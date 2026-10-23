@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+
+# Runtime data & backups
+data/*.json
+data/*.tmp
+!data/.gitkeep
+backups/*
+
+# Storage binaries & caches
+storage/raw/*
+!storage/raw/.gitkeep
+!storage/raw/protected
+!storage/raw/protected/**
+storage/cache/*
+!storage/cache/.gitkeep
+
+# System & OS files
+.DS_Store
+Thumbs.db
+*.log

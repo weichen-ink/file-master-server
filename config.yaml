@@ -1,0 +1,47 @@
+# =====================================================================
+# FileMaster Server - Global and Module Configuration
+# =====================================================================
+
+# ----------------- 1. Core Settings -----------------
+site_name: FileMaster Server
+port: 3000
+base_url: http://localhost:3000
+
+# ----------------- 2. Unified Security & Authentication -----------------
+# Stealth admin entry point (any request to /, /admin, /login returns 404;
+# only /panel-9x7k2m loads the management console).
+admin_path: panel-9x7k2m
+
+# Administrator credentials
+username: admin
+password: admin-password-123
+
+# Brute-force protection: IP is banned for 24h after exceeding failed attempts
+max_login_attempts: 3
+
+# Optional TOTP 2FA secret (leave empty "" to disable 2FA)
+totp_secret: ""
+
+# Global API token for FileMaster plugin, PicList, scripts, and CLI tools
+api_token: filemaster-api-token-888
+
+
+# =====================================================================
+# Module Configuration
+# =====================================================================
+
+# ----------------- [Module 1: Image Host] -----------------
+image_host:
+  raw_secret_path: raw-8f9a2b     # Obfuscated path prefix for accessing original lossless files
+  webp_quality: 82                # WebP compression quality for public files (/pub/*, 1-100)
+  max_width: 1920                 # Maximum width constraint for public images (0 for unlimited)
+  watermark_enable: true          # Enable dynamic watermarking: true | false
+  watermark_type: image           # Mode: image (PNG) | text (rendered text) | tile (repeating diagonal)
+  watermark_pos: bottom-right     # Position: bottom-right | bottom-left | top-right | top-left | center
+  watermark_opacity: 0.65         # Watermark opacity (0.1 - 1.0)
+  watermark_scale: 0.16           # Watermark width relative to target image (0.16 = 16%)
+  watermark_margin: 24            # Margin padding in pixels
+  watermark_min_width: 320        # Skip watermarking if image width is smaller than this value
+  watermark_image: ./watermark.png
+  watermark_text: "© FileMaster"
+  watermark_color: "#ffffff"

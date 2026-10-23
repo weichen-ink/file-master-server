@@ -1,0 +1,1571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FileMaster Server Console</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #1e293b;
+      --panel-hover: #26354d;
+      --border: #334155;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --danger: #ef4444;
+      --danger-hover: #dc2626;
+      --success: #10b981;
+      --warn: #f59e0b;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+    .hidden { display: none !important; }
+    .layout {
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      min-height: 100vh;
+    }
+    .sidebar {
+      background: #090d16;
+      border-right: 1px solid var(--border);
+      padding: 20px 16px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .brand {
+      padding-bottom: 16px;
+      margin-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .brand h1 { font-size: 17px; font-weight: 700; color: #fff; }
+    .brand p { font-size: 12px; color: var(--muted); margin-top: 3px; }
+    .nav-section-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      margin: 16px 8px 8px;
+      font-weight: 600;
+    }
+    .nav-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      padding: 10px 12px;
+      margin-bottom: 4px;
+      border-radius: 8px;
+      color: var(--text);
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      font-size: 13.5px;
+      font-weight: 500;
+      text-align: left;
+      transition: all 0.15s ease;
+    }
+    .nav-item:hover { background: var(--panel); }
+    .nav-item.active { background: var(--primary); color: #fff; }
+    .nav-item .badge {
+      font-size: 11px;
+      padding: 2px 7px;
+      border-radius: 9999px;
+      background: rgba(255, 255, 255, 0.16);
+    }
+    .main-content {
+      padding: 28px 36px;
+      overflow-y: auto;
+      max-height: 100vh;
+    }
+    .page-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .page-header h2 { font-size: 22px; font-weight: 700; color: #fff; }
+    .page-header p { font-size: 13px; color: var(--muted); margin-top: 4px; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 8px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      border-radius: 8px;
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      text-decoration: none;
+    }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-primary:hover { background: var(--primary-hover); }
+    .btn-outline { background: var(--panel); color: var(--text); border-color: var(--border); }
+    .btn-outline:hover { background: var(--panel-hover); border-color: #475569; }
+    .btn-danger { background: rgba(239, 68, 68, 0.15); color: #f87171; border-color: rgba(239, 68, 68, 0.35); }
+    .btn-danger:hover { background: var(--danger); color: #fff; }
+    .btn-block { width: 100%; }
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px 20px;
+    }
+    .stat-label { font-size: 12px; color: var(--muted); font-weight: 500; }
+    .stat-val { font-size: 24px; font-weight: 700; color: #fff; margin-top: 6px; }
+    .stat-hint { font-size: 11px; color: var(--muted); margin-top: 4px; }
+    .upload-zone {
+      border: 2px dashed var(--border);
+      background: rgba(30, 41, 59, 0.4);
+      border-radius: 12px;
+      padding: 30px;
+      text-align: center;
+      cursor: pointer;
+      margin-bottom: 24px;
+      transition: all 0.2s ease;
+    }
+    .upload-zone:hover, .upload-zone.dragover {
+      border-color: var(--primary);
+      background: rgba(59, 130, 246, 0.08);
+    }
+    .explorer-layout {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      gap: 20px;
+      align-items: start;
+    }
+    @media (max-width: 900px) {
+      .explorer-layout { grid-template-columns: 1fr; }
+    }
+    .folder-panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      position: sticky;
+      top: 0;
+    }
+    .folder-panel-header {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--muted);
+      padding: 6px 8px 10px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .folder-btn {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      padding: 7px 10px;
+      border-radius: 6px;
+      font-size: 13px;
+      background: transparent;
+      border: none;
+      color: var(--text);
+      cursor: pointer;
+      text-align: left;
+      transition: background 0.15s;
+    }
+    .folder-btn:hover { background: var(--panel-hover); }
+    .folder-btn.active { background: rgba(59, 130, 246, 0.22); color: #93c5fd; font-weight: 600; }
+    .folder-btn.month-node { padding-left: 24px; font-size: 12.5px; }
+    .folder-count { font-size: 11px; color: var(--muted); background: rgba(0,0,0,0.3); padding: 1px 6px; border-radius: 10px; }
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .gallery-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 16px;
+    }
+    .img-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      transition: transform 0.15s ease, border-color 0.15s ease;
+    }
+    .img-card:hover {
+      transform: translateY(-2px);
+      border-color: #475569;
+    }
+    .img-thumb-wrap {
+      width: 100%;
+      height: 155px;
+      background: #090d16;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      position: relative;
+      cursor: pointer;
+    }
+    .img-thumb-wrap img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+    }
+    .img-tag {
+      position: absolute;
+      bottom: 6px;
+      right: 6px;
+      background: rgba(0,0,0,0.75);
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: #cbd5e1;
+    }
+    .img-body {
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      flex: 1;
+      gap: 10px;
+    }
+    .img-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: #fff;
+      word-break: break-all;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+    .img-meta {
+      font-size: 11px;
+      color: var(--muted);
+      display: flex;
+      justify-content: space-between;
+      margin-top: 4px;
+    }
+    .card-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+    .card-actions .btn {
+      padding: 5px 8px;
+      font-size: 11.5px;
+    }
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: #1e293b;
+      color: #fff;
+      padding: 12px 18px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+      font-size: 13px;
+      z-index: 9999;
+      animation: fadeIn 0.2s ease;
+    }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      z-index: 8000;
+    }
+    .modal-box {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      max-width: 900px;
+      width: 100%;
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .modal-header {
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .modal-body {
+      padding: 20px;
+      overflow: auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #090d16;
+    }
+    .modal-body img {
+      max-width: 100%;
+      max-height: 70vh;
+      object-fit: contain;
+    }
+    .form-group {
+      margin-bottom: 14px;
+    }
+    .form-group label {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 6px;
+      font-weight: 500;
+    }
+    .form-input {
+      width: 100%;
+      background: #090d16;
+      border: 1px solid var(--border);
+      color: #fff;
+      padding: 9px 12px;
+      border-radius: 8px;
+      font-size: 13.5px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .form-input:focus { border-color: var(--primary); }
+    .login-wrap {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .login-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 36px 32px;
+      width: 100%;
+      max-width: 400px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+    }
+    .login-title { font-size: 20px; font-weight: 700; color: #fff; text-align: center; margin-bottom: 6px; }
+    .login-sub { font-size: 12px; color: var(--muted); text-align: center; margin-bottom: 24px; }
+    .err-msg {
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.35);
+      color: #f87171;
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-size: 12.5px;
+      margin-bottom: 16px;
+    }
+    .inline-code {
+      font-family: var(--font-mono);
+      background: rgba(0,0,0,0.35);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 12px;
+      color: #93c5fd;
+    }
+    .progress-track {
+      background: rgba(0,0,0,0.35);
+      height: 7px;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+    .progress-fill {
+      height: 100%;
+      background: var(--primary);
+      border-radius: 4px;
+      transition: width 0.3s ease;
+    }
+    .kv-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 16px;
+    }
+    .kv-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 9px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      font-size: 13px;
+    }
+    .kv-row:last-child { border-bottom: none; }
+    .kv-key { color: var(--muted); }
+    .kv-val { font-weight: 600; text-align: right; word-break: break-all; }
+  </style>
+</head>
+<body>
+
+  <!-- ================= 1. Stealth Login View ================= -->
+  <div id="loginView" class="login-wrap hidden">
+    <div class="login-card">
+      <div class="login-title">⚡ <span id="loginSiteName">FileMaster Server</span></div>
+      <div class="login-sub">Stealth entry active · 24h IP lockout on consecutive failures</div>
+      <div id="loginError" class="err-msg hidden"></div>
+      <form id="loginForm">
+        <div class="form-group">
+          <label>Administrator Username</label>
+          <input type="text" id="loginUsername" class="form-input" autocomplete="username" required />
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="loginPassword" class="form-input" autocomplete="current-password" required />
+        </div>
+        <div id="totpGroup" class="form-group hidden">
+          <label>2FA Authenticator Code (6 digits)</label>
+          <input type="text" id="loginTotp" class="form-input" placeholder="000000" maxlength="6" pattern="\d{6}" />
+        </div>
+        <div class="form-group" style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
+          <label style="display:inline-flex; align-items:center; gap:8px; margin:0; cursor:pointer; color:var(--text); font-size:13px;">
+            <input type="checkbox" id="rememberAccount" checked style="width:15px; height:15px; accent-color:var(--primary); cursor:pointer;" />
+            <span>Remember session on this device (30 days)</span>
+          </label>
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">Sign In</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ================= 2. Main Dashboard ================= -->
+  <div id="appView" class="layout hidden">
+    <aside class="sidebar">
+      <div>
+        <div class="brand">
+          <h1 id="navSiteName">⚡ FileMaster Server</h1>
+          <p>Self-Hosted Asset & Image Hub</p>
+        </div>
+
+        <div class="nav-section-title">Active Modules</div>
+        <button class="nav-item active" onclick="switchTab('image-host', this)">
+          <span>🖼️ Image Host & Assets</span>
+          <span class="badge" id="navImgCount">0</span>
+        </button>
+        <button class="nav-item" onclick="switchTab('status', this)">
+          <span>📊 Host & Process Status</span>
+        </button>
+        <button class="nav-item" onclick="switchTab('platform', this)">
+          <span>🛡️ Config & Security</span>
+        </button>
+
+        <div class="nav-section-title" style="margin-top: 14px;">Planned Modules</div>
+        <button class="nav-item" onclick="switchTab('future-countdown', this)">
+          <span>⏳ Event Countdowns</span>
+          <span class="badge">Planned</span>
+        </button>
+        <button class="nav-item" onclick="switchTab('future-files', this)">
+          <span>📁 File Sharing</span>
+          <span class="badge">Planned</span>
+        </button>
+      </div>
+
+      <div style="border-top: 1px solid var(--border); padding-top: 14px;">
+        <button class="btn btn-outline" style="width:100%;" onclick="logout()">Sign Out</button>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <!-- ======= Module 1: Image Host & Asset Manager ======= -->
+      <section id="tab-image-host">
+        <div class="page-header">
+          <div>
+            <h2>📦 Asset Manager (Obsidian Raw + Astro WebP Watermark)</h2>
+            <p>Upload images, documents, videos, and archives via drag-and-drop, <code class="inline-code">Ctrl/Cmd + V</code> paste, or the FileMaster Obsidian plugin</p>
+          </div>
+          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            <label style="display:inline-flex; align-items:center; gap:6px; font-size:12px; color:#fbbf24; background:rgba(245,158,11,0.12); border:1px solid rgba(245,158,11,0.35); padding:6px 10px; border-radius:8px; cursor:pointer;" title="Files uploaded here are stored in storage/raw/protected/keep/ with permanent deletion protection and scan exemption">
+              <input type="checkbox" id="uploadToProtectedChk" style="accent-color:#f59e0b; cursor:pointer;" />
+              <span>🛡️ Upload to Protected Folder</span>
+            </label>
+            <button class="btn btn-outline" onclick="clearWatermarkCache()">🔄 Rebuild Watermark Cache</button>
+            <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">+ Upload Files</button>
+            <input type="file" id="fileInput" multiple class="hidden" onchange="uploadFiles(this.files)" />
+          </div>
+        </div>
+
+        <div class="stats-row">
+          <div class="stat-card">
+            <div class="stat-label">Total Raw Assets (storage/raw)</div>
+            <div class="stat-val" id="statCount">0</div>
+            <div class="stat-hint">Lossless storage for Obsidian</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Raw Asset Storage Footprint</div>
+            <div class="stat-val" id="statRawSize">0 MB</div>
+            <div class="stat-hint">Archived by YYYY/MM</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Public Watermark Cache (storage/cache)</div>
+            <div class="stat-val" id="statCacheSize">0 MB</div>
+            <div class="stat-hint">Optimized WebP cache for Astro blogs</div>
+          </div>
+        </div>
+
+        <div id="dropZone" class="upload-zone" onclick="document.getElementById('fileInput').click()">
+          <div style="font-size: 15px; font-weight: 600; margin-bottom: 4px;">📥 Click to select files, drag files here, or paste from clipboard (Ctrl+V)</div>
+          <div style="font-size: 12px; color: var(--muted);">Original files are stored losslessly; public WebP watermarks generate dynamically when requesting /pub/*</div>
+        </div>
+
+        <div class="explorer-layout">
+          <!-- Left: Year/Month folder tree -->
+          <div class="folder-panel">
+            <div class="folder-panel-header">
+              <span>📂 Folder Archive Navigation</span>
+              <span id="folderCountHint" style="font-weight:400;"></span>
+            </div>
+            <div id="folderTreeList"></div>
+          </div>
+
+          <!-- Right: Toolbar and asset cards -->
+          <div>
+            <div class="toolbar">
+              <div style="display:flex; align-items:center; gap:8px; font-size:13px;">
+                <span id="currentFolderBreadcrumb" style="font-weight:600; color:var(--text);">📁 All Assets</span>
+                <span id="currentFolderStats" style="color:var(--muted); font-size:12px;"></span>
+              </div>
+              <div style="display:flex; gap:10px; align-items:center;">
+                <input type="text" id="searchInput" class="form-input" style="width:230px; padding:7px 12px;" placeholder="🔍 Filter files in current folder..." oninput="renderGallery()" />
+              </div>
+            </div>
+
+            <div id="galleryGrid" class="gallery-grid"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ======= Server and Site Runtime Status ======= -->
+      <section id="tab-status" class="hidden">
+        <div class="page-header">
+          <div>
+            <h2>📊 Host & Process Status</h2>
+            <p>Real-time monitor of hardware resources, disk capacity, and Node.js process runtime</p>
+          </div>
+          <div style="display:flex; align-items:center; gap:12px;">
+            <label style="display:inline-flex; align-items:center; gap:6px; font-size:13px; color:var(--muted); cursor:pointer;">
+              <input type="checkbox" id="autoRefreshMetrics" checked onchange="toggleMetricsTimer()" style="accent-color:var(--primary);" />
+              <span>Auto-refresh every 5s</span>
+            </label>
+            <button class="btn btn-outline" onclick="loadServerMetrics(true)">🔄 Refresh Now</button>
+          </div>
+        </div>
+
+        <div class="stats-row">
+          <div class="stat-card">
+            <div class="stat-label">CPU 1-min Average Load</div>
+            <div class="stat-val" id="mCpuLoad">0%</div>
+            <div class="progress-track"><div id="mCpuBar" class="progress-fill" style="width:0%"></div></div>
+            <div class="stat-hint" id="mCpuDetail">-</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Physical Memory (RAM)</div>
+            <div class="stat-val" id="mRamUsage">0%</div>
+            <div class="progress-track"><div id="mRamBar" class="progress-fill" style="width:0%"></div></div>
+            <div class="stat-hint" id="mRamDetail">-</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Host Disk Capacity (Storage)</div>
+            <div class="stat-val" id="mDiskUsage">0%</div>
+            <div class="progress-track"><div id="mDiskBar" class="progress-fill" style="width:0%"></div></div>
+            <div class="stat-hint" id="mDiskDetail">-</div>
+          </div>
+        </div>
+
+        <div class="kv-grid">
+          <div class="stat-card">
+            <h3 style="font-size:16px; margin-bottom:12px;">🖥️ Host Server Specs</h3>
+            <div class="kv-row"><span class="kv-key">Hostname</span><span class="kv-val" id="mHostName">-</span></div>
+            <div class="kv-row"><span class="kv-key">OS Platform & Arch</span><span class="kv-val" id="mOsPlatform">-</span></div>
+            <div class="kv-row"><span class="kv-key">CPU Model</span><span class="kv-val" id="mCpuModel">-</span></div>
+            <div class="kv-row"><span class="kv-key">CPU Cores</span><span class="kv-val" id="mCpuCores">-</span></div>
+            <div class="kv-row"><span class="kv-key">System Load Avg (1m / 5m / 15m)</span><span class="kv-val" id="mLoadAvg">-</span></div>
+            <div class="kv-row"><span class="kv-key">Total RAM / Free RAM</span><span class="kv-val" id="mMemSummary">-</span></div>
+            <div class="kv-row"><span class="kv-key">Disk Capacity / Available</span><span class="kv-val" id="mDiskSummary">-</span></div>
+            <div class="kv-row"><span class="kv-key">Host System Uptime</span><span class="kv-val" id="mHostUptime">-</span></div>
+          </div>
+
+          <div class="stat-card">
+            <h3 style="font-size:16px; margin-bottom:12px;">🚀 Node.js Service Runtime</h3>
+            <div class="kv-row"><span class="kv-key">Service Status</span><span class="kv-val" style="color:var(--success);">● Active & Online</span></div>
+            <div class="kv-row"><span class="kv-key">Listening Port</span><span class="kv-val"><code class="inline-code" id="mSitePort">-</code></span></div>
+            <div class="kv-row"><span class="kv-key">Process Uptime</span><span class="kv-val" id="mSiteUptime">-</span></div>
+            <div class="kv-row"><span class="kv-key">Boot Time</span><span class="kv-val" id="mSiteStartTime">-</span></div>
+            <div class="kv-row"><span class="kv-key">Node.js Version / PID</span><span class="kv-val" id="mNodePid">-</span></div>
+            <div class="kv-row"><span class="kv-key">Process Memory (RSS / Heap)</span><span class="kv-val" id="mProcMem">-</span></div>
+            <div class="kv-row"><span class="kv-key">Raw Storage Footprint</span><span class="kv-val" id="mSiteRawBytes">-</span></div>
+            <div class="kv-row"><span class="kv-key">WebP Watermark Cache Footprint</span><span class="kv-val" id="mSiteCacheBytes">-</span></div>
+            <div class="kv-row"><span class="kv-key">Security Guards</span><span class="kv-val" id="mSiteSec">-</span></div>
+          </div>
+        </div>
+
+        <div class="stat-card" style="margin-top:16px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+            <div>
+              <h3 style="font-size:16px;">🔌 PicList & Client Integration Parameters</h3>
+              <p style="font-size:12px; color:var(--muted); margin-top:2px;">Select "Custom Web" image host in PicList and copy the parameters below</p>
+            </div>
+          </div>
+          <div class="kv-row">
+            <span class="kv-key">Server Port</span>
+            <span class="kv-val">
+              <code class="inline-code" id="epPort">-</code>
+              <span style="font-size:12px; color:var(--muted); margin-left:6px;">(Localhost: <code class="inline-code" id="epLocalUrl">-</code>)</span>
+            </span>
+          </div>
+          <div class="kv-row">
+            <span class="kv-key">PicList API Upload URL</span>
+            <span class="kv-val" style="display:flex; align-items:center; gap:8px;">
+              <code class="inline-code" id="epUploadUrl">-</code>
+              <button class="btn btn-outline" style="padding:4px 10px; font-size:12px;" onclick="copyText(document.getElementById('epUploadUrl').textContent, 'Upload URL')">Copy</button>
+            </span>
+          </div>
+          <div class="kv-row">
+            <span class="kv-key">POST Field / JSON Response Path</span>
+            <span class="kv-val" style="display:flex; align-items:center; gap:8px;">
+              <span>Field: <code class="inline-code">file</code></span>
+              <span>JSON Path: <code class="inline-code">url</code></span>
+            </span>
+          </div>
+          <div class="kv-row">
+            <span class="kv-key">PicList Custom Headers</span>
+            <span class="kv-val" style="display:flex; align-items:center; gap:8px;">
+              <code class="inline-code" id="epHeadersJson">-</code>
+              <button class="btn btn-primary" style="padding:4px 10px; font-size:12px;" onclick="copyText(document.getElementById('epHeadersJson').textContent, 'Headers JSON')">Copy Headers</button>
+            </span>
+          </div>
+          <div class="kv-row">
+            <span class="kv-key">Obsidian Raw URL Route / Astro Watermark WebP Route</span>
+            <span class="kv-val" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
+              <code class="inline-code" id="epRawPattern">-</code>
+              <span style="color:var(--muted);">→</span>
+              <code class="inline-code" id="epPubPattern">-</code>
+            </span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ======= Configuration and Security (config.yaml) ======= -->
+      <section id="tab-platform" class="hidden">
+        <div class="page-header">
+          <div>
+            <h2>🛡️ Config & Security (Online config.yaml Editor)</h2>
+            <p>Update settings via visual form (comments preserved 100%) or edit raw <code class="inline-code">config.yaml</code> directly</p>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <button id="btnCfgFormMode" class="btn btn-primary" onclick="setCfgEditMode('form')">🎛️ Form Mode</button>
+            <button id="btnCfgRawMode" class="btn btn-outline" onclick="setCfgEditMode('raw')">📝 Raw YAML Mode</button>
+          </div>
+        </div>
+
+        <div id="cfgFormPanel">
+          <div class="kv-grid" style="margin-bottom: 18px;">
+            <div class="stat-card">
+              <h3 style="font-size:16px; margin-bottom:14px;">🔒 1. Core Platform & Security</h3>
+              <div class="form-group">
+                <label>Site Name (site_name)</label>
+                <input type="text" id="f_site_name" class="form-input" />
+              </div>
+              <div style="display:grid; grid-template-columns: 1fr 130px; gap:12px;">
+                <div class="form-group">
+                  <label>Base URL (base_url)</label>
+                  <input type="text" id="f_base_url" class="form-input" />
+                </div>
+                <div class="form-group">
+                  <label>Port (port)</label>
+                  <input type="number" id="f_port" class="form-input" />
+                </div>
+              </div>
+              <div style="display:grid; grid-template-columns: 1fr 130px; gap:12px;">
+                <div class="form-group">
+                  <label>Stealth Admin Path (admin_path)</label>
+                  <input type="text" id="f_admin_path" class="form-input" />
+                </div>
+                <div class="form-group">
+                  <label>Max Login Attempts</label>
+                  <input type="number" id="f_max_login_attempts" class="form-input" min="1" max="20" />
+                </div>
+              </div>
+              <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+                <div class="form-group">
+                  <label>Admin Username (username)</label>
+                  <input type="text" id="f_username" class="form-input" />
+                </div>
+                <div class="form-group">
+                  <label>Password (password)</label>
+                  <input type="password" id="f_password" class="form-input" />
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Global Upload API Token (api_token)</label>
+                <input type="text" id="f_api_token" class="form-input" />
+              </div>
+              <div class="form-group" style="margin-bottom:0;">
+                <label style="display:flex; justify-content:space-between; align-items:center;">
+                  <span>2FA TOTP Secret (totp_secret, leave empty to disable)</span>
+                  <a href="javascript:void(0)" onclick="generateNewTotp()" style="color:var(--primary); text-decoration:none; font-size:12px;">✨ Generate New Key</a>
+                </label>
+                <input type="text" id="f_totp_secret" class="form-input" placeholder="Leave empty for password-only login" />
+              </div>
+              <div id="totpResultBox" class="hidden" style="margin-top:10px; padding:10px 12px; background:#090d16; border-radius:8px; border:1px solid var(--border); font-size:12px;">
+                <div><strong>Generated key populated above:</strong> <code class="inline-code" id="newTotpSecret"></code></div>
+                <div style="margin-top:6px;"><strong>otpauth URI (copy into 1Password / Authenticator):</strong> <code class="inline-code" id="newTotpUri" style="word-break:break-all;"></code></div>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <h3 style="font-size:16px; margin-bottom:14px;">🖼️ 2. Image Host & Watermark</h3>
+              <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px;">
+                <div class="form-group">
+                  <label>Raw Secret Prefix</label>
+                  <input type="text" id="f_raw_secret_path" class="form-input" />
+                </div>
+                <div class="form-group">
+                  <label>WebP Quality (1-100)</label>
+                  <input type="number" id="f_webp_quality" class="form-input" min="10" max="100" />
+                </div>
+                <div class="form-group">
+                  <label>Max Width (px)</label>
+                  <input type="number" id="f_max_width" class="form-input" min="0" />
+                </div>
+              </div>
+
+              <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px;">
+                <div class="form-group">
+                  <label>Watermark Enabled</label>
+                  <select id="f_watermark_enable" class="form-input">
+                    <option value="true">Enabled (true)</option>
+                    <option value="false">Disabled (false)</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Watermark Mode</label>
+                  <select id="f_watermark_type" class="form-input">
+                    <option value="image">PNG Image (image)</option>
+                    <option value="text">Corner Text (text)</option>
+                    <option value="tile">Repeating Tile (tile)</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Watermark Position</label>
+                  <select id="f_watermark_pos" class="form-input">
+                    <option value="bottom-right">Bottom-Right</option>
+                    <option value="bottom-left">Bottom-Left</option>
+                    <option value="top-right">Top-Right</option>
+                    <option value="top-left">Top-Left</option>
+                    <option value="center">Center</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:10px;">
+                <div class="form-group">
+                  <label>Opacity (0.1 - 1.0)</label>
+                  <input type="number" id="f_watermark_opacity" class="form-input" step="0.05" min="0.05" max="1" />
+                </div>
+                <div class="form-group">
+                  <label>Scale (0.05 - 0.8)</label>
+                  <input type="number" id="f_watermark_scale" class="form-input" step="0.01" min="0.05" max="0.8" />
+                </div>
+                <div class="form-group">
+                  <label>Margin (px)</label>
+                  <input type="number" id="f_watermark_margin" class="form-input" min="0" />
+                </div>
+                <div class="form-group">
+                  <label>Min Width for Watermark</label>
+                  <input type="number" id="f_watermark_min_width" class="form-input" min="0" />
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label>Watermark Image Path (watermark_image)</label>
+                <input type="text" id="f_watermark_image" class="form-input" />
+              </div>
+
+              <div style="display:grid; grid-template-columns: 2fr 1fr; gap:10px;">
+                <div class="form-group" style="margin-bottom:0;">
+                  <label>Watermark Text (watermark_text)</label>
+                  <input type="text" id="f_watermark_text" class="form-input" />
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                  <label>Text Color (watermark_color)</label>
+                  <input type="text" id="f_watermark_color" class="form-input" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="stat-card" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+            <label style="display:inline-flex; align-items:center; gap:8px; font-size:13px; cursor:pointer;">
+              <input type="checkbox" id="f_auto_clear_cache" checked style="width:15px; height:15px; accent-color:var(--primary);" />
+              <span>Automatically clear watermark cache on save (applies new settings to all past images immediately)</span>
+            </label>
+            <button class="btn btn-primary" style="padding:10px 22px; font-size:14px;" onclick="saveConfigForm()">💾 Save Configuration</button>
+          </div>
+        </div>
+
+        <div id="cfgRawPanel" class="stat-card hidden">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <span style="font-size:13px; color:var(--muted);">Directly editing root <code class="inline-code">config.yaml</code> (syntax validated before saving)</span>
+            <button class="btn btn-primary" onclick="saveConfigRaw()">💾 Validate & Save config.yaml</button>
+          </div>
+          <textarea id="rawYamlEditor" class="form-input" style="height:460px; font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:13px; line-height:1.6; resize:vertical;" spellcheck="false"></textarea>
+        </div>
+      </section>
+
+      <!-- ======= Future Expansion Slots ======= -->
+      <section id="tab-future-countdown" class="hidden">
+        <div class="stat-card">
+          <h2 style="margin-bottom:8px;">⏳ Event Countdowns (Planned Module Slot)</h2>
+          <p style="color:var(--muted); font-size:14px;">
+            The server core provides <code class="inline-code">readJsonData('countdowns')</code> and <code class="inline-code">writeJsonData('countdowns', data)</code> atomic storage.
+            When implementing this module, register routes in <code class="inline-code">src/modules/countdown/</code>; data persists cleanly in <code class="inline-code">data/countdowns.json</code>.
+          </p>
+        </div>
+      </section>
+
+      <section id="tab-future-files" class="hidden">
+        <div class="stat-card">
+          <h2 style="margin-bottom:8px;">📁 File Sharing Platform (Planned Module Slot)</h2>
+          <p style="color:var(--muted); font-size:14px;">
+            Unified authentication and physical storage conventions (<code class="inline-code">storage/files/</code>) are already prepared.
+          </p>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- ================= 3. Preview Modal ================= -->
+  <div id="previewModal" class="modal-backdrop hidden" onclick="if(event.target===this) closeModal()">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <strong id="modalTitle" style="font-size:14px;">Asset Preview</strong>
+          <button id="btnViewPub" class="btn btn-primary" style="padding:5px 12px; font-size:12px;" onclick="setModalMode('pub')">👁️ Public WebP Watermark</button>
+          <button id="btnViewRaw" class="btn btn-outline" style="padding:5px 12px; font-size:12px;" onclick="setModalMode('raw')">🔍 Lossless Raw Original</button>
+        </div>
+        <button class="btn btn-outline" style="padding:5px 10px;" onclick="closeModal()">✕ Close</button>
+      </div>
+      <div class="modal-body">
+        <img id="modalImg" src="" alt="preview" />
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script>
+    // ================= Internationalization (i18n Architecture) =================
+    const I18N = {
+      en: {
+        allAssets: "All Assets",
+        copied: "Copied {label}",
+        deleteConfirm: "Are you sure you want to delete {filename}? (Both original and watermark cache will be removed)",
+        lockedNotice: "File '{filename}' is locked against deletion. Unlock it before deleting.",
+        lockSuccess: "Protected against deletion: {filename}",
+        unlockSuccess: "Unlocked deletion protection: {filename}",
+        uploading: "Uploading {count} file(s)...",
+        uploadSuccess: "Upload completed successfully!",
+        configSaved: "Configuration saved and active!",
+        rawSaved: "config.yaml source saved successfully!",
+        cacheCleared: "Watermark cache cleared successfully."
+      }
+    };
+    let currentLocale = 'en';
+
+    function t(key, params = {}) {
+      const dict = I18N[currentLocale] || I18N.en;
+      let msg = dict[key] || key;
+      for (const [k, v] of Object.entries(params)) {
+        msg = msg.replace(new RegExp(`\\{${k}\\}`, 'g'), v);
+      }
+      return msg;
+    }
+
+    let allImages = [];
+    let currentModalItem = null;
+
+    function showToast(msg) {
+      const tEl = document.getElementById('toast');
+      tEl.textContent = msg;
+      tEl.classList.remove('hidden');
+      clearTimeout(window.__toastTimer);
+      window.__toastTimer = setTimeout(() => tEl.classList.add('hidden'), 2400);
+    }
+
+    function formatBytes(bytes) {
+      if (!bytes) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return (bytes / Math.pow(k, i)).toFixed(i > 1 ? 2 : 1) + ' ' + sizes[i];
+    }
+
+    async function copyText(text, label) {
+      try {
+        await navigator.clipboard.writeText(text);
+        showToast(`✅ ${t('copied', { label })}`);
+      } catch {
+        prompt('Copy manually:', text);
+      }
+    }
+
+    function formatDuration(sec) {
+      const s = Math.max(0, Math.floor(sec || 0));
+      const d = Math.floor(s / 86400);
+      const h = Math.floor((s % 86400) / 3600);
+      const m = Math.floor((s % 3600) / 60);
+      const r = s % 60;
+      const parts = [];
+      if (d > 0) parts.push(`${d}d`);
+      if (h > 0 || d > 0) parts.push(`${h}h`);
+      if (m > 0 || h > 0 || d > 0) parts.push(`${m}m`);
+      parts.push(`${r}s`);
+      return parts.join(' ');
+    }
+
+    function getBarColor(pct) {
+      if (pct >= 85) return 'var(--danger)';
+      if (pct >= 70) return 'var(--warn)';
+      return 'var(--primary)';
+    }
+
+    async function loadServerMetrics(manual = false) {
+      const res = await fetch('/api/platform/metrics');
+      if (!res.ok) return;
+      const m = await res.json();
+      const { host, site } = m;
+
+      // 1. Dashboard summary cards
+      document.getElementById('mCpuLoad').textContent = `${host.cpu.loadPercent1m}%`;
+      const cpuBar = document.getElementById('mCpuBar');
+      cpuBar.style.width = `${Math.min(100, host.cpu.loadPercent1m)}%`;
+      cpuBar.style.background = getBarColor(host.cpu.loadPercent1m);
+      document.getElementById('mCpuDetail').textContent = `${host.cpu.cores} Core(s) · 1m Load ${host.cpu.loadAvg[0]}`;
+
+      document.getElementById('mRamUsage').textContent = `${host.memory.usagePercent}%`;
+      const ramBar = document.getElementById('mRamBar');
+      ramBar.style.width = `${Math.min(100, host.memory.usagePercent)}%`;
+      ramBar.style.background = getBarColor(host.memory.usagePercent);
+      document.getElementById('mRamDetail').textContent = `Used ${formatBytes(host.memory.used)} / Total ${formatBytes(host.memory.total)}`;
+
+      document.getElementById('mDiskUsage').textContent = `${host.disk.usagePercent}%`;
+      const diskBar = document.getElementById('mDiskBar');
+      diskBar.style.width = `${Math.min(100, host.disk.usagePercent)}%`;
+      diskBar.style.background = getBarColor(host.disk.usagePercent);
+      document.getElementById('mDiskDetail').textContent = `Available ${formatBytes(host.disk.free)} / Total ${formatBytes(host.disk.total)}`;
+
+      // 2. Host specs
+      document.getElementById('mHostName').textContent = host.hostname;
+      document.getElementById('mOsPlatform').textContent = host.platform;
+      document.getElementById('mCpuModel').textContent = host.cpu.model;
+      document.getElementById('mCpuCores').textContent = `${host.cpu.cores} Cores`;
+      document.getElementById('mLoadAvg').textContent = host.cpu.loadAvg.join(' / ');
+      document.getElementById('mMemSummary').textContent = `${formatBytes(host.memory.total)} (Free: ${formatBytes(host.memory.free)})`;
+      document.getElementById('mDiskSummary').textContent = `${formatBytes(host.disk.total)} (Free: ${formatBytes(host.disk.free)})`;
+      document.getElementById('mHostUptime').textContent = formatDuration(host.uptimeSec);
+
+      // 3. Node process specs
+      document.getElementById('mSitePort').textContent = `${site.port} (${site.baseUrl})`;
+      document.getElementById('mSiteUptime').textContent = formatDuration(site.uptimeSec);
+      document.getElementById('mSiteStartTime').textContent = new Date(site.startedAt).toLocaleString('en-US');
+      document.getElementById('mNodePid').textContent = `${site.nodeVersion} (PID: ${site.pid})`;
+      document.getElementById('mProcMem').textContent = `RSS ${formatBytes(site.processMemory.rss)} / Heap ${formatBytes(site.processMemory.heapUsed)}`;
+      document.getElementById('mSiteRawBytes').textContent = `${formatBytes(site.storage.rawBytes)} (${site.storage.imageCount} raw files)`;
+      document.getElementById('mSiteCacheBytes').textContent = formatBytes(site.storage.cacheBytes);
+      document.getElementById('mSiteSec').textContent = `Banned IPs: ${site.security.activeBans} | 2FA: ${site.security.totpEnabled ? 'Enabled' : 'Disabled'}`;
+
+      // 4. PicList endpoints
+      if (site.endpoints) {
+        document.getElementById('epPort').textContent = site.endpoints.port;
+        document.getElementById('epLocalUrl').textContent = site.endpoints.localUploadUrl;
+        document.getElementById('epUploadUrl').textContent = site.endpoints.uploadUrl;
+        document.getElementById('epHeadersJson').textContent = site.endpoints.piclistHeaders;
+        document.getElementById('epRawPattern').textContent = site.endpoints.rawUrlPattern;
+        document.getElementById('epPubPattern').textContent = site.endpoints.pubUrlPattern;
+      }
+
+      if (manual) showToast('✅ Metrics refreshed');
+    }
+
+    function toggleMetricsTimer() {
+      clearInterval(window.__metricsTimer);
+      const isStatusVisible = !document.getElementById('tab-status').classList.contains('hidden');
+      const autoOn = document.getElementById('autoRefreshMetrics')?.checked;
+      if (isStatusVisible && autoOn) {
+        window.__metricsTimer = setInterval(() => loadServerMetrics(false), 5000);
+      }
+    }
+
+    function switchTab(tabId, btnEl) {
+      document.querySelectorAll('main > section').forEach(s => s.classList.add('hidden'));
+      document.getElementById('tab-' + tabId).classList.remove('hidden');
+      document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+      if (btnEl) btnEl.classList.add('active');
+      if (tabId === 'status') {
+        loadServerMetrics(false);
+      } else if (tabId === 'platform') {
+        loadConfigForEdit();
+      }
+      toggleMetricsTimer();
+    }
+
+    async function initApp() {
+      const res = await fetch('/api/platform/status');
+      const data = await res.json();
+      document.title = data.siteName + ' - Console';
+      document.getElementById('loginSiteName').textContent = data.siteName;
+      document.getElementById('navSiteName').textContent = '⚡ ' + data.siteName;
+
+      if (data.totpEnabled) {
+        document.getElementById('totpGroup').classList.remove('hidden');
+      }
+
+      if (data.authenticated) {
+        document.getElementById('loginView').classList.add('hidden');
+        document.getElementById('appView').classList.remove('hidden');
+        loadImages();
+      } else {
+        document.getElementById('loginView').classList.remove('hidden');
+        document.getElementById('appView').classList.add('hidden');
+        const savedUser = localStorage.getItem('filemaster_saved_username');
+        const savedRem = localStorage.getItem('filemaster_remember_pref');
+        if (savedRem !== null) {
+          document.getElementById('rememberAccount').checked = savedRem === '1';
+        }
+        if (savedUser) {
+          document.getElementById('loginUsername').value = savedUser;
+          document.getElementById('loginPassword').focus();
+        } else {
+          document.getElementById('loginUsername').focus();
+        }
+      }
+    }
+
+    function setCfgEditMode(mode) {
+      const formPanel = document.getElementById('cfgFormPanel');
+      const rawPanel = document.getElementById('cfgRawPanel');
+      const btnForm = document.getElementById('btnCfgFormMode');
+      const btnRaw = document.getElementById('btnCfgRawMode');
+
+      if (mode === 'raw') {
+        formPanel.classList.add('hidden');
+        rawPanel.classList.remove('hidden');
+        btnForm.className = 'btn btn-outline';
+        btnRaw.className = 'btn btn-primary';
+      } else {
+        rawPanel.classList.add('hidden');
+        formPanel.classList.remove('hidden');
+        btnForm.className = 'btn btn-primary';
+        btnRaw.className = 'btn btn-outline';
+      }
+    }
+
+    async function loadConfigForEdit() {
+      const res = await fetch('/api/platform/config');
+      if (!res.ok) return;
+      const { config, rawYaml } = await res.json();
+      fillConfigForm(config, rawYaml);
+    }
+
+    function fillConfigForm(cfg, rawYaml) {
+      document.getElementById('rawYamlEditor').value = rawYaml || '';
+      document.getElementById('f_site_name').value = cfg.site_name || '';
+      document.getElementById('f_base_url').value = cfg.base_url || '';
+      document.getElementById('f_port').value = cfg.port || 3000;
+      document.getElementById('f_admin_path').value = cfg.admin_path || '';
+      document.getElementById('f_max_login_attempts').value = cfg.max_login_attempts || 3;
+      document.getElementById('f_username').value = cfg.username || '';
+      document.getElementById('f_password').value = cfg.password || '';
+      document.getElementById('f_api_token').value = cfg.api_token || '';
+      document.getElementById('f_totp_secret').value = cfg.totp_secret || '';
+
+      const img = cfg.image_host || {};
+      document.getElementById('f_raw_secret_path').value = img.raw_secret_path || '';
+      document.getElementById('f_webp_quality').value = img.webp_quality ?? 82;
+      document.getElementById('f_max_width').value = img.max_width ?? 1920;
+      document.getElementById('f_watermark_enable').value = String(Boolean(img.watermark_enable));
+      document.getElementById('f_watermark_type').value = img.watermark_type || 'image';
+      document.getElementById('f_watermark_pos').value = img.watermark_pos || 'bottom-right';
+      document.getElementById('f_watermark_opacity').value = img.watermark_opacity ?? 0.65;
+      document.getElementById('f_watermark_scale').value = img.watermark_scale ?? 0.16;
+      document.getElementById('f_watermark_margin').value = img.watermark_margin ?? 24;
+      document.getElementById('f_watermark_min_width').value = img.watermark_min_width ?? 320;
+      document.getElementById('f_watermark_image').value = img.watermark_image || './watermark.png';
+      document.getElementById('f_watermark_text').value = img.watermark_text || '';
+      document.getElementById('f_watermark_color').value = img.watermark_color || '#ffffff';
+    }
+
+    async function saveConfigForm() {
+      const patch = {
+        site_name: document.getElementById('f_site_name').value.trim(),
+        base_url: document.getElementById('f_base_url').value.trim().replace(/\/+$/, ''),
+        port: Number(document.getElementById('f_port').value) || 3000,
+        admin_path: document.getElementById('f_admin_path').value.trim().replace(/^\/+|\/+$/g, ''),
+        max_login_attempts: Number(document.getElementById('f_max_login_attempts').value) || 3,
+        username: document.getElementById('f_username').value.trim(),
+        password: document.getElementById('f_password').value,
+        api_token: document.getElementById('f_api_token').value.trim(),
+        totp_secret: document.getElementById('f_totp_secret').value.trim(),
+        image_host: {
+          raw_secret_path: document.getElementById('f_raw_secret_path').value.trim().replace(/^\/+|\/+$/g, ''),
+          webp_quality: Number(document.getElementById('f_webp_quality').value) || 82,
+          max_width: Number(document.getElementById('f_max_width').value) || 0,
+          watermark_enable: document.getElementById('f_watermark_enable').value === 'true',
+          watermark_type: document.getElementById('f_watermark_type').value,
+          watermark_pos: document.getElementById('f_watermark_pos').value,
+          watermark_opacity: Number(document.getElementById('f_watermark_opacity').value) || 0.65,
+          watermark_scale: Number(document.getElementById('f_watermark_scale').value) || 0.16,
+          watermark_margin: Number(document.getElementById('f_watermark_margin').value) || 24,
+          watermark_min_width: Number(document.getElementById('f_watermark_min_width').value) || 320,
+          watermark_image: document.getElementById('f_watermark_image').value.trim(),
+          watermark_text: document.getElementById('f_watermark_text').value,
+          watermark_color: document.getElementById('f_watermark_color').value.trim()
+        }
+      };
+
+      const res = await fetch('/api/platform/config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'form', patch })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || 'Failed to save configuration');
+        return;
+      }
+
+      if (document.getElementById('f_auto_clear_cache').checked) {
+        await fetch('/api/modules/image-host/cache/clear', { method: 'POST' });
+      }
+
+      fillConfigForm(data.config, data.rawYaml);
+      document.getElementById('navSiteName').textContent = '⚡ ' + data.config.site_name;
+      showToast('✅ ' + t('configSaved'));
+
+      if (data.adminPathChanged) {
+        setTimeout(() => {
+          window.location.href = '/' + data.newAdminPath;
+        }, 800);
+      } else {
+        loadImages();
+      }
+    }
+
+    async function saveConfigRaw() {
+      const rawYaml = document.getElementById('rawYamlEditor').value;
+      const res = await fetch('/api/platform/config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'raw', rawYaml })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || 'Invalid YAML syntax: failed to save');
+        return;
+      }
+      fillConfigForm(data.config, data.rawYaml);
+      document.getElementById('navSiteName').textContent = '⚡ ' + data.config.site_name;
+      showToast('✅ ' + t('rawSaved'));
+      if (data.adminPathChanged) {
+        setTimeout(() => {
+          window.location.href = '/' + data.newAdminPath;
+        }, 800);
+      } else {
+        loadImages();
+      }
+    }
+
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const errBox = document.getElementById('loginError');
+      errBox.classList.add('hidden');
+
+      const username = document.getElementById('loginUsername').value.trim();
+      const password = document.getElementById('loginPassword').value;
+      const totpCode = document.getElementById('loginTotp').value.trim();
+      const rememberMe = document.getElementById('rememberAccount').checked;
+
+      const res = await fetch('/api/platform/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password, totpCode, rememberMe })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        errBox.textContent = data.error || 'Authentication failed';
+        errBox.classList.remove('hidden');
+        return;
+      }
+
+      if (rememberMe) {
+        localStorage.setItem('filemaster_saved_username', username);
+        localStorage.setItem('filemaster_remember_pref', '1');
+      } else {
+        localStorage.removeItem('filemaster_saved_username');
+        localStorage.setItem('filemaster_remember_pref', '0');
+      }
+      initApp();
+    });
+
+    async function logout() {
+      await fetch('/api/platform/logout', { method: 'POST' });
+      location.reload();
+    }
+
+    let selectedFolder = 'all';
+    const collapsedYears = new Set();
+
+    async function loadImages() {
+      const res = await fetch('/api/modules/image-host/list');
+      if (!res.ok) return;
+      const data = await res.json();
+      allImages = data.images || [];
+
+      document.getElementById('navImgCount').textContent = data.stats.totalCount;
+      document.getElementById('statCount').textContent = data.stats.totalCount;
+      document.getElementById('statRawSize').textContent = formatBytes(data.stats.totalRawBytes);
+      document.getElementById('statCacheSize').textContent = formatBytes(data.stats.totalCacheBytes);
+
+      renderFolderTree();
+      renderGallery();
+    }
+
+    function selectFolder(folderKey) {
+      selectedFolder = folderKey;
+      renderFolderTree();
+      renderGallery();
+    }
+
+    function toggleYearCollapse(year, ev) {
+      ev.stopPropagation();
+      if (collapsedYears.has(year)) {
+        collapsedYears.delete(year);
+      } else {
+        collapsedYears.add(year);
+      }
+      renderFolderTree();
+    }
+
+    function renderFolderTree() {
+      const treeEl = document.getElementById('folderTreeList');
+      const yearMap = new Map();
+      for (const img of allImages) {
+        if (!yearMap.has(img.year)) {
+          yearMap.set(img.year, { count: 0, bytes: 0, months: new Map() });
+        }
+        const yObj = yearMap.get(img.year);
+        yObj.count += 1;
+        yObj.bytes += img.size || 0;
+
+        if (!yObj.months.has(img.month)) {
+          yObj.months.set(img.month, { count: 0, bytes: 0 });
+        }
+        const mObj = yObj.months.get(img.month);
+        mObj.count += 1;
+        mObj.bytes += img.size || 0;
+      }
+
+      if (selectedFolder !== 'all') {
+        const [selY, selM] = selectedFolder.split('/');
+        if (!yearMap.has(selY) || (selM && !yearMap.get(selY).months.has(selM))) {
+          selectedFolder = 'all';
+        }
+      }
+
+      let totalFolders = 0;
+      yearMap.forEach((v) => { totalFolders += v.months.size; });
+      document.getElementById('folderCountHint').textContent = `${totalFolders} folder(s)`;
+
+      let html = `
+        <button class="folder-btn ${selectedFolder === 'all' ? 'active' : ''}" onclick="selectFolder('all')">
+          <span>🗂️ All Assets</span>
+          <span class="folder-count">${allImages.length}</span>
+        </button>
+      `;
+
+      const sortedYears = [...yearMap.keys()].sort((a, b) => {
+        if (a === 'protected') return -1;
+        if (b === 'protected') return 1;
+        return b.localeCompare(a);
+      });
+      for (const year of sortedYears) {
+        const yData = yearMap.get(year);
+        const isCollapsed = collapsedYears.has(year);
+        const isYearActive = selectedFolder === year;
+        const arrow = isCollapsed ? '▸' : '▾';
+        const yearLabel = year === 'protected' ? '🛡️ Protected Folder' : `📂 ${year}`;
+
+        html += `
+          <button class="folder-btn ${isYearActive ? 'active' : ''}" onclick="selectFolder('${year}')">
+            <span style="display:flex; align-items:center; gap:6px;">
+              <span onclick="toggleYearCollapse('${year}', event)" style="display:inline-block; width:14px; text-align:center; color:var(--muted);">${arrow}</span>
+              <span>${yearLabel}</span>
+            </span>
+            <span class="folder-count">${yData.count}</span>
+          </button>
+        `;
+
+        if (!isCollapsed) {
+          const sortedMonths = [...yData.months.keys()].sort().reverse();
+          for (const month of sortedMonths) {
+            const mData = yData.months.get(month);
+            const folderKey = `${year}/${month}`;
+            const isMonthActive = selectedFolder === folderKey;
+            const monthLabel = month === 'keep' ? '🔒 Permanent Keep (protected/keep)' : `📁 ${month} <span style="font-size:11px; color:var(--muted);">(${year}/${month})</span>`;
+            html += `
+              <button class="folder-btn month-node ${isMonthActive ? 'active' : ''}" onclick="selectFolder('${folderKey}')" title="${formatBytes(mData.bytes)}">
+                <span>${monthLabel}</span>
+                <span class="folder-count">${mData.count}</span>
+              </button>
+            `;
+          }
+        }
+      }
+
+      treeEl.innerHTML = html;
+    }
+
+    function renderGallery() {
+      const q = document.getElementById('searchInput').value.trim().toLowerCase();
+      const grid = document.getElementById('galleryGrid');
+
+      const filtered = allImages.filter(item => {
+        if (selectedFolder !== 'all') {
+          if (selectedFolder.includes('/')) {
+            if (`${item.year}/${item.month}` !== selectedFolder) return false;
+          } else {
+            if (item.year !== selectedFolder) return false;
+          }
+        }
+        if (q && !item.filename.toLowerCase().includes(q)) return false;
+        return true;
+      });
+
+      const filteredBytes = filtered.reduce((acc, cur) => acc + (cur.size || 0), 0);
+      const bcEl = document.getElementById('currentFolderBreadcrumb');
+      const stEl = document.getElementById('currentFolderStats');
+
+      if (selectedFolder === 'all') {
+        bcEl.textContent = '🗂️ All Assets (storage/raw/*)';
+      } else {
+        bcEl.textContent = `📂 storage/raw/${selectedFolder}/`;
+      }
+      stEl.textContent = `${filtered.length} items · ${formatBytes(filteredBytes)}`;
+
+      if (filtered.length === 0) {
+        grid.innerHTML = `<div style="grid-column:1/-1; text-align:center; padding:56px 20px; color:var(--muted); background:var(--panel); border:1px solid var(--border); border-radius:12px;">No matching assets in this folder. Drop files or paste (Ctrl+V) to upload.</div>`;
+        return;
+      }
+
+      grid.innerHTML = filtered.map((item) => {
+        const isImg = item.isImage !== false;
+        const iconMap = {
+          pdf: '📄 PDF Document',
+          video: '🎬 Video Asset',
+          audio: '🎵 Audio Asset',
+          archive: '📦 Archive',
+          document: '📑 Document'
+        };
+        const badgeLabel = iconMap[item.category] || '📎 Attachment';
+        const mdText = isImg ? `![](${item.rawUrl})` : `[📎 ${item.filename}](${item.rawUrl})`;
+        const isLocked = Boolean(item.locked);
+        const inProtFolder = Boolean(item.inProtectedFolder);
+        const lockBadgeHtml = isLocked
+          ? `<span style="position:absolute; top:8px; left:8px; background:rgba(245,158,11,0.92); color:#fff; font-size:11px; font-weight:700; padding:2px 8px; border-radius:6px;">${inProtFolder ? '🛡️ Protected Folder' : '🔒 Locked'}</span>`
+          : '';
+
+        const thumbHtml = isImg
+          ? `<div class="img-thumb-wrap" onclick="openPreview('${item.year}', '${item.month}', '${item.filename}')">
+               <img src="${item.rawPreviewPath}" loading="lazy" alt="${item.filename}" />
+               ${lockBadgeHtml}
+               <span class="img-tag">${item.year}/${item.month}</span>
+             </div>`
+          : `<div class="img-thumb-wrap" onclick="window.open('${item.rawPreviewPath}', '_blank')" style="flex-direction:column; gap:6px; cursor:pointer;">
+               ${lockBadgeHtml}
+               <div style="font-size:28px;">${badgeLabel.split(' ')[0]}</div>
+               <div style="font-size:12px; color:#93c5fd; font-weight:600;">${badgeLabel.split(' ')[1] || ''} (${(item.ext || '').toUpperCase()})</div>
+               <span class="img-tag">${item.year}/${item.month}</span>
+             </div>`;
+
+        const lockBtnHtml = inProtFolder
+          ? `<button class="btn btn-outline" disabled title="Resides inside protected folder: deletion is permanently locked" style="opacity:0.7; cursor:not-allowed;">🛡️ Protected</button>`
+          : `<button class="btn btn-outline" onclick="toggleLockImage('${item.year}', '${item.month}', '${item.filename}', ${!isLocked})" style="${isLocked ? 'border-color:#f59e0b; color:#fbbf24;' : ''}">${isLocked ? '🔓 Unlock' : '🔒 Lock'}</button>`;
+
+        return `
+        <div class="img-card" style="${isLocked ? 'border-color: rgba(245,158,11,0.45);' : ''}">
+          ${thumbHtml}
+          <div class="img-body">
+            <div>
+              <div class="img-name" title="${item.filename}">${item.filename}</div>
+              <div class="img-meta">
+                <span>Raw ${formatBytes(item.size)}</span>
+                <span>${isImg ? (item.hasCache ? 'Cached (' + formatBytes(item.cacheSize) + ')' : 'On-demand') : 'Direct stream'}</span>
+              </div>
+            </div>
+            <div class="card-actions">
+              <button class="btn btn-primary" onclick="copyText('${mdText}', 'Obsidian Markdown')">📋 Obsidian MD</button>
+              <button class="btn btn-outline" onclick="copyText('${item.pubUrl}', 'Public URL')">🔗 Public URL</button>
+              ${lockBtnHtml}
+              <button class="btn btn-danger" ${isLocked ? 'disabled style="opacity:0.45; cursor:not-allowed;" title="Asset is locked. Unlock before deleting."' : ''} onclick="deleteImage('${item.year}', '${item.month}', '${item.filename}', ${isLocked})">🗑️ Delete</button>
+            </div>
+          </div>
+        </div>
+      `;
+      }).join('');
+    }
+
+    async function uploadFiles(files) {
+      if (!files || !files.length) return;
+      const toProt = document.getElementById('uploadToProtectedChk')?.checked;
+      showToast(`⏳ ${t('uploading', { count: files.length })}${toProt ? ' (protected)' : ''}`);
+      for (const file of files) {
+        const fd = new FormData();
+        fd.append('file', file);
+        const headers = { 'X-File-Name': encodeURIComponent(file.name) };
+        if (toProt) headers['X-Protected-Folder'] = '1';
+        const res = await fetch('/api/image/upload', {
+          method: 'POST',
+          headers,
+          body: fd
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          alert('Upload failed: ' + (err.error || res.statusText));
+        }
+      }
+      document.getElementById('fileInput').value = '';
+      showToast('✅ ' + t('uploadSuccess'));
+      loadImages();
+    }
+
+    async function toggleLockImage(year, month, filename, locked) {
+      const res = await fetch('/api/modules/image-host/lock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ year, month, filename, locked })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(data.error || 'Action failed');
+        return;
+      }
+      showToast(locked ? `🔒 ${t('lockSuccess', { filename })}` : `🔓 ${t('unlockSuccess', { filename })}`);
+      loadImages();
+    }
+
+    const dropZone = document.getElementById('dropZone');
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('dragover');
+      if (e.dataTransfer.files.length) uploadFiles(e.dataTransfer.files);
+    });
+    window.addEventListener('paste', (e) => {
+      if (document.getElementById('appView').classList.contains('hidden')) return;
+      const items = e.clipboardData?.items || [];
+      const files = [];
+      for (const it of items) {
+        if (it.type.startsWith('image/')) files.push(it.getAsFile());
+      }
+      if (files.length) uploadFiles(files);
+    });
+
+    async function deleteImage(year, month, filename, isLocked) {
+      if (isLocked) {
+        alert(`🔒 ${t('lockedNotice', { filename })}`);
+        return;
+      }
+      if (!confirm(t('deleteConfirm', { filename }))) return;
+      const res = await fetch(`/api/modules/image-host/item/${encodeURIComponent(year)}/${encodeURIComponent(month)}/${encodeURIComponent(filename)}`, { method: 'DELETE' });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        showToast('🗑️ Asset deleted');
+        loadImages();
+      } else {
+        alert(data.error || 'Failed to delete asset');
+      }
+    }
+
+    async function clearWatermarkCache() {
+      const res = await fetch('/api/modules/image-host/cache/clear', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        showToast('✅ ' + (data.message || t('cacheCleared')));
+        loadImages();
+      }
+    }
+
+    function openPreview(year, month, filename) {
+      currentModalItem = allImages.find(i => i.year === year && i.month === month && i.filename === filename);
+      if (!currentModalItem) return;
+      document.getElementById('modalTitle').textContent = filename;
+      document.getElementById('previewModal').classList.remove('hidden');
+      setModalMode('pub');
+    }
+
+    function setModalMode(mode) {
+      if (!currentModalItem) return;
+      const img = document.getElementById('modalImg');
+      const btnPub = document.getElementById('btnViewPub');
+      const btnRaw = document.getElementById('btnViewRaw');
+      if (mode === 'pub') {
+        img.src = currentModalItem.pubPreviewPath + '?t=' + Date.now();
+        btnPub.className = 'btn btn-primary';
+        btnRaw.className = 'btn btn-outline';
+      } else {
+        img.src = currentModalItem.rawPreviewPath;
+        btnRaw.className = 'btn btn-primary';
+        btnPub.className = 'btn btn-outline';
+      }
+    }
+
+    function closeModal() {
+      document.getElementById('previewModal').classList.add('hidden');
+      document.getElementById('modalImg').src = '';
+      loadImages();
+    }
+
+    async function generateNewTotp() {
+      const res = await fetch('/api/platform/totp-generate', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        document.getElementById('newTotpSecret').textContent = data.secret;
+        document.getElementById('newTotpUri').textContent = data.otpauthUri;
+        document.getElementById('f_totp_secret').value = data.secret;
+        document.getElementById('totpResultBox').classList.remove('hidden');
+      }
+    }
+
+    initApp();
+  </script>
+</body>
+</html>
