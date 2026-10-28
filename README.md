@@ -93,6 +93,10 @@ site_name: FileMaster Server
 port: 3000
 base_url: http://localhost:3000
 
+# Upstream Git Repository (One-Click Hot Update & Restart)
+upstream_repo: https://github.com/weichen-ink/file-master-server.git
+upstream_branch: main
+
 # Security & Authentication
 admin_path: panel-9x7k2m        # Obfuscated admin path
 username: admin                 # Management username
@@ -132,6 +136,9 @@ image_host:
 | `DELETE` | `/api/modules/image-host/item/:y/:m/:f`| Delete asset and associated cache | API Token / Session |
 | `POST` | `/api/modules/image-host/orphans` | Discover or batch-clean orphan files | API Token / Session |
 | `POST` | `/api/modules/image-host/cache/clear` | Purge all cached WebP derived images | API Token / Session |
+| `GET` | `/api/platform/update/status` | Check local & upstream Git commit status | Session |
+| `POST` | `/api/platform/update/pull` | Pull upstream repo, preserve `config.yaml`, & hot restart | Session |
+| `POST` | `/api/platform/restart` | Gracefully restart the server process | Session |
 
 ---
 

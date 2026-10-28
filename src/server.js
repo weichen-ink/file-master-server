@@ -18,7 +18,14 @@ const {
   requireAdmin
 } = require('./core/security');
 const { collectRuntimeMetrics } = require('./core/metrics');
+const {
+  getUpdateStatus,
+  performHotUpdate,
+  restartServerProcess
+} = require('./core/updater');
 const { registerImageHostModule } = require('./modules/image-host');
+
+let httpServer = null;
 
 const app = express();
 app.use(express.json({ limit: '10mb' }));
@@ -139,6 +146,55 @@ app.put('/api/platform/config', requireAdmin, (req, res) => {
   }
 });
 
+// ================= 1.5 Upstream Repository & Hot Update APIs =================
+app.get('/api/platform/update/status', requireAdmin, async (req, res) => {
+  try {
+    const fetchRemote = req.query.fetch === '1' || req.query.fetch === 'true';
+    const status = await getUpdateStatus({ fetchRemote });
+    res.json(status);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.post('/api/platform/update/pull', requireAdmin, async (req, res) => {
+  try {
+    const { upstream_repo, upstream_branch } = req.body || {};
+    const patch = {};
+    if (typeof upstream_repo === 'string' && upstream_repo.trim()) {
+      patch.upstream_repo = upstream_repo.trim();
+    }
+    if (typeof upstream_branch === 'string' && upstream_branch.trim()) {
+      patch.upstream_branch = upstream_branch.trim();
+    }
+    if (Object.keys(patch).length > 0) {
+      updateConfigPreservingComments(patch);
+    }
+
+    const result = await performHotUpdate();
+    res.on('finish', () => {
+      setTimeout(() => {
+        restartServerProcess(httpServer, __filename);
+      }, 350);
+    });
+    res.json({
+      ...result,
+      restarting: true
+    });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.post('/api/platform/restart', requireAdmin, (req, res) => {
+  res.on('finish', () => {
+    setTimeout(() => {
+      restartServerProcess(httpServer, __filename);
+    }, 300);
+  });
+  res.json({ success: true, restarting: true });
+});
+
 // ================= 2. Mount Platform Modules =================
 // Module 1: Image Host & Asset Manager
 registerImageHostModule(app);
@@ -168,10 +224,25 @@ app.use((req, res) => {
 const initialCfg = getConfig();
 const PORT = process.env.PORT || initialCfg.port || 3000;
 
-app.listen(PORT, () => {
-  const cfg = getConfig();
-  console.log(`🚀 ${cfg.site_name} is running!`);
-  console.log(`🔒 Stealth Console: ${cfg.base_url}/${cfg.admin_path}`);
-  console.log(`🖼️ Raw Asset Route: ${cfg.base_url}/${cfg.image_host.raw_secret_path}/YYYY/MM/filename.ext`);
-  console.log(`🌐 Public WebP Route: ${cfg.base_url}/pub/YYYY/MM/filename.webp`);
-});
+function startServer(port, retriesLeft = 6) {
+  const srv = app.listen(port, () => {
+    httpServer = srv;
+    const cfg = getConfig();
+    console.log(`🚀 ${cfg.site_name} is running!`);
+    console.log(`🔒 Stealth Console: ${cfg.base_url}/${cfg.admin_path}`);
+    console.log(`🖼️ Raw Asset Route: ${cfg.base_url}/${cfg.image_host.raw_secret_path}/YYYY/MM/filename.ext`);
+    console.log(`🌐 Public WebP Route: ${cfg.base_url}/pub/YYYY/MM/filename.webp`);
+  });
+
+  srv.on('error', (err) => {
+    if (err.code === 'EADDRINUSE' && retriesLeft > 0) {
+      console.warn(`[Server] Port ${port} busy during restart handoff, retrying in 350ms (${retriesLeft} left)...`);
+      setTimeout(() => startServer(port, retriesLeft - 1), 350);
+    } else {
+      console.error(`[Server] Failed to bind port ${port}:`, err.message);
+      process.exit(1);
+    }
+  });
+}
+
+startServer(PORT);

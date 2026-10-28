@@ -488,7 +488,8 @@
         </button>
       </div>
 
-      <div style="border-top: 1px solid var(--border); padding-top: 14px;">
+      <div style="border-top: 1px solid var(--border); padding-top: 14px; display:flex; flex-direction:column; gap:8px;">
+        <button class="btn btn-primary" style="width:100%;" onclick="quickJumpHotUpdate()">🚀 Pull & Hot Update</button>
         <button class="btn btn-outline" style="width:100%;" onclick="logout()">Sign Out</button>
       </div>
     </aside>
@@ -574,6 +575,7 @@
               <input type="checkbox" id="autoRefreshMetrics" checked onchange="toggleMetricsTimer()" style="accent-color:var(--primary);" />
               <span>Auto-refresh every 5s</span>
             </label>
+            <button class="btn btn-primary" onclick="quickJumpHotUpdate()">🚀 Pull & Hot Update</button>
             <button class="btn btn-outline" onclick="loadServerMetrics(true)">🔄 Refresh Now</button>
           </div>
         </div>
@@ -686,6 +688,47 @@
         </div>
 
         <div id="cfgFormPanel">
+          <!-- ======= Upstream Repository & One-Click Hot Update Card ======= -->
+          <div id="hotUpdateCard" class="stat-card" style="margin-bottom: 18px; border-color: rgba(59, 130, 246, 0.45);">
+            <div style="display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:14px;">
+              <div>
+                <h3 style="font-size:16px; display:flex; align-items:center; gap:8px;">
+                  <span>🚀 Upstream Repository & One-Click Hot Update</span>
+                  <span id="updVersionBadge" class="inline-code" style="font-size:11.5px;">v0.1.0</span>
+                </h3>
+                <p style="font-size:12px; color:var(--muted); margin-top:3px;">
+                  Configure upstream Git repository URL & branch. Clicking <strong>Pull & Hot Restart</strong> automatically backs up and preserves your <code class="inline-code">config.yaml</code>, pulls latest code, updates dependencies if needed, and restarts the server.
+                </p>
+              </div>
+              <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <button id="btnCheckUpdate" class="btn btn-outline" onclick="checkRemoteUpdate()">🔍 Check Updates</button>
+                <button id="btnRestartOnly" class="btn btn-outline" onclick="triggerServerRestartOnly()">♻️ Restart Only</button>
+                <button id="btnPullUpdate" class="btn btn-primary" onclick="triggerHotUpdate()">⚡ Pull & Hot Restart</button>
+              </div>
+            </div>
+
+            <div style="display:grid; grid-template-columns: 1fr 180px; gap:12px;">
+              <div class="form-group" style="margin-bottom:10px;">
+                <label>Upstream Git Repository URL (upstream_repo)</label>
+                <input type="text" id="f_upstream_repo" class="form-input" placeholder="https://github.com/weichen-ink/file-master-server.git" />
+              </div>
+              <div class="form-group" style="margin-bottom:10px;">
+                <label>Upstream Branch (upstream_branch)</label>
+                <input type="text" id="f_upstream_branch" class="form-input" placeholder="main" />
+              </div>
+            </div>
+
+            <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; font-size:12px; color:var(--muted); padding-top:4px;">
+              <div>
+                <span>Local Commit: <code class="inline-code" id="updLocalCommit">Loading...</code></span>
+                <span id="updRemoteStatus" style="margin-left:10px;"></span>
+              </div>
+              <span id="updLastChecked"></span>
+            </div>
+
+            <div id="updLogBox" class="hidden" style="margin-top:12px; padding:12px; background:#090d16; border:1px solid var(--border); border-radius:8px; font-family:var(--font-mono); font-size:12px; color:#cbd5e1; max-height:220px; overflow-y:auto; white-space:pre-wrap; line-height:1.5;"></div>
+          </div>
+
           <div class="kv-grid" style="margin-bottom: 18px;">
             <div class="stat-card">
               <h3 style="font-size:16px; margin-bottom:14px;">🔒 1. Core Platform & Security</h3>
@@ -1093,6 +1136,7 @@
       if (!res.ok) return;
       const { config, rawYaml } = await res.json();
       fillConfigForm(config, rawYaml);
+      loadLocalUpdateStatus();
     }
 
     function fillConfigForm(cfg, rawYaml) {
@@ -1100,6 +1144,8 @@
       document.getElementById('f_site_name').value = cfg.site_name || '';
       document.getElementById('f_base_url').value = cfg.base_url || '';
       document.getElementById('f_port').value = cfg.port || 3000;
+      document.getElementById('f_upstream_repo').value = cfg.upstream_repo || '';
+      document.getElementById('f_upstream_branch').value = cfg.upstream_branch || 'main';
       document.getElementById('f_admin_path').value = cfg.admin_path || '';
       document.getElementById('f_max_login_attempts').value = cfg.max_login_attempts || 3;
       document.getElementById('f_username').value = cfg.username || '';
@@ -1128,6 +1174,8 @@
         site_name: document.getElementById('f_site_name').value.trim(),
         base_url: document.getElementById('f_base_url').value.trim().replace(/\/+$/, ''),
         port: Number(document.getElementById('f_port').value) || 3000,
+        upstream_repo: document.getElementById('f_upstream_repo').value.trim(),
+        upstream_branch: document.getElementById('f_upstream_branch').value.trim() || 'main',
         admin_path: document.getElementById('f_admin_path').value.trim().replace(/^\/+|\/+$/g, ''),
         max_login_attempts: Number(document.getElementById('f_max_login_attempts').value) || 3,
         username: document.getElementById('f_username').value.trim(),
@@ -1562,6 +1610,177 @@
         document.getElementById('newTotpUri').textContent = data.otpauthUri;
         document.getElementById('f_totp_secret').value = data.secret;
         document.getElementById('totpResultBox').classList.remove('hidden');
+      }
+    }
+
+    function quickJumpHotUpdate() {
+      const platformNavBtn = document.querySelectorAll('.nav-item')[2];
+      switchTab('platform', platformNavBtn);
+      setCfgEditMode('form');
+      const card = document.getElementById('hotUpdateCard');
+      if (card) {
+        card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
+
+    function appendUpdateLog(text, replace = false) {
+      const logBox = document.getElementById('updLogBox');
+      logBox.classList.remove('hidden');
+      if (replace) {
+        logBox.textContent = text;
+      } else {
+        logBox.textContent = (logBox.textContent ? logBox.textContent + '\n' : '') + text;
+      }
+      logBox.scrollTop = logBox.scrollHeight;
+    }
+
+    async function loadLocalUpdateStatus() {
+      try {
+        const res = await fetch('/api/platform/update/status');
+        if (!res.ok) return;
+        const st = await res.json();
+        document.getElementById('updVersionBadge').textContent = 'v' + (st.version || '0.1.0');
+        const commitEl = document.getElementById('updLocalCommit');
+        if (st.localShortCommit) {
+          commitEl.textContent = `#${st.localShortCommit} (${st.currentBranch || 'main'}) · ${st.localCommitMessage || ''}`;
+        } else {
+          commitEl.textContent = st.hasGitDir ? 'No commits yet' : 'Not initialized (will auto-init on pull)';
+        }
+      } catch {
+        // Ignore status error
+      }
+    }
+
+    async function checkRemoteUpdate() {
+      const btn = document.getElementById('btnCheckUpdate');
+      const statusEl = document.getElementById('updRemoteStatus');
+      const checkedEl = document.getElementById('updLastChecked');
+      btn.disabled = true;
+      btn.textContent = '⏳ Checking...';
+      statusEl.innerHTML = `<span style="color:var(--muted);">Fetching remote branch...</span>`;
+
+      try {
+        // Save upstream_repo / upstream_branch if user modified the inputs before checking
+        const upstream_repo = document.getElementById('f_upstream_repo').value.trim();
+        const upstream_branch = document.getElementById('f_upstream_branch').value.trim() || 'main';
+        if (upstream_repo) {
+          await fetch('/api/platform/config', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mode: 'form', patch: { upstream_repo, upstream_branch } })
+          });
+        }
+
+        const res = await fetch('/api/platform/update/status?fetch=1');
+        const st = await res.json();
+        if (!res.ok) {
+          throw new Error(st.error || 'Failed to check remote repository');
+        }
+
+        checkedEl.textContent = 'Checked at ' + new Date().toLocaleTimeString();
+        if (st.hasUpdate) {
+          statusEl.innerHTML = `<span style="color:var(--warn); font-weight:600;">⚡ ${st.commitsBehind} new commit(s) available (latest: #${st.remoteShortCommit})</span>`;
+          if (st.incomingCommits && st.incomingCommits.length > 0) {
+            appendUpdateLog(`Incoming commits from ${st.upstreamBranch}:\n` + st.incomingCommits.map(c => '  • ' + c).join('\n'), true);
+          }
+          showToast(`⚡ Found ${st.commitsBehind} new update(s)!`);
+        } else {
+          statusEl.innerHTML = `<span style="color:var(--success); font-weight:600;">✅ Up to date with origin/${st.upstreamBranch} (#${st.remoteShortCommit || st.localShortCommit || '-'})</span>`;
+          showToast('✅ Already on latest commit');
+        }
+      } catch (err) {
+        statusEl.innerHTML = `<span style="color:var(--danger);">❌ Check failed</span>`;
+        appendUpdateLog(`Error checking updates: ${err.message}`, true);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '🔍 Check Updates';
+      }
+    }
+
+    async function waitForServerReconnect(maxAttempts = 25) {
+      appendUpdateLog('Waiting for server process to restart and come back online...');
+      for (let i = 1; i <= maxAttempts; i++) {
+        await new Promise((r) => setTimeout(r, 900));
+        try {
+          const res = await fetch('/api/platform/status?t=' + Date.now(), { cache: 'no-store' });
+          if (res.ok) {
+            appendUpdateLog('✅ Server is back online! Reloading console state...');
+            showToast('🚀 Hot update & restart completed!');
+            await loadConfigForEdit();
+            await loadImages();
+            return true;
+          }
+        } catch {
+          // Server is still restarting
+        }
+      }
+      appendUpdateLog('⚠️ Reconnect timed out. Please refresh the page manually.');
+      return false;
+    }
+
+    async function triggerHotUpdate() {
+      const upstream_repo = document.getElementById('f_upstream_repo').value.trim();
+      const upstream_branch = document.getElementById('f_upstream_branch').value.trim() || 'main';
+      if (!upstream_repo) {
+        alert('Please enter an Upstream Git Repository URL first.');
+        return;
+      }
+      if (!confirm(`Pull latest code from:\n${upstream_repo} (branch: ${upstream_branch})\n\nand automatically restart the server? (Your config.yaml will be preserved)`)) {
+        return;
+      }
+
+      const btnPull = document.getElementById('btnPullUpdate');
+      const btnCheck = document.getElementById('btnCheckUpdate');
+      const btnRestart = document.getElementById('btnRestartOnly');
+      btnPull.disabled = true;
+      btnCheck.disabled = true;
+      btnRestart.disabled = true;
+      btnPull.textContent = '⏳ Pulling & Updating...';
+      appendUpdateLog(`Starting hot update from ${upstream_repo} (${upstream_branch})...`, true);
+
+      try {
+        const res = await fetch('/api/platform/update/pull', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ upstream_repo, upstream_branch })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || 'Hot update failed');
+        }
+
+        if (Array.isArray(data.logs)) {
+          appendUpdateLog(data.logs.join('\n'), true);
+        }
+        btnPull.textContent = '🔄 Restarting Service...';
+        await waitForServerReconnect();
+      } catch (err) {
+        appendUpdateLog(`❌ Hot update failed: ${err.message}`);
+        alert('Hot update failed: ' + err.message);
+      } finally {
+        btnPull.disabled = false;
+        btnCheck.disabled = false;
+        btnRestart.disabled = false;
+        btnPull.textContent = '⚡ Pull & Hot Restart';
+      }
+    }
+
+    async function triggerServerRestartOnly() {
+      if (!confirm('Restart the FileMaster Server Node.js process now?')) return;
+      const btnRestart = document.getElementById('btnRestartOnly');
+      btnRestart.disabled = true;
+      btnRestart.textContent = '⏳ Restarting...';
+      appendUpdateLog('Triggering graceful server process restart...', true);
+
+      try {
+        const res = await fetch('/api/platform/restart', { method: 'POST' });
+        if (!res.ok) throw new Error('Failed to trigger restart');
+        await waitForServerReconnect();
+      } catch (err) {
+        appendUpdateLog(`❌ Restart error: ${err.message}`);
+      } finally {
+        btnRestart.disabled = false;
+        btnRestart.textContent = '♻️ Restart Only';
       }
     }
 

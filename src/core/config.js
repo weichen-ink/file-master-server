@@ -24,6 +24,10 @@ function getConfig() {
         site_name: parsed.site_name || 'FileMaster Server',
         port: Number(parsed.port) || 3000,
         base_url: String(parsed.base_url || 'http://localhost:3000').replace(/\/+$/, ''),
+        upstream_repo: String(
+          parsed.upstream_repo || 'https://github.com/weichen-ink/file-master-server.git'
+        ).trim(),
+        upstream_branch: String(parsed.upstream_branch || 'main').trim() || 'main',
         admin_path: String(parsed.admin_path || 'panel-9x7k2m').replace(/^\/+|\/+$/g, ''),
         username: String(parsed.username || 'admin'),
         password: String(parsed.password || 'admin-password-123'),
@@ -116,6 +120,8 @@ function updateConfigPreservingComments(patch) {
     'site_name',
     'port',
     'base_url',
+    'upstream_repo',
+    'upstream_branch',
     'admin_path',
     'username',
     'password',

@@ -1,13 +1,28 @@
 const crypto = require('node:crypto');
-const { getConfig } = require('./config');
+const { getConfig, readJsonData, writeJsonData } = require('./config');
 
 // In-memory IP brute-force protection map: ip -> { count, bannedUntil, lastAttempt }
 const ipFailures = new Map();
 const BAN_DURATION_MS = 24 * 60 * 60 * 1000; // 24-hour lockout
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30-day session retention
 
-// Generate a random boot salt; combined with user password so changing password invalidates older cookies
-const SERVER_BOOT_SALT = crypto.randomBytes(16).toString('hex');
+// Persist instance salt in data/security_meta.json so hot updates & restarts keep active sessions alive,
+// while changing username, password, or admin_path still immediately invalidates older cookies.
+function loadOrCreateInstanceSalt() {
+  try {
+    const meta = readJsonData('security_meta', null);
+    if (meta && typeof meta.instanceSalt === 'string' && meta.instanceSalt.length >= 16) {
+      return meta.instanceSalt;
+    }
+    const newSalt = crypto.randomBytes(16).toString('hex');
+    writeJsonData('security_meta', { instanceSalt: newSalt, createdAt: Date.now() });
+    return newSalt;
+  } catch {
+    return 'filemaster-default-instance-salt';
+  }
+}
+
+const SERVER_BOOT_SALT = loadOrCreateInstanceSalt();
 
 function getSigningSecret(cfg) {
   return crypto
