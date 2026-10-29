@@ -62,12 +62,6 @@
         <button class="nav-item" onclick="switchTab('platform', this)">
           <span data-i18n="navConfig">🛡️ 配置与安全中心</span>
         </button>
-
-        <div class="nav-section-title" style="margin-top: 14px;">Planned Modules</div>
-        <button class="nav-item" onclick="switchTab('future-countdown', this)">
-          <span>⏳ Event Countdowns</span>
-          <span class="badge">Planned</span>
-        </button>
       </div>
 
       <div style="border-top: 1px solid var(--border); padding-top: 14px; display:flex; flex-direction:column; gap:8px;">
@@ -290,21 +284,28 @@
               </div>
             </div>
 
-            <div style="display:grid; grid-template-columns: 1fr 1fr 160px; gap:12px;">
+            <div style="display:grid; grid-template-columns: 1fr 150px 1fr; gap:12px; align-items:end;">
               <div class="form-group" style="margin-bottom:10px;">
-                <label>官方仓库 (Official Repo - 锁定安全保护)</label>
+                <label data-i18n="lblOfficialRepo">官方代码源与分支 (Official Repo & Branch)</label>
                 <div style="padding: 9px 12px; background: rgba(0,0,0,0.35); border: 1px solid var(--border); border-radius: 8px; font-size: 12.5px; color: #93c5fd; font-family: var(--font-mono); display:flex; align-items:center; justify-content:space-between;">
-                  <span>weichen-ink/file-master-server</span>
+                  <span>weichen-ink/file-master-server <span style="color:var(--muted); font-size:11px;">(branch: main)</span></span>
                   <span style="font-size:11px; background:rgba(16,185,129,0.2); color:#34d399; padding:1px 6px; border-radius:4px;">🔒 官方锁定</span>
                 </div>
               </div>
               <div class="form-group" style="margin-bottom:10px;">
-                <label>GitHub 加速镜像源 (upstream_mirror, 可选)</label>
-                <input type="text" id="f_upstream_mirror" class="form-input" placeholder="留空官方直连，或如: https://ghproxy.net/" />
+                <label data-i18n="lblEnableMirror">是否开启加速</label>
+                <select id="f_enable_mirror" class="form-input" onchange="toggleMirrorPresetSelect()">
+                  <option value="false">关闭 (官方直连)</option>
+                  <option value="true">开启加速</option>
+                </select>
               </div>
-              <div class="form-group" style="margin-bottom:10px;">
-                <label>分支 (upstream_branch)</label>
-                <input type="text" id="f_upstream_branch" class="form-input" placeholder="main" />
+              <div class="form-group" id="group_mirror_preset" style="margin-bottom:10px;">
+                <label data-i18n="lblMirrorPreset">加速服务器选择</label>
+                <select id="f_upstream_mirror_preset" class="form-input">
+                  <option value="https://ghproxy.net/">ghproxy.net (推荐 / 通用高速)</option>
+                  <option value="https://gh-proxy.com/">gh-proxy.com (备用镜像)</option>
+                  <option value="https://mirror.ghproxy.com/">mirror.ghproxy.com (备用镜像)</option>
+                </select>
               </div>
             </div>
 
@@ -509,17 +510,6 @@
             <button class="btn btn-primary" onclick="saveConfigRaw()">💾 Validate & Save config.yaml</button>
           </div>
           <textarea id="rawYamlEditor" class="form-input" style="height:460px; font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:13px; line-height:1.6; resize:vertical;" spellcheck="false"></textarea>
-        </div>
-      </section>
-
-      <!-- ======= Future Expansion Slots ======= -->
-      <section id="tab-future-countdown" class="hidden">
-        <div class="stat-card">
-          <h2 style="margin-bottom:8px;">⏳ Event Countdowns (Planned Module Slot)</h2>
-          <p style="color:var(--muted); font-size:14px;">
-            The server core provides <code class="inline-code">readJsonData('countdowns')</code> and <code class="inline-code">writeJsonData('countdowns', data)</code> atomic storage.
-            When implementing this module, register routes in <code class="inline-code">src/modules/countdown/</code>; data persists cleanly in <code class="inline-code">data/countdowns.json</code>.
-          </p>
         </div>
       </section>
 

@@ -206,15 +206,52 @@ function toggleConsoleOptFields() {
   }
 }
 
+function toggleMirrorPresetSelect() {
+  const isEnabled = document.getElementById('f_enable_mirror')?.value === 'true';
+  const group = document.getElementById('group_mirror_preset');
+  const sel = document.getElementById('f_upstream_mirror_preset');
+  if (sel) sel.disabled = !isEnabled;
+  if (group) {
+    group.style.opacity = isEnabled ? '1' : '0.45';
+    group.style.pointerEvents = isEnabled ? 'auto' : 'none';
+  }
+}
+
+function getSelectedUpstreamMirror() {
+  const isEnabled = document.getElementById('f_enable_mirror')?.value === 'true';
+  if (!isEnabled) return '';
+  return (document.getElementById('f_upstream_mirror_preset')?.value || '').trim();
+}
+
 function fillConfigForm(cfg, rawYaml) {
   document.getElementById('rawYamlEditor').value = rawYaml || '';
   document.getElementById('f_site_name').value = cfg.site_name || '';
   document.getElementById('f_base_url').value = cfg.base_url || '';
   document.getElementById('f_port').value = cfg.port || 3000;
-  if (document.getElementById('f_upstream_mirror')) {
-    document.getElementById('f_upstream_mirror').value = cfg.upstream_mirror || '';
+  
+  const mirror = (cfg.upstream_mirror || '').trim();
+  const enableMirrorEl = document.getElementById('f_enable_mirror');
+  const mirrorPresetEl = document.getElementById('f_upstream_mirror_preset');
+  if (enableMirrorEl && mirrorPresetEl) {
+    if (mirror) {
+      enableMirrorEl.value = 'true';
+      let matched = false;
+      for (const opt of mirrorPresetEl.options) {
+        if (opt.value === mirror || mirror.includes(opt.value.replace(/^https?:\/\//, '').replace(/\/+$/, ''))) {
+          mirrorPresetEl.value = opt.value;
+          matched = true;
+          break;
+        }
+      }
+      if (!matched) {
+        mirrorPresetEl.value = mirrorPresetEl.options[0]?.value || 'https://ghproxy.net/';
+      }
+    } else {
+      enableMirrorEl.value = 'false';
+    }
+    toggleMirrorPresetSelect();
   }
-  document.getElementById('f_upstream_branch').value = cfg.upstream_branch || 'main';
+
   document.getElementById('f_admin_path').value = cfg.admin_path || '';
   document.getElementById('f_max_login_attempts').value = cfg.max_login_attempts || 3;
   document.getElementById('f_username').value = cfg.username || '';
@@ -245,8 +282,8 @@ async function saveConfigForm() {
     site_name: document.getElementById('f_site_name').value.trim(),
     base_url: document.getElementById('f_base_url').value.trim().replace(/\/+$/, ''),
     port: Number(document.getElementById('f_port').value) || 3000,
-    upstream_mirror: document.getElementById('f_upstream_mirror') ? document.getElementById('f_upstream_mirror').value.trim() : '',
-    upstream_branch: document.getElementById('f_upstream_branch').value.trim() || 'main',
+    upstream_mirror: getSelectedUpstreamMirror(),
+    upstream_branch: 'main',
     admin_path: document.getElementById('f_admin_path').value.trim().replace(/^\/+|\/+$/g, ''),
     max_login_attempts: Number(document.getElementById('f_max_login_attempts').value) || 3,
     username: document.getElementById('f_username').value.trim(),
@@ -845,8 +882,8 @@ async function checkRemoteUpdate() {
   statusEl.innerHTML = `<span style="color:var(--muted);">Fetching remote branch...</span>`;
 
   try {
-    const upstream_mirror = document.getElementById('f_upstream_mirror') ? document.getElementById('f_upstream_mirror').value.trim() : '';
-    const upstream_branch = document.getElementById('f_upstream_branch').value.trim() || 'main';
+    const upstream_mirror = getSelectedUpstreamMirror();
+    const upstream_branch = 'main';
     await fetch('/api/platform/config', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -899,8 +936,8 @@ async function waitForServerReconnect(maxAttempts = 25) {
 }
 
 async function triggerHotUpdate() {
-  const upstream_mirror = document.getElementById('f_upstream_mirror') ? document.getElementById('f_upstream_mirror').value.trim() : '';
-  const upstream_branch = document.getElementById('f_upstream_branch').value.trim() || 'main';
+  const upstream_mirror = getSelectedUpstreamMirror();
+  const upstream_branch = 'main';
   const mirrorHint = upstream_mirror ? ` (加速镜像: ${upstream_mirror})` : ' (官方直连)';
   if (!confirm(`确定拉取官方仓库最新代码 [${upstream_branch}]${mirrorHint} 并平滑重启服务吗？（现有配置与数据将完全保留）`)) {
     return;

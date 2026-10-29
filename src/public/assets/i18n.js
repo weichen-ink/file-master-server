@@ -26,7 +26,10 @@ const I18N = {
     navConfig: "🛡️ 配置与安全中心",
     navHotUpdate: "🚀 在线热更新",
     navLogout: "退出登录",
-    langToggle: "🌐 English"
+    langToggle: "🌐 English",
+    lblOfficialRepo: "官方代码源与分支 (Official Repo & Branch)",
+    lblEnableMirror: "是否开启加速",
+    lblMirrorPreset: "加速服务器选择"
   },
   en: {
     allAssets: "All Assets",
@@ -54,7 +57,10 @@ const I18N = {
     navConfig: "🛡️ Config & Security",
     navHotUpdate: "🚀 Pull & Hot Update",
     navLogout: "Sign Out",
-    langToggle: "🌐 简体中文"
+    langToggle: "🌐 简体中文",
+    lblOfficialRepo: "Official Repository & Branch",
+    lblEnableMirror: "GitHub Accelerator",
+    lblMirrorPreset: "Accelerator Server Node"
   }
 };
 

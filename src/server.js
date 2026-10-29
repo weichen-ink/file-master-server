@@ -428,7 +428,7 @@ registerImageHostModule(app);
 // Module 2: Lightweight Secure File Sharing with Expiring Links (/s/:shareId)
 registerShareModule(app);
 
-// Additional modules (Countdowns, File Share, etc.) can be mounted here
+// Additional modules can be mounted here
 
 // ================= 3. Setup Wizard & Admin Console Routing =================
 app.use('/assets', express.static(path.join(__dirname, 'public/assets'), { maxAge: '1h' }));
