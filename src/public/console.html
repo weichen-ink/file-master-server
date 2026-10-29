@@ -12,28 +12,28 @@
   <div id="loginView" class="login-wrap hidden">
     <div class="login-card">
       <div class="login-title">⚡ <span id="loginSiteName">FileMaster Server</span></div>
-      <div class="login-sub">Stealth entry active · 24h IP lockout on consecutive failures</div>
+      <div class="login-sub" data-i18n="loginSub">隐蔽访问路径已生效 · 连续失败将锁定 IP 24 小时</div>
       <div id="loginError" class="err-msg hidden"></div>
       <form id="loginForm">
         <div class="form-group">
-          <label>Administrator Username</label>
+          <label data-i18n="loginUsername">管理员账号</label>
           <input type="text" id="loginUsername" class="form-input" autocomplete="username" required />
         </div>
         <div class="form-group">
-          <label>Password</label>
+          <label data-i18n="loginPassword">密码</label>
           <input type="password" id="loginPassword" class="form-input" autocomplete="current-password" required />
         </div>
         <div id="totpGroup" class="form-group hidden">
-          <label>2FA Authenticator Code (6 digits)</label>
+          <label data-i18n="loginTotp">双重验证码 (6 位数字)</label>
           <input type="text" id="loginTotp" class="form-input" placeholder="000000" maxlength="6" pattern="\d{6}" />
         </div>
         <div class="form-group" style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
           <label style="display:inline-flex; align-items:center; gap:8px; margin:0; cursor:pointer; color:var(--text); font-size:13px;">
             <input type="checkbox" id="rememberAccount" checked style="width:15px; height:15px; accent-color:var(--primary); cursor:pointer;" />
-            <span>Remember session on this device (30 days)</span>
+            <span data-i18n="loginRemember">在此设备上记住登录状态 (30 天)</span>
           </label>
         </div>
-        <button type="submit" class="btn btn-primary btn-block">Sign In</button>
+        <button type="submit" class="btn btn-primary btn-block" data-i18n="loginSubmit">登录系统</button>
       </form>
     </div>
   </div>
@@ -44,7 +44,7 @@
       <div>
         <div class="brand">
           <h1 id="navSiteName">⚡ FileMaster Server</h1>
-          <p>Self-Hosted Asset & Image Hub</p>
+          <p data-i18n="brandSubtitle">自建资产与图片中枢</p>
         </div>
 
         <div class="nav-section-title" data-i18n="navSecWorkspace">工作空间</div>
@@ -83,48 +83,48 @@
       <section id="tab-image-host">
         <div class="page-header">
           <div>
-            <h2>📦 Asset Manager (Obsidian Raw + Astro WebP Watermark)</h2>
-            <p>Upload images, documents, videos, and archives via drag-and-drop, <code class="inline-code">Ctrl/Cmd + V</code> paste, or the FileMaster Obsidian plugin</p>
+            <h2 data-i18n="lblAssetManagerTitle">文件与资产库</h2>
+            <p data-i18n="lblAssetManagerDesc">支持拖拽、粘贴或通过 Obsidian 插件直接上传；无损存储原始素材，并支持按需 WebP 水印转码。</p>
           </div>
           <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
             <label style="display:inline-flex; align-items:center; gap:6px; font-size:12px; color:#fbbf24; background:rgba(245,158,11,0.12); border:1px solid rgba(245,158,11,0.35); padding:6px 10px; border-radius:8px; cursor:pointer;" title="Files uploaded here are stored in storage/raw/protected/keep/ with permanent deletion protection and scan exemption">
               <input type="checkbox" id="uploadToProtectedChk" style="accent-color:#f59e0b; cursor:pointer;" />
-              <span>🛡️ Upload to Protected Folder</span>
+              <span data-i18n="chkUploadProtected">🛡️ 上传至防删保护目录</span>
             </label>
-            <button id="btnRebuildCache" class="btn btn-outline" onclick="clearWatermarkCache()">🔄 Rebuild Watermark Cache</button>
-            <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">+ Upload Files</button>
+            <button id="btnRebuildCache" class="btn btn-outline" onclick="clearWatermarkCache()" data-i18n="btnClearWatermarkCache">🔄 重建水印缓存</button>
+            <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()" data-i18n="btnUploadFiles">+ 上传文件</button>
             <input type="file" id="fileInput" multiple class="hidden" onchange="uploadFiles(this.files)" />
           </div>
         </div>
 
         <div class="stats-row">
           <div class="stat-card">
-            <div class="stat-label">Total Raw Assets (storage/raw)</div>
+            <div class="stat-label" data-i18n="lblStatRawCount">原始资产总数</div>
             <div class="stat-val" id="statCount">0</div>
-            <div class="stat-hint">Lossless storage for Obsidian</div>
+            <div class="stat-hint" data-i18n="lblStatRawHint">无损保存于 storage/raw</div>
           </div>
           <div class="stat-card">
-            <div class="stat-label">Raw Asset Storage Footprint</div>
+            <div class="stat-label" data-i18n="lblStatRawSize">原始资产总占用</div>
             <div class="stat-val" id="statRawSize">0 MB</div>
-            <div class="stat-hint">Archived by YYYY/MM</div>
+            <div class="stat-hint" data-i18n="lblStatRawSizeHint">磁盘实际占用容量</div>
           </div>
           <div class="stat-card" id="cardCacheStat">
-            <div class="stat-label">Optimized Image Cache (storage/cache)</div>
+            <div class="stat-label" data-i18n="lblStatPubSize">缓存占用空间</div>
             <div class="stat-val" id="statCacheSize">0 MB</div>
-            <div class="stat-hint" id="statCacheHint">Optimized WebP cache (/pub/*)</div>
+            <div class="stat-hint" id="statCacheHint" data-i18n="lblStatPubHint">按需生成的 WebP / 水印版本</div>
           </div>
         </div>
 
         <div id="dropZone" class="upload-zone" onclick="document.getElementById('fileInput').click()">
-          <div style="font-size: 15px; font-weight: 600; margin-bottom: 4px;">📥 Click to select files, drag files here, or paste from clipboard (Ctrl+V)</div>
-          <div style="font-size: 12px; color: var(--muted);">Original files are stored losslessly; public WebP watermarks generate dynamically when requesting /pub/*</div>
+          <div style="font-size: 15px; font-weight: 600; margin-bottom: 4px;" data-i18n="dropZoneTitle">📥 点击选择文件、将文件拖拽至此，或直接从剪贴板粘贴 (Ctrl+V)</div>
+          <div style="font-size: 12px; color: var(--muted);" data-i18n="dropZoneDesc">原始文件无损留存；当访问优化路径时动态按需生成 WebP 水印图</div>
         </div>
 
         <div class="explorer-layout">
           <!-- Left: Year/Month folder tree -->
           <div class="folder-panel">
             <div class="folder-panel-header">
-              <span>📂 Folder Archive Navigation</span>
+              <span data-i18n="folderNavTitle">📂 归档目录导航</span>
               <span id="folderCountHint" style="font-weight:400;"></span>
             </div>
             <div id="folderTreeList"></div>
@@ -134,11 +134,11 @@
           <div>
             <div class="toolbar">
               <div style="display:flex; align-items:center; gap:8px; font-size:13px;">
-                <span id="currentFolderBreadcrumb" style="font-weight:600; color:var(--text);">📁 All Assets</span>
+                <span id="currentFolderBreadcrumb" style="font-weight:600; color:var(--text);" data-i18n="allAssets">📁 全部资源</span>
                 <span id="currentFolderStats" style="color:var(--muted); font-size:12px;"></span>
               </div>
               <div style="display:flex; gap:10px; align-items:center;">
-                <input type="text" id="searchInput" class="form-input" style="width:230px; padding:7px 12px;" placeholder="🔍 Filter files in current folder..." oninput="renderGallery()" />
+                <input type="text" id="searchInput" class="form-input" style="width:230px; padding:7px 12px;" placeholder="🔍 Filter files in current folder..." data-i18n-placeholder="searchPlaceholder" oninput="renderGallery()" />
               </div>
             </div>
 
@@ -151,34 +151,34 @@
       <section id="tab-status" class="hidden">
         <div class="page-header">
           <div>
-            <h2>📊 Host & Process Status</h2>
-            <p>Real-time monitor of hardware resources, disk capacity, and Node.js process runtime</p>
+            <h2 data-i18n="lblMonitorTitle">主机与进程监控</h2>
+            <p data-i18n="lblMonitorDesc">实时观测硬件资源负荷、磁盘容量与 Node.js 服务运行指标。</p>
           </div>
           <div style="display:flex; align-items:center; gap:12px;">
             <label style="display:inline-flex; align-items:center; gap:6px; font-size:13px; color:var(--muted); cursor:pointer;">
               <input type="checkbox" id="autoRefreshMetrics" checked onchange="toggleMetricsTimer()" style="accent-color:var(--primary);" />
-              <span>Auto-refresh every 5s</span>
+              <span data-i18n="autoRefreshHint">每 5 秒自动刷新</span>
             </label>
-            <button class="btn btn-primary" onclick="quickJumpHotUpdate()">🚀 Pull & Hot Update</button>
-            <button class="btn btn-outline" onclick="loadServerMetrics(true)">🔄 Refresh Now</button>
+            <button class="btn btn-primary" onclick="quickJumpHotUpdate()" data-i18n="navHotUpdate">在线热更新</button>
+            <button class="btn btn-outline" onclick="loadServerMetrics(true)" data-i18n="btnRefreshNow">🔄 立即刷新</button>
           </div>
         </div>
 
         <div class="stats-row">
           <div class="stat-card">
-            <div class="stat-label">CPU 1-min Average Load</div>
+            <div class="stat-label" data-i18n="mCpuTitle">CPU 1 分钟平均负载</div>
             <div class="stat-val" id="mCpuLoad">0%</div>
             <div class="progress-track"><div id="mCpuBar" class="progress-fill" style="width:0%"></div></div>
             <div class="stat-hint" id="mCpuDetail">-</div>
           </div>
           <div class="stat-card">
-            <div class="stat-label">Physical Memory (RAM)</div>
+            <div class="stat-label" data-i18n="mRamTitle">物理运行内存 (RAM)</div>
             <div class="stat-val" id="mRamUsage">0%</div>
             <div class="progress-track"><div id="mRamBar" class="progress-fill" style="width:0%"></div></div>
             <div class="stat-hint" id="mRamDetail">-</div>
           </div>
           <div class="stat-card">
-            <div class="stat-label">Host Disk Capacity (Storage)</div>
+            <div class="stat-label" data-i18n="mDiskTitle">服务器磁盘容量</div>
             <div class="stat-val" id="mDiskUsage">0%</div>
             <div class="progress-track"><div id="mDiskBar" class="progress-fill" style="width:0%"></div></div>
             <div class="stat-hint" id="mDiskDetail">-</div>
@@ -187,68 +187,68 @@
 
         <div class="kv-grid">
           <div class="stat-card">
-            <h3 style="font-size:16px; margin-bottom:12px;">🖥️ Host Server Specs</h3>
-            <div class="kv-row"><span class="kv-key">Hostname</span><span class="kv-val" id="mHostName">-</span></div>
-            <div class="kv-row"><span class="kv-key">OS Platform & Arch</span><span class="kv-val" id="mOsPlatform">-</span></div>
-            <div class="kv-row"><span class="kv-key">CPU Model</span><span class="kv-val" id="mCpuModel">-</span></div>
-            <div class="kv-row"><span class="kv-key">CPU Cores</span><span class="kv-val" id="mCpuCores">-</span></div>
-            <div class="kv-row"><span class="kv-key">System Load Avg (1m / 5m / 15m)</span><span class="kv-val" id="mLoadAvg">-</span></div>
-            <div class="kv-row"><span class="kv-key">Total RAM / Free RAM</span><span class="kv-val" id="mMemSummary">-</span></div>
-            <div class="kv-row"><span class="kv-key">Disk Capacity / Available</span><span class="kv-val" id="mDiskSummary">-</span></div>
-            <div class="kv-row"><span class="kv-key">Host System Uptime</span><span class="kv-val" id="mHostUptime">-</span></div>
+            <h3 style="font-size:16px; margin-bottom:12px;" data-i18n="mSpecsTitle">🖥️ 服务器硬件指标</h3>
+            <div class="kv-row"><span class="kv-key" data-i18n="mKeyHostname">主机名</span><span class="kv-val" id="mHostName">-</span></div>
+            <div class="kv-row"><span class="kv-key" data-i18n="mKeyOs">操作系统平台与架构</span><span class="kv-val" id="mOsPlatform">-</span></div>
+            <div class="kv-row"><span class="kv-key" data-i18n="mKeyCpuModel">处理器型号</span><span class="kv-val" id="mCpuModel">-</span></div>
+            <div class="kv-row"><span class="kv-key" data-i18n="mKeyCpuCores">处理器核心数</span><span class="kv-val" id="mCpuCores">-</span></div>
+            <div class="kv-row"><span class="kv-key" data-i18n="mKeyLoadAvg">系统负载平均值 (1m / 5m / 15m)</span><span class="kv-val" id="mLoadAvg">-</span></div>
+            <div class="kv-row"><span class="kv-key" data-i18n="mKeyRam">运行内存总量 / 可用内存</span><span class="kv-val" id="mMemSummary">-</span></div>
+            <div class="kv-row"><span class="kv-key" data-i18n="mKeyDisk">磁盘总容量 / 可用容量</span><span class="kv-val" id="mDiskSummary">-</span></div>
+            <div class="kv-row"><span class="kv-key" data-i18n="mKeySysUptime">系统运行时间</span><span class="kv-val" id="mHostUptime">-</span></div>
           </div>
 
           <div class="stat-card">
-            <h3 style="font-size:16px; margin-bottom:12px;">🚀 Node.js Service Runtime</h3>
-            <div class="kv-row"><span class="kv-key">Service Status</span><span class="kv-val" style="color:var(--success);">● Active & Online</span></div>
-            <div class="kv-row"><span class="kv-key">Listening Port</span><span class="kv-val"><code class="inline-code" id="mSitePort">-</code></span></div>
-            <div class="kv-row"><span class="kv-key">Process Uptime</span><span class="kv-val" id="mSiteUptime">-</span></div>
-            <div class="kv-row"><span class="kv-key">Boot Time</span><span class="kv-val" id="mSiteStartTime">-</span></div>
-            <div class="kv-row"><span class="kv-key">Node.js Version / PID</span><span class="kv-val" id="mNodePid">-</span></div>
-            <div class="kv-row"><span class="kv-key">Process Memory (RSS / Heap)</span><span class="kv-val" id="mProcMem">-</span></div>
-            <div class="kv-row"><span class="kv-key">Raw Storage Footprint</span><span class="kv-val" id="mSiteRawBytes">-</span></div>
-            <div class="kv-row"><span class="kv-key">WebP Watermark Cache Footprint</span><span class="kv-val" id="mSiteCacheBytes">-</span></div>
-            <div class="kv-row"><span class="kv-key">Security Guards</span><span class="kv-val" id="mSiteSec">-</span></div>
+            <h3 style="font-size:16px; margin-bottom:12px;" data-i18n="mRuntimeTitle">🚀 Node.js 服务运行状态</h3>
+            <div class="kv-row"><span class="kv-key" data-i18n="mKeyStatus">服务状态</span><span class="kv-val" style="color:var(--success);" data-i18n="mValActive">● 正常在线运行中</span></div>
+            <div class="kv-row"><span class="kv-key" data-i18n="mKeyPort">监听端口</span><span class="kv-val"><code class="inline-code" id="mSitePort">-</code></span></div>
+            <div class="kv-row"><span class="kv-key" data-i18n="lblMetricUptime">服务运行时间</span><span class="kv-val" id="mSiteUptime">-</span></div>
+            <div class="kv-row"><span class="kv-key" data-i18n="mKeyBootTime">启动时间</span><span class="kv-val" id="mSiteStartTime">-</span></div>
+            <div class="kv-row"><span class="kv-key" data-i18n="mKeyNodePid">Node.js 版本 / 进程 PID</span><span class="kv-val" id="mNodePid">-</span></div>
+            <div class="kv-row"><span class="kv-key" data-i18n="mKeyProcMem">进程内存 (物理常驻 / 堆内存)</span><span class="kv-val" id="mProcMem">-</span></div>
+            <div class="kv-row"><span class="kv-key" data-i18n="lblStatRawSize">原始资产总占用</span><span class="kv-val" id="mSiteRawBytes">-</span></div>
+            <div class="kv-row"><span class="kv-key" data-i18n="lblStatPubSize">缓存占用空间</span><span class="kv-val" id="mSiteCacheBytes">-</span></div>
+            <div class="kv-row"><span class="kv-key" data-i18n="mKeyGuards">安全防护策略</span><span class="kv-val" id="mSiteSec">-</span></div>
           </div>
         </div>
 
         <div class="stat-card" style="margin-top:16px;">
           <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
             <div>
-              <h3 style="font-size:16px;">🔌 PicList & Client Integration Parameters</h3>
-              <p style="font-size:12px; color:var(--muted); margin-top:2px;">Select "Custom Web" image host in PicList and copy the parameters below</p>
+              <h3 style="font-size:16px;" data-i18n="piclistTitle">🔌 第三方客户端集成参数 (PicList / Typora / uPic)</h3>
+              <p style="font-size:12px; color:var(--muted); margin-top:2px;" data-i18n="piclistDesc">在 PicList 等图床工具中选择「自定义 Web 图床」并复制填写下方参数即可</p>
             </div>
           </div>
           <div class="kv-row">
-            <span class="kv-key">Server Port</span>
+            <span class="kv-key" data-i18n="lblPort">服务监听端口</span>
             <span class="kv-val">
               <code class="inline-code" id="epPort">-</code>
               <span style="font-size:12px; color:var(--muted); margin-left:6px;">(Localhost: <code class="inline-code" id="epLocalUrl">-</code>)</span>
             </span>
           </div>
           <div class="kv-row">
-            <span class="kv-key">PicList API Upload URL</span>
+            <span class="kv-key" data-i18n="piclistUploadUrl">API 上传接口地址</span>
             <span class="kv-val" style="display:flex; align-items:center; gap:8px;">
               <code class="inline-code" id="epUploadUrl">-</code>
-              <button class="btn btn-outline" style="padding:4px 10px; font-size:12px;" onclick="copyText(document.getElementById('epUploadUrl').textContent, 'Upload URL')">Copy</button>
+              <button class="btn btn-outline" style="padding:4px 10px; font-size:12px;" onclick="copyText(document.getElementById('epUploadUrl').textContent, 'Upload URL')" data-i18n="btnCopy">复制</button>
             </span>
           </div>
           <div class="kv-row">
-            <span class="kv-key">POST Field / JSON Response Path</span>
+            <span class="kv-key" data-i18n="piclistFields">POST 表单字段 / JSON 响应路径</span>
             <span class="kv-val" style="display:flex; align-items:center; gap:8px;">
               <span>Field: <code class="inline-code">file</code></span>
               <span>JSON Path: <code class="inline-code">url</code></span>
             </span>
           </div>
           <div class="kv-row">
-            <span class="kv-key">PicList Custom Headers</span>
+            <span class="kv-key" data-i18n="piclistHeaders">自定义 Header 请求头</span>
             <span class="kv-val" style="display:flex; align-items:center; gap:8px;">
               <code class="inline-code" id="epHeadersJson">-</code>
-              <button class="btn btn-primary" style="padding:4px 10px; font-size:12px;" onclick="copyText(document.getElementById('epHeadersJson').textContent, 'Headers JSON')">Copy Headers</button>
+              <button class="btn btn-primary" style="padding:4px 10px; font-size:12px;" onclick="copyText(document.getElementById('epHeadersJson').textContent, 'Headers JSON')" data-i18n="btnCopyHeaders">复制 Header 请求头</button>
             </span>
           </div>
           <div class="kv-row">
-            <span class="kv-key">Obsidian Raw URL Route / Astro Watermark WebP Route</span>
+            <span class="kv-key" data-i18n="piclistRoutes">原始文件路由 / 优化文件路由</span>
             <span class="kv-val" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
               <code class="inline-code" id="epRawPattern">-</code>
               <span style="color:var(--muted);">→</span>
@@ -400,8 +400,8 @@
         <div id="subtab-settings-raw" class="subtab-settings-content hidden">
           <div class="stat-card">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-              <span style="font-size:13px; color:var(--muted);">直接编辑根目录配置文件 <code class="inline-code">config.yaml</code>（保存前自动校验 YAML 语法合法性）</span>
-              <button class="btn btn-primary" onclick="saveConfigRaw()">💾 校验并保存 config.yaml</button>
+              <span style="font-size:13px; color:var(--muted);" data-i18n="rawYamlDesc">直接编辑根目录配置文件 <code class="inline-code">config.yaml</code>（保存前自动校验 YAML 语法合法性）</span>
+              <button class="btn btn-primary" onclick="saveConfigRaw()" data-i18n="btnSaveRaw">💾 校验并保存 config.yaml</button>
             </div>
             <textarea id="rawYamlEditor" class="form-input" style="height:480px; font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:13px; line-height:1.6; resize:vertical;" spellcheck="false"></textarea>
           </div>
@@ -454,8 +454,8 @@
           </div>
 
           <div id="totpResultBox" class="hidden" style="margin-top:12px; padding:10px 14px; background:#090d16; border-radius:8px; border:1px solid var(--border); font-size:12px;">
-            <div><strong>生成新密钥：</strong> <code class="inline-code" id="newTotpSecret"></code></div>
-            <div style="margin-top:6px;"><strong>身份验证器绑定链接 (可复制到 1Password / Google Authenticator)：</strong> <code class="inline-code" id="newTotpUri" style="word-break:break-all;"></code></div>
+            <div><strong data-i18n="lblNewTotpKey">生成新密钥：</strong> <code class="inline-code" id="newTotpSecret"></code></div>
+            <div style="margin-top:6px;"><strong data-i18n="lblNewTotpUri">身份验证器绑定链接 (可复制到 1Password / Google Authenticator)：</strong> <code class="inline-code" id="newTotpUri" style="word-break:break-all;"></code></div>
           </div>
 
           <div style="margin-top: 24px; display:flex; justify-content:flex-end;">
@@ -512,7 +512,7 @@
 
           <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; font-size:12px; color:var(--muted); padding-top:4px;">
             <div>
-              <span>本地提交版本: <code class="inline-code" id="updLocalCommit">加载中...</code></span>
+              <span><span data-i18n="lblLocalCommit">本地提交版本:</span> <code class="inline-code" id="updLocalCommit">...</code></span>
               <span id="updRemoteStatus" style="margin-left:10px;"></span>
             </div>
             <span id="updLastChecked"></span>
@@ -552,14 +552,14 @@
       <section id="tab-future-files" class="hidden">
         <div class="page-header">
           <div>
-            <h2>📁 Lightweight Secure File Sharing (Expiring Links)</h2>
-            <p>Generate isolated <code class="inline-code">/s/:shareId</code> links with automatic expiration and download limits without exposing your raw storage path</p>
+            <h2 data-i18n="lblSharesTitle">安全文件分享短链</h2>
+            <p data-i18n="lblSharesDesc">生成带有效时长与下载次数限制的独立分享链接，不暴露服务器真实存储路径。</p>
           </div>
-          <button class="btn btn-outline" onclick="loadShares()">🔄 Refresh Share List</button>
+          <button class="btn btn-outline" onclick="loadShares()" data-i18n="btnRefreshShares">🔄 刷新分享列表</button>
         </div>
 
         <div class="stat-card">
-          <div id="shareListContainer" style="font-size:13px; color:var(--muted);">Loading active share links...</div>
+          <div id="shareListContainer" style="font-size:13px; color:var(--muted);" data-i18n="loadingShares">正在加载有效分享链接...</div>
         </div>
       </section>
     </main>
@@ -570,11 +570,11 @@
     <div class="modal-box">
       <div class="modal-header">
         <div style="display:flex; align-items:center; gap:10px;">
-          <strong id="modalTitle" style="font-size:14px;">Asset Preview</strong>
-          <button id="btnViewPub" class="btn btn-primary" style="padding:5px 12px; font-size:12px;" onclick="setModalMode('pub')">👁️ Public WebP Watermark</button>
-          <button id="btnViewRaw" class="btn btn-outline" style="padding:5px 12px; font-size:12px;" onclick="setModalMode('raw')">🔍 Lossless Raw Original</button>
+          <strong id="modalTitle" style="font-size:14px;" data-i18n="modalPreviewTitle">资产预览</strong>
+          <button id="btnViewPub" class="btn btn-primary" style="padding:5px 12px; font-size:12px;" onclick="setModalMode('pub')" data-i18n="btnViewPubText">👁️ 优化水印预览</button>
+          <button id="btnViewRaw" class="btn btn-outline" style="padding:5px 12px; font-size:12px;" onclick="setModalMode('raw')" data-i18n="btnViewRawText">🔍 原始无损素材</button>
         </div>
-        <button class="btn btn-outline" style="padding:5px 10px;" onclick="closeModal()">✕ Close</button>
+        <button class="btn btn-outline" style="padding:5px 10px;" onclick="closeModal()" data-i18n="closeBtn">✕ 关闭</button>
       </div>
       <div class="modal-body">
         <img id="modalImg" src="" alt="preview" />

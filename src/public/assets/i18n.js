@@ -13,9 +13,18 @@ const I18N = {
     navHotUpdate: "在线热更新",
     navLogout: "退出登录",
     langToggle: "🌐 English",
+    brandSubtitle: "自建资产与图片中枢",
+
+    // 隐蔽登录面板
+    loginSub: "隐蔽访问路径已生效 · 连续失败将锁定 IP 24 小时",
+    loginUsername: "管理员账号",
+    loginPassword: "密码",
+    loginTotp: "双重验证码 (6 位数字)",
+    loginRemember: "在此设备上记住登录状态 (30 天)",
+    loginSubmit: "登录系统",
 
     // 交互提示与按钮
-    allAssets: "全部资源",
+    allAssets: "📁 全部资源",
     copied: "已复制 {label}",
     deleteConfirm: "确定要删除 {filename} 吗？原图将移入回收站，同时清理关联缓存。",
     lockedNotice: "文件 '{filename}' 已开启防删保护锁，请先解锁后再删除。",
@@ -26,6 +35,18 @@ const I18N = {
     configSaved: "配置已保存并立即生效！",
     rawSaved: "配置文件源码已保存并生效！",
     cacheCleared: "图片缓存已清空并重新生成。",
+    noMatchingAssets: "当前目录下无匹配文件。可拖拽文件或粘贴 (Ctrl+V) 上传。",
+    noShareLinks: "暂无有效分享短链。在画廊卡片上点击「🔗 分享」即可生成。",
+    shareRevoked: "已撤销分享短链",
+    assetDeleted: "已删除资产并移入回收站",
+    metricsRefreshed: "监控指标已刷新",
+    checkChecking: "⏳ 正在检查官方版本...",
+    checkRemoteFetching: "正在连接远程仓库...",
+    checkAvailable: "⚡ 发现 {count} 个新更新版本 (最新提交: #{commit})",
+    checkLatest: "✅ 当前已是官方最新版本 (#{commit})",
+    checkFailed: "❌ 检查更新失败",
+    updateRestartSuccess: "🚀 热更新并平滑重启成功！",
+    updateWaitingRestart: "正在等待服务端进程重启就绪...",
     copyRawBtn: "📎 原始链接",
     copyOptBtn: "⚡ 优化链接",
     copyMdBtn: "📋 Markdown",
@@ -34,6 +55,7 @@ const I18N = {
     lockBtn: "🔒 加锁",
     unlockBtn: "🔓 解锁",
     protectedBtn: "🛡️ 保护目录",
+    closeBtn: "✕ 关闭",
 
     // 资产管理页面
     lblAssetManagerTitle: "文件与资产库",
@@ -49,6 +71,15 @@ const I18N = {
     lblStatPubHint: "按需生成的 WebP / 水印版本",
     lblStatPubSize: "缓存占用空间",
     lblStatPubSavings: "体积节省比例",
+    dropZoneTitle: "📥 点击选择文件、将文件拖拽至此，或直接从剪贴板粘贴 (Ctrl+V)",
+    dropZoneDesc: "原始文件无损留存；当访问优化路径时动态按需生成 WebP 水印图",
+    folderNavTitle: "📂 归档目录导航",
+    searchPlaceholder: "🔍 筛选当前目录内的文件...",
+
+    // 预览弹窗
+    modalPreviewTitle: "资产预览",
+    btnViewPubText: "👁️ 优化水印预览",
+    btnViewRawText: "🔍 原始无损素材",
 
     // 安全文件分享
     lblSharesTitle: "安全文件分享短链",
@@ -57,12 +88,40 @@ const I18N = {
 
     // 主机监控中心
     lblMonitorTitle: "主机与进程监控",
-    lblMonitorDesc: "实时观测 Node.js 进程状态、内存占用、垃圾回收站容量及系统运行健康指标。",
-    lblMetricUptime: "服务连续运行时间",
-    lblMetricMemory: "Node.js 堆内存占用",
-    lblMetricRss: "物理常驻内存",
-    lblMetricTrash: "安全回收站容量",
-    btnEmptyTrash: "🗑️ 清空回收站",
+    lblMonitorDesc: "实时观测硬件资源负荷、磁盘容量与 Node.js 服务运行指标。",
+    autoRefreshHint: "每 5 秒自动刷新",
+    btnRefreshNow: "🔄 立即刷新",
+    mCpuTitle: "CPU 1 分钟平均负载",
+    mRamTitle: "物理运行内存 (RAM)",
+    mDiskTitle: "服务器磁盘容量",
+    mSpecsTitle: "🖥️ 服务器硬件指标",
+    mKeyHostname: "主机名",
+    mKeyOs: "操作系统平台与架构",
+    mKeyCpuModel: "处理器型号",
+    mKeyCpuCores: "处理器核心数",
+    mKeyLoadAvg: "系统负载平均值 (1m / 5m / 15m)",
+    mKeyRam: "运行内存总量 / 可用内存",
+    mKeyDisk: "磁盘总容量 / 可用容量",
+    mKeySysUptime: "系统运行时间",
+    mRuntimeTitle: "🚀 Node.js 服务运行状态",
+    mKeyStatus: "服务状态",
+    mValActive: "● 正常在线运行中",
+    mKeyPort: "监听端口",
+    lblMetricUptime: "服务运行时间",
+    mKeyBootTime: "启动时间",
+    mKeyNodePid: "Node.js 版本 / 进程 PID",
+    mKeyProcMem: "进程内存 (物理常驻 / 堆内存)",
+    mKeyGuards: "安全防护策略",
+
+    // 客户端集成
+    piclistTitle: "🔌 第三方客户端集成参数 (PicList / Typora / uPic)",
+    piclistDesc: "在 PicList 等图床工具中选择「自定义 Web 图床」并复制填写下方参数即可",
+    piclistUploadUrl: "API 上传接口地址",
+    btnCopy: "复制",
+    piclistFields: "POST 表单字段 / JSON 响应路径",
+    piclistHeaders: "自定义 Header 请求头",
+    btnCopyHeaders: "复制 Header 请求头",
+    piclistRoutes: "原始文件路由 / 优化文件路由",
 
     // 系统配置子标签
     subtabGeneral: "基本参数",
@@ -130,7 +189,58 @@ const I18N = {
     lblBackupDesc: "支持一键打包导出快照归档（.tar.gz），或通过 Linux rclone 工具配置定时增量云同步。",
     btnExportConfig: "📦 导出配置与索引 (.tar.gz)",
     btnExportFull: "🗄️ 导出完整全量库 (.tar.gz)",
-    lblRcloneHint: "# Linux 环境通过 rclone 定时增量同步云端示例："
+    lblRcloneHint: "# Linux 环境通过 rclone 定时增量同步云端示例：",
+
+    // 新增与补全键
+    rawYamlDesc: "直接编辑根目录配置文件 config.yaml（保存前自动校验 YAML 语法合法性）",
+    btnSaveRaw: "💾 校验并保存 config.yaml",
+    lblNewTotpKey: "生成新密钥：",
+    lblNewTotpUri: "身份验证器绑定链接 (可复制到 1Password / Google Authenticator)：",
+    lblLocalCommit: "本地提交版本:",
+    loadingShares: "正在加载有效分享链接...",
+    folderCountHint: "{count} 个目录",
+    folderProtectedLabel: "🛡️ 保护目录",
+    folderKeepLabel: "🔒 永久防删保留 (protected/keep)",
+    folderStatsHint: "{count} 个文件 · {bytes}",
+    catPdf: "📄 PDF 文档",
+    catVideo: "🎬 视频媒体",
+    catAudio: "🎵 音频媒体",
+    catArchive: "📦 压缩归档",
+    catDocument: "📑 办公文档",
+    catAttachment: "📎 附件",
+    statCacheOptimizedHint: "按需生成的 WebP / 水印版本 (/pub/*)",
+    statCacheDisabledHint: "已在系统配置中关闭图片自动优化",
+    protectedFolderLockedHint: "位于保护目录内，永久锁定禁止删除",
+    copyOptTooltip: "复制优化后的 WebP 链接 (/pub/*)",
+    tagRawOnly: "仅原始文件",
+    tagOnDemand: "按需动态转码",
+    tagOptimized: "已优化 ({size})",
+    tagDirectStream: "原始直链",
+    copyRawTooltip: "复制原始无修改图片链接",
+    copyMdTooltip: "复制 Markdown 引用语法",
+    shareTooltip: "生成带时效与次数限制的独立分享短链 (/s/...)",
+    delLockedTooltip: "该资产处于锁定状态，需解锁后方可删除",
+    shareColAsset: "资产文件",
+    shareColLink: "分享短链",
+    shareColDownloads: "已下载 / 限制",
+    shareColExpires: "到期时间",
+    shareColStatus: "状态",
+    shareColActions: "操作",
+    shareStatusActive: "有效",
+    shareStatusExpired: "已过期",
+    shareNeverExpire: "永久有效",
+    shareBtnCopy: "📋 复制",
+    shareBtnRevoke: "🗑️ 撤销",
+    revokeShareConfirm: "确定立即撤销此分享链接吗？",
+    sharePromptExpiry: "为 \"{filename}\" 创建临时分享短链：\n请输入有效小时数 (如 24 为 1 天, 168 为 7 天, 0 为不过期):",
+    sharePromptMaxDl: "请输入最大允许下载次数 (0 为不限制, 或输入数字如 1, 5, 10):",
+    gitNoCommits: "暂无提交记录",
+    gitNotInit: "未初始化仓库 (拉取时将自动初始化)",
+    serverOnline: "服务端进程已重新上线！正在恢复控制台状态...",
+    hotUpdateConfirm: "确定拉取官方仓库最新代码 [{branch}]{mirrorHint} 并平滑重启服务吗？（现有配置与数据将完全保留）",
+    pullingUpdate: "正在拉取更新并重启...",
+    restartConfirm: "确定立即重启 FileMaster Server 服务端进程吗？",
+    restartingServer: "正在重启服务..."
   },
   en: {
     // Sidebar & Navigation
@@ -145,9 +255,18 @@ const I18N = {
     navHotUpdate: "Hot Update",
     navLogout: "Sign Out",
     langToggle: "🌐 简体中文",
+    brandSubtitle: "Self-Hosted Asset & Image Hub",
+
+    // Login View
+    loginSub: "Stealth access active · 24h IP lockout on consecutive failures",
+    loginUsername: "Administrator Username",
+    loginPassword: "Password",
+    loginTotp: "2FA Authenticator Code (6 digits)",
+    loginRemember: "Remember session on this device (30 days)",
+    loginSubmit: "Sign In",
 
     // Prompts & Buttons
-    allAssets: "All Assets",
+    allAssets: "📁 All Assets",
     copied: "Copied {label}",
     deleteConfirm: "Are you sure you want to delete {filename}? Moved to trash and cache cleared.",
     lockedNotice: "File '{filename}' is deletion-protected. Unlock it before deleting.",
@@ -158,6 +277,18 @@ const I18N = {
     configSaved: "Configuration saved and active!",
     rawSaved: "Configuration file saved and active!",
     cacheCleared: "Image cache cleared and refreshed.",
+    noMatchingAssets: "No matching assets in this folder. Drop files or paste (Ctrl+V) to upload.",
+    noShareLinks: "No expiring share links created yet. Click 'Share' on any asset card in the gallery to generate one.",
+    shareRevoked: "Share link revoked",
+    assetDeleted: "Asset moved to trash",
+    metricsRefreshed: "Metrics refreshed",
+    checkChecking: "⏳ Checking for updates...",
+    checkRemoteFetching: "Connecting to remote repository...",
+    checkAvailable: "⚡ {count} new commit(s) available (latest: #{commit})",
+    checkLatest: "✅ Already on latest commit (#{commit})",
+    checkFailed: "❌ Check failed",
+    updateRestartSuccess: "🚀 Hot update & restart completed!",
+    updateWaitingRestart: "Waiting for server process to restart and come back online...",
     copyRawBtn: "📎 Raw URL",
     copyOptBtn: "⚡ Optimized URL",
     copyMdBtn: "📋 Markdown",
@@ -166,6 +297,7 @@ const I18N = {
     lockBtn: "🔒 Lock",
     unlockBtn: "🔓 Unlock",
     protectedBtn: "🛡️ Protected",
+    closeBtn: "✕ Close",
 
     // Assets View
     lblAssetManagerTitle: "Files & Asset Library",
@@ -181,6 +313,15 @@ const I18N = {
     lblStatPubHint: "Generated on-the-fly",
     lblStatPubSize: "Cache Footprint",
     lblStatPubSavings: "Bandwidth Savings",
+    dropZoneTitle: "📥 Click to select files, drag files here, or paste from clipboard (Ctrl+V)",
+    dropZoneDesc: "Original files stored losslessly; public WebP watermarks generate dynamically on request",
+    folderNavTitle: "📂 Folder Archive Navigation",
+    searchPlaceholder: "🔍 Filter files in current folder...",
+
+    // Preview Modal
+    modalPreviewTitle: "Asset Preview",
+    btnViewPubText: "👁️ Public WebP Watermark",
+    btnViewRawText: "🔍 Lossless Raw Original",
 
     // Shared Links
     lblSharesTitle: "Secure Expiring File Shares",
@@ -189,12 +330,40 @@ const I18N = {
 
     // Host & Monitoring
     lblMonitorTitle: "Host & Process Status",
-    lblMonitorDesc: "Real-time metrics for Node.js process, memory, trash retention, and operational health.",
+    lblMonitorDesc: "Real-time metrics for hardware load, storage capacity, and Node.js process runtime.",
+    autoRefreshHint: "Auto-refresh every 5s",
+    btnRefreshNow: "🔄 Refresh Now",
+    mCpuTitle: "CPU 1-min Average Load",
+    mRamTitle: "Physical Memory (RAM)",
+    mDiskTitle: "Host Disk Capacity",
+    mSpecsTitle: "🖥️ Host Server Specs",
+    mKeyHostname: "Hostname",
+    mKeyOs: "OS Platform & Arch",
+    mKeyCpuModel: "CPU Model",
+    mKeyCpuCores: "CPU Cores",
+    mKeyLoadAvg: "System Load Avg (1m / 5m / 15m)",
+    mKeyRam: "Total RAM / Free RAM",
+    mKeyDisk: "Disk Capacity / Available",
+    mKeySysUptime: "Host System Uptime",
+    mRuntimeTitle: "🚀 Node.js Service Runtime",
+    mKeyStatus: "Service Status",
+    mValActive: "● Active & Online",
+    mKeyPort: "Listening Port",
     lblMetricUptime: "Process Uptime",
-    lblMetricMemory: "Node.js Heap Memory",
-    lblMetricRss: "Resident Set Size (RSS)",
-    lblMetricTrash: "Trash Retention Size",
-    btnEmptyTrash: "🗑️ Empty Trash",
+    mKeyBootTime: "Boot Time",
+    mKeyNodePid: "Node.js Version / PID",
+    mKeyProcMem: "Process Memory (RSS / Heap)",
+    mKeyGuards: "Security Guards",
+
+    // Client Integration
+    piclistTitle: "🔌 PicList & Client Integration Parameters",
+    piclistDesc: "Select 'Custom Web' image host in PicList and copy the parameters below",
+    piclistUploadUrl: "API Upload URL",
+    btnCopy: "Copy",
+    piclistFields: "POST Field / JSON Response Path",
+    piclistHeaders: "Custom Headers",
+    btnCopyHeaders: "Copy Headers",
+    piclistRoutes: "Raw URL Route / Optimized WebP Route",
 
     // Settings Subtabs
     subtabGeneral: "General",
@@ -262,7 +431,58 @@ const I18N = {
     lblBackupDesc: "Export one-click .tar.gz snapshots or set up scheduled Linux rclone incremental cloud backups.",
     btnExportConfig: "📦 Export Config & Index (.tar.gz)",
     btnExportFull: "🗄️ Export Full Assets & Config (.tar.gz)",
-    lblRcloneHint: "# Linux incremental backup example using rclone:"
+    lblRcloneHint: "# Linux incremental backup example using rclone:",
+
+    // Additional Keys
+    rawYamlDesc: "Directly edit root config.yaml (YAML syntax validated prior to saving)",
+    btnSaveRaw: "💾 Validate & Save config.yaml",
+    lblNewTotpKey: "Generated Secret:",
+    lblNewTotpUri: "Authenticator App URI (compatible with 1Password / Google Authenticator):",
+    lblLocalCommit: "Local Commit:",
+    loadingShares: "Loading active share links...",
+    folderCountHint: "{count} folder(s)",
+    folderProtectedLabel: "🛡️ Protected Folder",
+    folderKeepLabel: "🔒 Permanent Keep (protected/keep)",
+    folderStatsHint: "{count} items · {bytes}",
+    catPdf: "📄 PDF Document",
+    catVideo: "🎬 Video Asset",
+    catAudio: "🎵 Audio Asset",
+    catArchive: "📦 Archive",
+    catDocument: "📑 Document",
+    catAttachment: "📎 Attachment",
+    statCacheOptimizedHint: "Optimized WebP cache (/pub/*)",
+    statCacheDisabledHint: "Auto-optimization is disabled in Settings",
+    protectedFolderLockedHint: "Resides inside protected folder: deletion is permanently locked",
+    copyOptTooltip: "Copy optimized WebP link (/pub/*)",
+    tagRawOnly: "Raw only",
+    tagOnDemand: "Optimize on-demand",
+    tagOptimized: "Optimized ({size})",
+    tagDirectStream: "Direct stream",
+    copyRawTooltip: "Copy original unmodified image URL",
+    copyMdTooltip: "Copy Markdown syntax",
+    shareTooltip: "Create expiring temporary share link (/s/...)",
+    delLockedTooltip: "Asset is locked. Unlock before deleting.",
+    shareColAsset: "Asset",
+    shareColLink: "Share Link",
+    shareColDownloads: "Downloads",
+    shareColExpires: "Expires",
+    shareColStatus: "Status",
+    shareColActions: "Actions",
+    shareStatusActive: "Active",
+    shareStatusExpired: "Expired",
+    shareNeverExpire: "Never",
+    shareBtnCopy: "📋 Copy",
+    shareBtnRevoke: "🗑️ Revoke",
+    revokeShareConfirm: "Revoke this share link immediately?",
+    sharePromptExpiry: "Create expiring share link for \"{filename}\":\nEnter expiration hours (e.g. 24 for 1 day, 168 for 7 days, or 0 for never):",
+    sharePromptMaxDl: "Enter maximum allowed downloads (0 for unlimited, or e.g. 1, 5, 10):",
+    gitNoCommits: "No commits yet",
+    gitNotInit: "Not initialized (will auto-init on pull)",
+    serverOnline: "Server is back online! Reloading console state...",
+    hotUpdateConfirm: "Pull latest code from official repository [{branch}]{mirrorHint} and restart smoothly? (Existing configurations and assets will be fully preserved)",
+    pullingUpdate: "Pulling & Updating...",
+    restartConfirm: "Restart the FileMaster Server process now?",
+    restartingServer: "Restarting..."
   }
 };
 
@@ -281,13 +501,24 @@ function applyLocaleToStaticDom() {
   document.querySelectorAll('[data-i18n]').forEach((el) => {
     const key = el.getAttribute('data-i18n');
     if (key) {
-      if (el.tagName === 'INPUT' && el.type === 'button') {
+      if (el.tagName === 'INPUT' && (el.type === 'button' || el.type === 'submit')) {
         el.value = t(key);
       } else {
         el.textContent = t(key);
       }
     }
   });
+
+  document.querySelectorAll('[data-i18n-placeholder]').forEach((el) => {
+    const key = el.getAttribute('data-i18n-placeholder');
+    if (key) el.placeholder = t(key);
+  });
+
+  document.querySelectorAll('[data-i18n-title]').forEach((el) => {
+    const key = el.getAttribute('data-i18n-title');
+    if (key) el.title = t(key);
+  });
+
   const langBtn = document.getElementById('btnLangSwitch');
   if (langBtn) langBtn.textContent = t('langToggle');
 }

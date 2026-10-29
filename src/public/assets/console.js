@@ -104,7 +104,7 @@ async function loadServerMetrics(manual = false) {
     document.getElementById('epPubPattern').textContent = site.endpoints.pubUrlPattern;
   }
 
-  if (manual) showToast('✅ Metrics refreshed');
+  if (manual) showToast('✅ ' + t('metricsRefreshed'));
 }
 
 function toggleMetricsTimer() {
@@ -425,8 +425,8 @@ async function loadImages() {
   const hintEl = document.getElementById('statCacheHint');
   if (hintEl) {
     hintEl.textContent = isOptimizationEnabled
-      ? 'Optimized WebP cache (/pub/*)'
-      : 'Auto-optimization is disabled in Settings';
+      ? t('statCacheOptimizedHint')
+      : t('statCacheDisabledHint');
   }
 
   renderFolderTree();
@@ -477,7 +477,7 @@ function renderFolderTree() {
 
   let totalFolders = 0;
   yearMap.forEach((v) => { totalFolders += v.months.size; });
-  document.getElementById('folderCountHint').textContent = `${totalFolders} folder(s)`;
+  document.getElementById('folderCountHint').textContent = t('folderCountHint', { count: totalFolders });
 
   let html = `
     <button class="folder-btn ${selectedFolder === 'all' ? 'active' : ''}" onclick="selectFolder('all')">
@@ -496,7 +496,7 @@ function renderFolderTree() {
     const isCollapsed = collapsedYears.has(year);
     const isYearActive = selectedFolder === year;
     const arrow = isCollapsed ? '▸' : '▾';
-    const yearLabel = year === 'protected' ? '🛡️ Protected Folder' : `📂 ${year}`;
+    const yearLabel = year === 'protected' ? t('folderProtectedLabel') : `📂 ${year}`;
 
     html += `
       <button class="folder-btn ${isYearActive ? 'active' : ''}" onclick="selectFolder('${year}')">
@@ -514,7 +514,7 @@ function renderFolderTree() {
         const mData = yData.months.get(month);
         const folderKey = `${year}/${month}`;
         const isMonthActive = selectedFolder === folderKey;
-        const monthLabel = month === 'keep' ? '🔒 Permanent Keep (protected/keep)' : `📁 ${month} <span style="font-size:11px; color:var(--muted);">(${year}/${month})</span>`;
+        const monthLabel = month === 'keep' ? t('folderKeepLabel') : `📁 ${month} <span style="font-size:11px; color:var(--muted);">(${year}/${month})</span>`;
         html += `
           <button class="folder-btn month-node ${isMonthActive ? 'active' : ''}" onclick="selectFolder('${folderKey}')" title="${formatBytes(mData.bytes)}">
             <span>${monthLabel}</span>
@@ -553,23 +553,23 @@ function renderGallery() {
   } else {
     bcEl.textContent = `📂 storage/raw/${selectedFolder}/`;
   }
-  stEl.textContent = `${filtered.length} items · ${formatBytes(filteredBytes)}`;
+  stEl.textContent = t('folderStatsHint', { count: filtered.length, bytes: formatBytes(filteredBytes) });
 
   if (filtered.length === 0) {
-    grid.innerHTML = `<div style="grid-column:1/-1; text-align:center; padding:56px 20px; color:var(--muted); background:var(--panel); border:1px solid var(--border); border-radius:12px;">No matching assets in this folder. Drop files or paste (Ctrl+V) to upload.</div>`;
+    grid.innerHTML = `<div style="grid-column:1/-1; text-align:center; padding:56px 20px; color:var(--muted); background:var(--panel); border:1px solid var(--border); border-radius:12px;">${t('noMatchingAssets')}</div>`;
     return;
   }
 
   grid.innerHTML = filtered.map((item) => {
     const isImg = item.isImage !== false;
     const iconMap = {
-      pdf: '📄 PDF Document',
-      video: '🎬 Video Asset',
-      audio: '🎵 Audio Asset',
-      archive: '📦 Archive',
-      document: '📑 Document'
+      pdf: t('catPdf'),
+      video: t('catVideo'),
+      audio: t('catAudio'),
+      archive: t('catArchive'),
+      document: t('catDocument')
     };
-    const badgeLabel = iconMap[item.category] || '📎 Attachment';
+    const badgeLabel = iconMap[item.category] || t('catAttachment');
     const mdText = isImg ? `![](${item.rawUrl})` : `[📎 ${item.filename}](${item.rawUrl})`;
     const isLocked = Boolean(item.locked);
     const inProtFolder = Boolean(item.inProtectedFolder);
@@ -591,18 +591,18 @@ function renderGallery() {
          </div>`;
 
     const lockBtnHtml = inProtFolder
-      ? `<button class="btn btn-outline" disabled title="Resides inside protected folder: deletion is permanently locked" style="opacity:0.7; cursor:not-allowed;">${t('protectedBtn')}</button>`
+      ? `<button class="btn btn-outline" disabled title="${t('protectedFolderLockedHint')}" style="opacity:0.7; cursor:not-allowed;">${t('protectedBtn')}</button>`
       : `<button class="btn btn-outline" onclick="toggleLockImage('${item.year}', '${item.month}', '${item.filename}', ${!isLocked})" style="${isLocked ? 'border-color:#f59e0b; color:#fbbf24;' : ''}">${isLocked ? t('unlockBtn') : t('lockBtn')}</button>`;
 
     const optBtnHtml = (isOptimizationEnabled && item.isProcessableImage)
-      ? `<button class="btn btn-outline" style="border-color:rgba(59,130,246,0.5); color:#60a5fa;" onclick="copyText('${item.pubUrl}', 'Optimized Image URL')" title="Copy optimized WebP link (/pub/*)">${t('copyOptBtn')}</button>`
+      ? `<button class="btn btn-outline" style="border-color:rgba(59,130,246,0.5); color:#60a5fa;" onclick="copyText('${item.pubUrl}', 'Optimized Image URL')" title="${t('copyOptTooltip')}">${t('copyOptBtn')}</button>`
       : '';
 
     const rightMetaHtml = !isImg
-      ? 'Direct stream'
+      ? t('tagDirectStream')
       : isOptimizationEnabled
-        ? (item.hasCache ? 'Optimized (' + formatBytes(item.cacheSize) + ')' : 'Optimize on-demand')
-        : 'Raw only';
+        ? (item.hasCache ? t('tagOptimized', { size: formatBytes(item.cacheSize) }) : t('tagOnDemand'))
+        : t('tagRawOnly');
 
     return `
     <div class="img-card" style="${isLocked ? 'border-color: rgba(245,158,11,0.45);' : ''}">
@@ -616,12 +616,12 @@ function renderGallery() {
           </div>
         </div>
         <div class="card-actions">
-          <button class="btn btn-primary" onclick="copyText('${item.rawUrl}', 'Raw Original URL')" title="Copy original unmodified image URL">${t('copyRawBtn')}</button>
+          <button class="btn btn-primary" onclick="copyText('${item.rawUrl}', 'Raw Original URL')" title="${t('copyRawTooltip')}">${t('copyRawBtn')}</button>
           ${optBtnHtml}
-          <button class="btn btn-outline" onclick="copyText('${mdText}', 'Markdown Link')" title="Copy Markdown syntax">${t('copyMdBtn')}</button>
-          <button class="btn btn-outline" onclick="createShareLink('${item.year}', '${item.month}', '${item.filename}')" title="Create expiring temporary share link (/s/...)">${t('shareBtn')}</button>
+          <button class="btn btn-outline" onclick="copyText('${mdText}', 'Markdown Link')" title="${t('copyMdTooltip')}">${t('copyMdBtn')}</button>
+          <button class="btn btn-outline" onclick="createShareLink('${item.year}', '${item.month}', '${item.filename}')" title="${t('shareTooltip')}">${t('shareBtn')}</button>
           ${lockBtnHtml}
-          <button class="btn btn-danger" ${isLocked ? 'disabled style="opacity:0.45; cursor:not-allowed;" title="Asset is locked. Unlock before deleting."' : ''} onclick="deleteImage('${item.year}', '${item.month}', '${item.filename}', ${isLocked})">${t('deleteBtn')}</button>
+          <button class="btn btn-danger" ${isLocked ? `disabled style="opacity:0.45; cursor:not-allowed;" title="${t('delLockedTooltip')}"` : ''} onclick="deleteImage('${item.year}', '${item.month}', '${item.filename}', ${isLocked})">${t('deleteBtn')}</button>
         </div>
       </div>
     </div>
@@ -695,7 +695,7 @@ async function deleteImage(year, month, filename, isLocked) {
   const res = await fetch(`/api/modules/image-host/item/${encodeURIComponent(year)}/${encodeURIComponent(month)}/${encodeURIComponent(filename)}`, { method: 'DELETE' });
   const data = await res.json().catch(() => ({}));
   if (res.ok) {
-    showToast('🗑️ Asset deleted');
+    showToast('🗑️ ' + t('assetDeleted'));
     loadImages();
   } else {
     alert(data.error || 'Failed to delete asset');
@@ -712,9 +712,9 @@ async function clearWatermarkCache() {
 }
 
 async function createShareLink(year, month, filename) {
-  const hoursStr = prompt(`Create expiring share link for "${filename}":\nEnter expiration hours (e.g. 24 for 1 day, 168 for 7 days, or 0 for never):`, '24');
+  const hoursStr = prompt(t('sharePromptExpiry', { filename }), '24');
   if (hoursStr === null) return;
-  const maxDlStr = prompt(`Enter maximum allowed downloads (0 for unlimited, or e.g. 1, 5, 10):`, '0');
+  const maxDlStr = prompt(t('sharePromptMaxDl'), '0');
   if (maxDlStr === null) return;
 
   const res = await fetch('/api/modules/share/create', {
@@ -748,7 +748,7 @@ async function loadShares() {
     const container = document.getElementById('shareListContainer');
     if (!container) return;
     if (!shares || shares.length === 0) {
-      container.innerHTML = `<div style="text-align:center; padding:32px; color:var(--muted);">No expiring share links created yet. Click <strong>${t('shareBtn')}</strong> on any asset card in the gallery to generate one.</div>`;
+      container.innerHTML = `<div style="text-align:center; padding:32px; color:var(--muted);">${t('noShareLinks')}</div>`;
       return;
     }
 
@@ -757,21 +757,21 @@ async function loadShares() {
         <table style="width:100%; border-collapse:collapse; font-size:13px;">
           <thead>
             <tr style="border-bottom:1px solid var(--border); text-align:left; color:var(--muted);">
-              <th style="padding:10px 8px;">Asset</th>
-              <th style="padding:10px 8px;">Share Link</th>
-              <th style="padding:10px 8px;">Downloads</th>
-              <th style="padding:10px 8px;">Expires</th>
-              <th style="padding:10px 8px;">Status</th>
-              <th style="padding:10px 8px; text-align:right;">Actions</th>
+              <th style="padding:10px 8px;">${t('shareColAsset')}</th>
+              <th style="padding:10px 8px;">${t('shareColLink')}</th>
+              <th style="padding:10px 8px;">${t('shareColDownloads')}</th>
+              <th style="padding:10px 8px;">${t('shareColExpires')}</th>
+              <th style="padding:10px 8px;">${t('shareColStatus')}</th>
+              <th style="padding:10px 8px; text-align:right;">${t('shareColActions')}</th>
             </tr>
           </thead>
           <tbody>
             ${shares.map(s => {
-              const expText = s.expiresAt > 0 ? new Date(s.expiresAt).toLocaleString() : 'Never';
+              const expText = s.expiresAt > 0 ? new Date(s.expiresAt).toLocaleString() : t('shareNeverExpire');
               const dlText = s.maxDownloads > 0 ? `${s.downloads} / ${s.maxDownloads}` : `${s.downloads} (∞)`;
               const statusBadge = s.expired
-                ? `<span style="color:#f87171; font-weight:600;">Expired</span>`
-                : `<span style="color:#34d399; font-weight:600;">Active</span>`;
+                ? `<span style="color:#f87171; font-weight:600;">${t('shareStatusExpired')}</span>`
+                : `<span style="color:#34d399; font-weight:600;">${t('shareStatusActive')}</span>`;
               return `
                 <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
                   <td style="padding:10px 8px; font-weight:600;">${s.year}/${s.month}/${s.filename}</td>
@@ -780,8 +780,8 @@ async function loadShares() {
                   <td style="padding:10px 8px;">${expText}</td>
                   <td style="padding:10px 8px;">${statusBadge}</td>
                   <td style="padding:10px 8px; text-align:right; display:flex; gap:6px; justify-content:flex-end;">
-                    <button class="btn btn-primary" style="padding:4px 10px; font-size:12px;" onclick="copyText('${s.shareUrl}', 'Share Link')">📋 Copy</button>
-                    <button class="btn btn-danger" style="padding:4px 10px; font-size:12px;" onclick="revokeShare('${s.id}')">🗑️ Revoke</button>
+                    <button class="btn btn-primary" style="padding:4px 10px; font-size:12px;" onclick="copyText('${s.shareUrl}', 'Share Link')">${t('shareBtnCopy')}</button>
+                    <button class="btn btn-danger" style="padding:4px 10px; font-size:12px;" onclick="revokeShare('${s.id}')">${t('shareBtnRevoke')}</button>
                   </td>
                 </tr>
               `;
@@ -794,10 +794,10 @@ async function loadShares() {
 }
 
 async function revokeShare(shareId) {
-  if (!confirm('Revoke this share link immediately?')) return;
+  if (!confirm(t('revokeShareConfirm'))) return;
   const res = await fetch('/api/modules/share/' + encodeURIComponent(shareId), { method: 'DELETE' });
   if (res.ok) {
-    showToast('🗑️ Share link revoked');
+    showToast('🗑️ ' + t('shareRevoked'));
     loadShares();
   }
 }
@@ -873,7 +873,7 @@ async function loadLocalUpdateStatus() {
     if (st.localShortCommit) {
       commitEl.textContent = `#${st.localShortCommit} (${st.currentBranch || 'main'}) · ${st.localCommitMessage || ''}`;
     } else {
-      commitEl.textContent = st.hasGitDir ? 'No commits yet' : 'Not initialized (will auto-init on pull)';
+      commitEl.textContent = st.hasGitDir ? t('gitNoCommits') : t('gitNotInit');
     }
   } catch {}
 }
@@ -883,8 +883,8 @@ async function checkRemoteUpdate() {
   const statusEl = document.getElementById('updRemoteStatus');
   const checkedEl = document.getElementById('updLastChecked');
   btn.disabled = true;
-  btn.textContent = '⏳ Checking...';
-  statusEl.innerHTML = `<span style="color:var(--muted);">Fetching remote branch...</span>`;
+  btn.textContent = t('checkChecking');
+  statusEl.innerHTML = `<span style="color:var(--muted);">${t('checkRemoteFetching')}</span>`;
 
   try {
     const upstream_mirror = getSelectedUpstreamMirror();
@@ -903,33 +903,33 @@ async function checkRemoteUpdate() {
 
     checkedEl.textContent = 'Checked at ' + new Date().toLocaleTimeString();
     if (st.hasUpdate) {
-      statusEl.innerHTML = `<span style="color:var(--warn); font-weight:600;">⚡ ${st.commitsBehind} new commit(s) available (latest: #${st.remoteShortCommit})</span>`;
+      statusEl.innerHTML = `<span style="color:var(--warn); font-weight:600;">${t('checkAvailable', { count: st.commitsBehind, commit: st.remoteShortCommit })}</span>`;
       if (st.incomingCommits && st.incomingCommits.length > 0) {
         appendUpdateLog(`Incoming commits from ${st.upstreamBranch}:\n` + st.incomingCommits.map(c => '  • ' + c).join('\n'), true);
       }
-      showToast(`⚡ Found ${st.commitsBehind} new update(s)!`);
+      showToast(t('checkAvailable', { count: st.commitsBehind, commit: st.remoteShortCommit }));
     } else {
-      statusEl.innerHTML = `<span style="color:var(--success); font-weight:600;">✅ Up to date with origin/${st.upstreamBranch} (#${st.remoteShortCommit || st.localShortCommit || '-'})</span>`;
-      showToast('✅ Already on latest commit');
+      statusEl.innerHTML = `<span style="color:var(--success); font-weight:600;">${t('checkLatest', { commit: st.remoteShortCommit || st.localShortCommit || '-' })}</span>`;
+      showToast(t('checkLatest', { commit: st.remoteShortCommit || st.localShortCommit || '-' }));
     }
   } catch (err) {
-    statusEl.innerHTML = `<span style="color:var(--danger);">❌ Check failed</span>`;
+    statusEl.innerHTML = `<span style="color:var(--danger);">${t('checkFailed')}</span>`;
     appendUpdateLog(`Error checking updates: ${err.message}`, true);
   } finally {
     btn.disabled = false;
-    btn.textContent = '🔍 Check Updates';
+    btn.textContent = t('btnCheckUpdates');
   }
 }
 
 async function waitForServerReconnect(maxAttempts = 25) {
-  appendUpdateLog('Waiting for server process to restart and come back online...');
+  appendUpdateLog(t('updateWaitingRestart'));
   for (let i = 1; i <= maxAttempts; i++) {
     await new Promise((r) => setTimeout(r, 900));
     try {
       const res = await fetch('/api/platform/status?t=' + Date.now(), { cache: 'no-store' });
       if (res.ok) {
-        appendUpdateLog('✅ Server is back online! Reloading console state...');
-        showToast('🚀 Hot update & restart completed!');
+        appendUpdateLog('✅ ' + t('serverOnline'));
+        showToast(t('updateRestartSuccess'));
         await loadConfigForEdit();
         await loadImages();
         return true;
@@ -943,8 +943,8 @@ async function waitForServerReconnect(maxAttempts = 25) {
 async function triggerHotUpdate() {
   const upstream_mirror = getSelectedUpstreamMirror();
   const upstream_branch = 'main';
-  const mirrorHint = upstream_mirror ? ` (加速镜像: ${upstream_mirror})` : ' (官方直连)';
-  if (!confirm(`确定拉取官方仓库最新代码 [${upstream_branch}]${mirrorHint} 并平滑重启服务吗？（现有配置与数据将完全保留）`)) {
+  const mirrorHint = upstream_mirror ? ` (${upstream_mirror})` : '';
+  if (!confirm(t('hotUpdateConfirm', { branch: upstream_branch, mirrorHint }))) {
     return;
   }
 
@@ -954,7 +954,7 @@ async function triggerHotUpdate() {
   btnPull.disabled = true;
   btnCheck.disabled = true;
   btnRestart.disabled = true;
-  btnPull.textContent = '⏳ Pulling & Updating...';
+  btnPull.textContent = '⏳ ' + t('pullingUpdate');
   appendUpdateLog(`Starting hot update from official repo [${upstream_branch}]${mirrorHint}...`, true);
 
   try {
@@ -971,7 +971,7 @@ async function triggerHotUpdate() {
     if (Array.isArray(data.logs)) {
       appendUpdateLog(data.logs.join('\n'), true);
     }
-    btnPull.textContent = '🔄 Restarting Service...';
+    btnPull.textContent = '🔄 ' + t('restartingServer');
     await waitForServerReconnect();
   } catch (err) {
     appendUpdateLog(`❌ Hot update failed: ${err.message}`);
@@ -980,15 +980,15 @@ async function triggerHotUpdate() {
     btnPull.disabled = false;
     btnCheck.disabled = false;
     btnRestart.disabled = false;
-    btnPull.textContent = '⚡ Pull & Hot Restart';
+    btnPull.textContent = t('btnPullUpdate');
   }
 }
 
 async function triggerServerRestartOnly() {
-  if (!confirm('Restart the FileMaster Server Node.js process now?')) return;
+  if (!confirm(t('restartConfirm'))) return;
   const btnRestart = document.getElementById('btnRestartOnly');
   btnRestart.disabled = true;
-  btnRestart.textContent = '⏳ Restarting...';
+  btnRestart.textContent = '⏳ ' + t('restartingServer');
   appendUpdateLog('Triggering graceful server process restart...', true);
 
   try {
@@ -999,7 +999,7 @@ async function triggerServerRestartOnly() {
     appendUpdateLog(`❌ Restart error: ${err.message}`);
   } finally {
     btnRestart.disabled = false;
-    btnRestart.textContent = '♻️ Restart Only';
+    btnRestart.textContent = t('btnRestartOnly');
   }
 }
 
