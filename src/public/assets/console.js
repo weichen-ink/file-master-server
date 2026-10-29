@@ -118,17 +118,26 @@ function toggleMetricsTimer() {
 
 function switchTab(tabId, btnEl) {
   document.querySelectorAll('main > section').forEach(s => s.classList.add('hidden'));
-  document.getElementById('tab-' + tabId).classList.remove('hidden');
+  const target = document.getElementById('tab-' + tabId);
+  if (target) target.classList.remove('hidden');
   document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
   if (btnEl) btnEl.classList.add('active');
   if (tabId === 'status') {
     loadServerMetrics(false);
-  } else if (tabId === 'platform') {
+  } else if (tabId === 'settings' || tabId === 'security' || tabId === 'maintenance' || tabId === 'platform') {
     loadConfigForEdit();
   } else if (tabId === 'future-files') {
     loadShares();
   }
   toggleMetricsTimer();
+}
+
+function switchSettingsSubtab(subtabId, btnEl) {
+  document.querySelectorAll('.subtab-settings-content').forEach(s => s.classList.add('hidden'));
+  const target = document.getElementById('subtab-settings-' + subtabId);
+  if (target) target.classList.remove('hidden');
+  document.querySelectorAll('#settingsTabPills .tab-pill').forEach(b => b.classList.remove('active'));
+  if (btnEl) btnEl.classList.add('active');
 }
 
 async function initApp() {
@@ -838,13 +847,9 @@ async function generateNewTotp() {
 }
 
 function quickJumpHotUpdate() {
-  const platformNavBtn = document.querySelectorAll('.nav-item')[3];
-  switchTab('platform', platformNavBtn);
-  setCfgEditMode('form');
-  const card = document.getElementById('hotUpdateCard');
-  if (card) {
-    card.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
+  const maintenanceBtn = document.getElementById('navItemMaintenance');
+  switchTab('maintenance', maintenanceBtn);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function appendUpdateLog(text, replace = false) {

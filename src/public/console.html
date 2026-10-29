@@ -47,26 +47,33 @@
           <p>Self-Hosted Asset & Image Hub</p>
         </div>
 
-        <div class="nav-section-title">Active Modules</div>
+        <div class="nav-section-title" data-i18n="navSecWorkspace">工作空间</div>
         <button class="nav-item active" onclick="switchTab('image-host', this)">
-          <span data-i18n="navAssets">🖼️ 图床与附件管理</span>
+          <span data-i18n="navAssets">🖼️ 文件与资产库</span>
           <span class="badge" id="navImgCount">0</span>
         </button>
-        <button class="nav-item" onclick="switchTab('status', this)">
-          <span data-i18n="navStatus">📊 主机与进程监控</span>
-        </button>
         <button class="nav-item" onclick="switchTab('future-files', this)">
-          <span data-i18n="navShares">📁 过期短链分享</span>
+          <span data-i18n="navShares">📁 安全文件分享</span>
           <span class="badge" id="navShareCount">0</span>
         </button>
-        <button class="nav-item" onclick="switchTab('platform', this)">
-          <span data-i18n="navConfig">🛡️ 配置与安全中心</span>
+        <button class="nav-item" onclick="switchTab('status', this)">
+          <span data-i18n="navMonitoring">📊 主机与监控中心</span>
+        </button>
+
+        <div class="nav-section-title" style="margin-top: 14px;" data-i18n="navSecSystem">系统管理</div>
+        <button class="nav-item" onclick="switchTab('settings', this)">
+          <span data-i18n="navSettings">⚙️ 系统配置中心</span>
+        </button>
+        <button class="nav-item" onclick="switchTab('security', this)">
+          <span data-i18n="navSecurity">🛡️ 安全与访问权限</span>
+        </button>
+        <button id="navItemMaintenance" class="nav-item" onclick="switchTab('maintenance', this)">
+          <span data-i18n="navMaintenance">🚀 系统维护与更新</span>
         </button>
       </div>
 
       <div style="border-top: 1px solid var(--border); padding-top: 14px; display:flex; flex-direction:column; gap:8px;">
         <button id="btnLangSwitch" class="btn btn-outline" style="width:100%;" onclick="toggleConsoleLanguage()">🌐 English</button>
-        <button class="btn btn-primary" style="width:100%;" onclick="quickJumpHotUpdate()" data-i18n="navHotUpdate">🚀 在线热更新</button>
         <button class="btn btn-outline" style="width:100%;" onclick="logout()" data-i18n="navLogout">退出登录</button>
       </div>
     </aside>
@@ -251,265 +258,294 @@
         </div>
       </section>
 
-      <!-- ======= Configuration and Security (config.yaml) ======= -->
-      <section id="tab-platform" class="hidden">
+      <!-- ================= 3. System Settings ================= -->
+      <section id="tab-settings" class="hidden">
         <div class="page-header">
           <div>
-            <h2>🛡️ Config & Security (Online config.yaml Editor)</h2>
-            <p>Update settings via visual form (comments preserved 100%) or edit raw <code class="inline-code">config.yaml</code> directly</p>
+            <h2 data-i18n="navSettings">⚙️ 系统配置中心</h2>
+            <p data-i18n="lblAssetManagerDesc">管理服务公网访问地址、端口与媒体自适应转码参数。</p>
           </div>
-          <div style="display:flex; gap:8px;">
-            <button id="btnCfgFormMode" class="btn btn-primary" onclick="setCfgEditMode('form')">🎛️ Form Mode</button>
-            <button id="btnCfgRawMode" class="btn btn-outline" onclick="setCfgEditMode('raw')">📝 Raw YAML Mode</button>
+          <div class="tab-pills" id="settingsTabPills">
+            <button class="tab-pill active" onclick="switchSettingsSubtab('general', this)" data-i18n="subtabGeneral">基本参数</button>
+            <button class="tab-pill" onclick="switchSettingsSubtab('media', this)" data-i18n="subtabMedia">图床与媒体处理</button>
+            <button class="tab-pill" onclick="switchSettingsSubtab('raw', this)" data-i18n="subtabRawYaml">原始配置 (YAML)</button>
           </div>
         </div>
 
-        <div id="cfgFormPanel">
-          <!-- ======= Upstream Repository & One-Click Hot Update Card ======= -->
-          <div id="hotUpdateCard" class="stat-card" style="margin-bottom: 18px; border-color: rgba(59, 130, 246, 0.45);">
-            <div style="display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:14px;">
-              <div>
-                <h3 style="font-size:16px; display:flex; align-items:center; gap:8px;">
-                  <span>🚀 Upstream Repository & One-Click Hot Update</span>
-                  <span id="updVersionBadge" class="inline-code" style="font-size:11.5px;">v0.1.0</span>
-                </h3>
-                <p style="font-size:12px; color:var(--muted); margin-top:3px;">
-                  Configure upstream Git repository URL & branch. Clicking <strong>Pull & Hot Restart</strong> automatically backs up and preserves your <code class="inline-code">config.yaml</code>, pulls latest code, updates dependencies if needed, and restarts the server.
-                </p>
-              </div>
-              <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                <button id="btnCheckUpdate" class="btn btn-outline" onclick="checkRemoteUpdate()">🔍 Check Updates</button>
-                <button id="btnRestartOnly" class="btn btn-outline" onclick="triggerServerRestartOnly()">♻️ Restart Only</button>
-                <button id="btnPullUpdate" class="btn btn-primary" onclick="triggerHotUpdate()">⚡ Pull & Hot Restart</button>
-              </div>
+        <!-- Subtab 1: General Settings -->
+        <div id="subtab-settings-general" class="subtab-settings-content">
+          <div class="stat-card" style="max-width: 760px;">
+            <div class="form-group">
+              <label data-i18n="lblSiteName">站点名称</label>
+              <input type="text" id="f_site_name" class="form-input" />
             </div>
-
-            <div style="display:grid; grid-template-columns: 1fr 150px 1fr; gap:12px; align-items:end;">
-              <div class="form-group" style="margin-bottom:10px;">
-                <label data-i18n="lblOfficialRepo">官方代码源与分支 (Official Repo & Branch)</label>
-                <div style="padding: 9px 12px; background: rgba(0,0,0,0.35); border: 1px solid var(--border); border-radius: 8px; font-size: 12.5px; color: #93c5fd; font-family: var(--font-mono); display:flex; align-items:center; justify-content:space-between;">
-                  <span>weichen-ink/file-master-server <span style="color:var(--muted); font-size:11px;">(branch: main)</span></span>
-                  <span style="font-size:11px; background:rgba(16,185,129,0.2); color:#34d399; padding:1px 6px; border-radius:4px;">🔒 官方锁定</span>
-                </div>
-              </div>
-              <div class="form-group" style="margin-bottom:10px;">
-                <label data-i18n="lblEnableMirror">是否开启加速</label>
-                <select id="f_enable_mirror" class="form-input" onchange="toggleMirrorPresetSelect()">
-                  <option value="false">关闭 (官方直连)</option>
-                  <option value="true">开启加速</option>
-                </select>
-              </div>
-              <div class="form-group" id="group_mirror_preset" style="margin-bottom:10px;">
-                <label data-i18n="lblMirrorPreset">加速服务器选择</label>
-                <select id="f_upstream_mirror_preset" class="form-input">
-                  <option value="https://ghproxy.net/">ghproxy.net (推荐 / 通用高速)</option>
-                  <option value="https://gh-proxy.com/">gh-proxy.com (备用镜像)</option>
-                  <option value="https://mirror.ghproxy.com/">mirror.ghproxy.com (备用镜像)</option>
-                </select>
-              </div>
-            </div>
-
-            <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; font-size:12px; color:var(--muted); padding-top:4px;">
-              <div>
-                <span>Local Commit: <code class="inline-code" id="updLocalCommit">Loading...</code></span>
-                <span id="updRemoteStatus" style="margin-left:10px;"></span>
-              </div>
-              <span id="updLastChecked"></span>
-            </div>
-
-            <div id="updLogBox" class="hidden" style="margin-top:12px; padding:12px; background:#090d16; border:1px solid var(--border); border-radius:8px; font-family:var(--font-mono); font-size:12px; color:#cbd5e1; max-height:220px; overflow-y:auto; white-space:pre-wrap; line-height:1.5;"></div>
-          </div>
-
-          <div class="kv-grid" style="margin-bottom: 18px;">
-            <div class="stat-card">
-              <h3 style="font-size:16px; margin-bottom:14px;">🔒 1. Core Platform & Security</h3>
+            <div style="display:grid; grid-template-columns: 1fr 140px; gap:12px;">
               <div class="form-group">
-                <label>Site Name (site_name)</label>
-                <input type="text" id="f_site_name" class="form-input" />
+                <label data-i18n="lblBaseUrl">对外访问公网地址</label>
+                <input type="text" id="f_base_url" class="form-input" placeholder="http://192.168.1.100:3000" />
               </div>
-              <div style="display:grid; grid-template-columns: 1fr 130px; gap:12px;">
-                <div class="form-group">
-                  <label>Base URL (base_url)</label>
-                  <input type="text" id="f_base_url" class="form-input" />
-                </div>
-                <div class="form-group">
-                  <label>Port (port)</label>
-                  <input type="number" id="f_port" class="form-input" />
-                </div>
+              <div class="form-group">
+                <label data-i18n="lblPort">服务监听端口</label>
+                <input type="number" id="f_port" class="form-input" />
               </div>
-              <div style="display:grid; grid-template-columns: 1fr 130px; gap:12px;">
-                <div class="form-group">
-                  <label>Stealth Admin Path (admin_path)</label>
-                  <input type="text" id="f_admin_path" class="form-input" />
-                </div>
-                <div class="form-group">
-                  <label>Max Login Attempts</label>
-                  <input type="number" id="f_max_login_attempts" class="form-input" min="1" max="20" />
-                </div>
-              </div>
+            </div>
+            <div class="form-group">
+              <label data-i18n="lblRawSecretPath">原始文件访问路径前缀</label>
+              <input type="text" id="f_raw_secret_path" class="form-input" placeholder="raw" />
+            </div>
+            <div style="margin-top: 20px; display:flex; justify-content:flex-end;">
+              <button class="btn btn-primary" onclick="saveConfigForm()" data-i18n="btnSaveConfig">💾 保存配置</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Subtab 2: Media & Image Host -->
+        <div id="subtab-settings-media" class="subtab-settings-content hidden">
+          <div class="stat-card" style="max-width: 820px;">
+            <div class="form-group">
+              <label data-i18n="lblEnableOptimization">启用图片自动优化与双链接</label>
+              <select id="f_enable_optimization" class="form-input" onchange="toggleConsoleOptFields()">
+                <option value="true" data-i18n="optOptEnabled">开启 — 同时提供原始文件链接与 WebP 优化链接</option>
+                <option value="false" data-i18n="optOptDisabled">关闭 — 仅使用原始无损文件</option>
+              </select>
+            </div>
+
+            <div id="optConfigSection">
               <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
                 <div class="form-group">
-                  <label>Admin Username (username)</label>
-                  <input type="text" id="f_username" class="form-input" />
+                  <label data-i18n="lblWebpQuality">WebP 压缩画质 (10-100)</label>
+                  <input type="number" id="f_webp_quality" class="form-input" min="10" max="100" />
                 </div>
                 <div class="form-group">
-                  <label>Password (password)</label>
-                  <input type="password" id="f_password" class="form-input" />
+                  <label data-i18n="lblMaxWidth">最大图片宽度限制 (像素, 0 为不限制)</label>
+                  <input type="number" id="f_max_width" class="form-input" min="0" />
                 </div>
               </div>
-              <div class="form-group">
-                <label>Global Upload API Token (api_token)</label>
-                <input type="text" id="f_api_token" class="form-input" />
-              </div>
-              <div class="form-group" style="margin-bottom:0;">
-                <label style="display:flex; justify-content:space-between; align-items:center;">
-                  <span>2FA TOTP Secret (totp_secret, leave empty to disable)</span>
-                  <a href="javascript:void(0)" onclick="generateNewTotp()" style="color:var(--primary); text-decoration:none; font-size:12px;">✨ Generate New Key</a>
-                </label>
-                <input type="text" id="f_totp_secret" class="form-input" placeholder="Leave empty for password-only login" />
-              </div>
-              <div id="totpResultBox" class="hidden" style="margin-top:10px; padding:10px 12px; background:#090d16; border-radius:8px; border:1px solid var(--border); font-size:12px;">
-                <div><strong>Generated key populated above:</strong> <code class="inline-code" id="newTotpSecret"></code></div>
-                <div style="margin-top:6px;"><strong>otpauth URI (copy into 1Password / Authenticator):</strong> <code class="inline-code" id="newTotpUri" style="word-break:break-all;"></code></div>
-              </div>
-            </div>
 
-            <div class="stat-card">
-              <h3 style="font-size:16px; margin-bottom:14px;">🖼️ 2. Image Host & Auto-Optimization</h3>
-              <div style="display:grid; grid-template-columns: 1fr 2fr; gap:10px; margin-bottom: 4px;">
+              <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:12px;">
                 <div class="form-group">
-                  <label>Original Path Prefix (raw)</label>
-                  <input type="text" id="f_raw_secret_path" class="form-input" placeholder="raw" />
+                  <label data-i18n="lblWatermarkEnable">水印功能</label>
+                  <select id="f_watermark_enable" class="form-input">
+                    <option value="true" data-i18n="optWatermarkOn">开启水印</option>
+                    <option value="false" data-i18n="optWatermarkOff">关闭水印</option>
+                  </select>
                 </div>
                 <div class="form-group">
-                  <label>⚡ Auto Image Optimization (enable_optimization)</label>
-                  <select id="f_enable_optimization" class="form-input" onchange="toggleConsoleOptFields()">
-                    <option value="true">Enabled — Show both Copy Raw & Copy Optimized buttons (true)</option>
-                    <option value="false">Disabled — Copy Raw Original URL only (false)</option>
+                  <label data-i18n="lblWatermarkType">水印呈现样式</label>
+                  <select id="f_watermark_type" class="form-input">
+                    <option value="image" data-i18n="optWatermarkImg">PNG 图片水印</option>
+                    <option value="text" data-i18n="optWatermarkText">角落文本水印</option>
+                    <option value="tile" data-i18n="optWatermarkTile">全图平铺水印</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label data-i18n="lblWatermarkPos">水印摆放位置</label>
+                  <select id="f_watermark_pos" class="form-input">
+                    <option value="bottom-right" data-i18n="optPosBottomRight">右下角</option>
+                    <option value="bottom-left" data-i18n="optPosBottomLeft">左下角</option>
+                    <option value="top-right" data-i18n="optPosTopRight">右上角</option>
+                    <option value="top-left" data-i18n="optPosTopLeft">左上角</option>
+                    <option value="center" data-i18n="optPosCenter">居中</option>
                   </select>
                 </div>
               </div>
 
-              <div id="optConfigSection">
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
-                  <div class="form-group">
-                    <label>WebP Quality (1-100)</label>
-                    <input type="number" id="f_webp_quality" class="form-input" min="10" max="100" />
-                  </div>
-                  <div class="form-group">
-                    <label>Max Width (px)</label>
-                    <input type="number" id="f_max_width" class="form-input" min="0" />
-                  </div>
-                </div>
-
-                <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px;">
-                  <div class="form-group">
-                    <label>Watermark Enabled</label>
-                    <select id="f_watermark_enable" class="form-input">
-                      <option value="true">Enabled (true)</option>
-                      <option value="false">Disabled (false)</option>
-                    </select>
-                  </div>
-                  <div class="form-group">
-                    <label>Watermark Mode</label>
-                    <select id="f_watermark_type" class="form-input">
-                      <option value="image">PNG Image (image)</option>
-                      <option value="text">Corner Text (text)</option>
-                      <option value="tile">Repeating Tile (tile)</option>
-                    </select>
-                  </div>
-                  <div class="form-group">
-                    <label>Watermark Position</label>
-                    <select id="f_watermark_pos" class="form-input">
-                      <option value="bottom-right">Bottom-Right</option>
-                      <option value="bottom-left">Bottom-Left</option>
-                      <option value="top-right">Top-Right</option>
-                      <option value="top-left">Top-Left</option>
-                      <option value="center">Center</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:10px;">
-                  <div class="form-group">
-                    <label>Opacity (0.1 - 1.0)</label>
-                    <input type="number" id="f_watermark_opacity" class="form-input" step="0.05" min="0.05" max="1" />
-                  </div>
-                  <div class="form-group">
-                    <label>Scale (0.05 - 0.8)</label>
-                    <input type="number" id="f_watermark_scale" class="form-input" step="0.01" min="0.05" max="0.8" />
-                  </div>
-                  <div class="form-group">
-                    <label>Margin (px)</label>
-                    <input type="number" id="f_watermark_margin" class="form-input" min="0" />
-                  </div>
-                  <div class="form-group">
-                    <label>Min Width for Watermark</label>
-                    <input type="number" id="f_watermark_min_width" class="form-input" min="0" />
-                  </div>
-                </div>
-
+              <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:12px;">
                 <div class="form-group">
-                  <label>Watermark Image Path (watermark_image)</label>
-                  <input type="text" id="f_watermark_image" class="form-input" />
+                  <label data-i18n="lblWatermarkOpacity">水印不透明度 (0.1 - 1.0)</label>
+                  <input type="number" id="f_watermark_opacity" class="form-input" step="0.05" min="0.05" max="1" />
                 </div>
+                <div class="form-group">
+                  <label data-i18n="lblWatermarkScale">水印缩放比例 (0.05 - 0.8)</label>
+                  <input type="number" id="f_watermark_scale" class="form-input" step="0.01" min="0.05" max="0.8" />
+                </div>
+                <div class="form-group">
+                  <label data-i18n="lblWatermarkMargin">边距留白 (像素)</label>
+                  <input type="number" id="f_watermark_margin" class="form-input" min="0" />
+                </div>
+                <div class="form-group">
+                  <label data-i18n="lblWatermarkMinWidth">启用水印最小图片宽度 (像素)</label>
+                  <input type="number" id="f_watermark_min_width" class="form-input" min="0" />
+                </div>
+              </div>
 
-                <div style="display:grid; grid-template-columns: 2fr 1fr; gap:10px;">
-                  <div class="form-group" style="margin-bottom:0;">
-                    <label>Watermark Text (watermark_text)</label>
-                    <input type="text" id="f_watermark_text" class="form-input" />
-                  </div>
-                  <div class="form-group" style="margin-bottom:0;">
-                    <label>Text Color (watermark_color)</label>
-                    <input type="text" id="f_watermark_color" class="form-input" />
-                  </div>
+              <div class="form-group">
+                <label data-i18n="lblWatermarkImage">水印图片相对路径</label>
+                <input type="text" id="f_watermark_image" class="form-input" />
+              </div>
+
+              <div style="display:grid; grid-template-columns: 2fr 1fr; gap:12px;">
+                <div class="form-group" style="margin-bottom:0;">
+                  <label data-i18n="lblWatermarkText">水印文字内容</label>
+                  <input type="text" id="f_watermark_text" class="form-input" />
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                  <label data-i18n="lblWatermarkColor">水印文字颜色</label>
+                  <input type="text" id="f_watermark_color" class="form-input" />
                 </div>
               </div>
             </div>
-          </div>
 
-          <div class="stat-card" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
-            <label style="display:inline-flex; align-items:center; gap:8px; font-size:13px; cursor:pointer;">
-              <input type="checkbox" id="f_auto_clear_cache" checked style="width:15px; height:15px; accent-color:var(--primary);" />
-              <span>Automatically clear watermark cache on save (applies new settings to all past images immediately)</span>
-            </label>
-            <button class="btn btn-primary" style="padding:10px 22px; font-size:14px;" onclick="saveConfigForm()">💾 Save Configuration</button>
-          </div>
-
-          <!-- ☁️ Backup & Linux rclone / rsync Center -->
-          <div class="stat-card" style="margin-top:16px; border:1px solid rgba(56,189,248,0.28);">
-            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
-              <div>
-                <h3 style="font-size:15px; display:flex; align-items:center; gap:8px;">
-                  ☁️ Backup & Linux Disaster Recovery Center
-                </h3>
-                <p style="font-size:12px; color:var(--muted); margin-top:4px;">
-                  Export one-click <code class="inline-code">.tar.gz</code> snapshots or copy incremental Linux <code class="inline-code">rclone</code> / <code class="inline-code">rsync</code> backup commands.
-                </p>
-              </div>
-              <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                <a class="btn btn-outline" href="/api/platform/backup/download?scope=config" target="_blank" style="text-decoration:none;">
-                  📦 Export Config & Index (.tar.gz)
-                </a>
-                <a class="btn btn-primary" href="/api/platform/backup/download?scope=full" target="_blank" style="text-decoration:none;">
-                  🗄️ Export Full Raw Storage + Config (.tar.gz)
-                </a>
-              </div>
-            </div>
-            <div style="background:rgba(15,23,42,0.75); border:1px solid var(--border); border-radius:8px; padding:10px 14px; font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:12px; color:#cbd5e1; line-height:1.6;">
-              <div style="color:var(--muted); margin-bottom:4px;"># Linux Incremental Cloud Sync via rclone (e.g. Cloudflare R2 / S3 / WebDAV cron job):</div>
-              <div>rclone sync ./storage/raw remote:filemaster-backup/raw --transfers=8 --fast-list</div>
-              <div>rclone sync ./data remote:filemaster-backup/data</div>
+            <div style="margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--border); display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+              <label style="display:inline-flex; align-items:center; gap:8px; font-size:13px; cursor:pointer;">
+                <input type="checkbox" id="f_auto_clear_cache" checked style="width:15px; height:15px; accent-color:var(--primary);" />
+                <span data-i18n="lblAutoClearCache">保存配置后自动清理旧缓存（立即对已有图片生效）</span>
+              </label>
+              <button class="btn btn-primary" onclick="saveConfigForm()" data-i18n="btnSaveConfig">💾 保存配置</button>
             </div>
           </div>
         </div>
 
-        <div id="cfgRawPanel" class="stat-card hidden">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-            <span style="font-size:13px; color:var(--muted);">Directly editing root <code class="inline-code">config.yaml</code> (syntax validated before saving)</span>
-            <button class="btn btn-primary" onclick="saveConfigRaw()">💾 Validate & Save config.yaml</button>
+        <!-- Subtab 3: Raw YAML Editor -->
+        <div id="subtab-settings-raw" class="subtab-settings-content hidden">
+          <div class="stat-card">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+              <span style="font-size:13px; color:var(--muted);">直接编辑根目录配置文件 <code class="inline-code">config.yaml</code>（保存前自动校验 YAML 语法合法性）</span>
+              <button class="btn btn-primary" onclick="saveConfigRaw()">💾 校验并保存 config.yaml</button>
+            </div>
+            <textarea id="rawYamlEditor" class="form-input" style="height:480px; font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:13px; line-height:1.6; resize:vertical;" spellcheck="false"></textarea>
           </div>
-          <textarea id="rawYamlEditor" class="form-input" style="height:460px; font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:13px; line-height:1.6; resize:vertical;" spellcheck="false"></textarea>
+        </div>
+      </section>
+
+      <!-- ================= 4. Security Center ================= -->
+      <section id="tab-security" class="hidden">
+        <div class="page-header">
+          <div>
+            <h2 data-i18n="lblSecurityTitle">🛡️ 安全中心与访问凭据</h2>
+            <p data-i18n="lblSecurityDesc">管理控制台身份验证凭证、对外上传 API 令牌、双重验证密钥及暴力破解防范策略。</p>
+          </div>
+        </div>
+
+        <div class="stat-card" style="max-width: 760px;">
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+            <div class="form-group">
+              <label data-i18n="lblUsername">管理员账号</label>
+              <input type="text" id="f_username" class="form-input" />
+            </div>
+            <div class="form-group">
+              <label data-i18n="lblPassword">管理员密码 (留空表示保持原密码不变)</label>
+              <input type="password" id="f_password" class="form-input" placeholder="留空保持原密码不变" />
+            </div>
+          </div>
+
+          <div style="display:grid; grid-template-columns: 1fr 160px; gap:12px;">
+            <div class="form-group">
+              <label data-i18n="lblAdminPath">隐蔽后台访问路径</label>
+              <input type="text" id="f_admin_path" class="form-input" />
+            </div>
+            <div class="form-group">
+              <label data-i18n="lblMaxLoginAttempts">登录失败锁定阈值 (次)</label>
+              <input type="number" id="f_max_login_attempts" class="form-input" min="1" max="20" />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label data-i18n="lblApiToken">全局上传 API 访问令牌</label>
+            <input type="text" id="f_api_token" class="form-input" />
+          </div>
+
+          <div class="form-group" style="margin-bottom:0;">
+            <label style="display:flex; justify-content:space-between; align-items:center;">
+              <span data-i18n="lblTotpSecret">双重验证密钥 (TOTP, 留空即关闭)</span>
+              <a href="javascript:void(0)" onclick="generateNewTotp()" style="color:var(--primary); text-decoration:none; font-size:12px;" data-i18n="btnGenerateTotp">✨ 生成新密钥</a>
+            </label>
+            <input type="text" id="f_totp_secret" class="form-input" placeholder="留空即仅使用账号密码登录" />
+          </div>
+
+          <div id="totpResultBox" class="hidden" style="margin-top:12px; padding:10px 14px; background:#090d16; border-radius:8px; border:1px solid var(--border); font-size:12px;">
+            <div><strong>生成新密钥：</strong> <code class="inline-code" id="newTotpSecret"></code></div>
+            <div style="margin-top:6px;"><strong>身份验证器绑定链接 (可复制到 1Password / Google Authenticator)：</strong> <code class="inline-code" id="newTotpUri" style="word-break:break-all;"></code></div>
+          </div>
+
+          <div style="margin-top: 24px; display:flex; justify-content:flex-end;">
+            <button class="btn btn-primary" onclick="saveConfigForm()" data-i18n="btnSaveSecurity">🛡️ 保存安全设置</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= 5. Maintenance & Updates ================= -->
+      <section id="tab-maintenance" class="hidden">
+        <div class="page-header">
+          <div>
+            <h2 data-i18n="lblUpstreamTitle">🚀 官方版本维护与在线热更新</h2>
+            <p data-i18n="lblUpstreamDesc">一键检查官方仓库版本更新。点击「拉取更新并平滑重启」将拉取最新代码、完整保留现有配置与存储数据，并平滑重启服务。</p>
+          </div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button id="btnCheckUpdate" class="btn btn-outline" onclick="checkRemoteUpdate()" data-i18n="btnCheckUpdates">🔍 检查更新</button>
+            <button id="btnRestartOnly" class="btn btn-outline" onclick="triggerServerRestartOnly()" data-i18n="btnRestartOnly">♻️ 仅重启服务</button>
+            <button id="btnPullUpdate" class="btn btn-primary" onclick="triggerHotUpdate()" data-i18n="btnPullUpdate">⚡ 拉取更新并平滑重启</button>
+          </div>
+        </div>
+
+        <!-- Hot Update Card -->
+        <div id="hotUpdateCard" class="stat-card" style="margin-bottom: 20px; border-color: rgba(59, 130, 246, 0.45);">
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px;">
+            <span style="font-weight:600; font-size:14.5px;" data-i18n="lblOfficialRepo">官方更新源与分支</span>
+            <span id="updVersionBadge" class="inline-code" style="font-size:11.5px;">v0.1.0</span>
+          </div>
+
+          <div style="display:grid; grid-template-columns: 1fr 150px 1fr; gap:12px; align-items:end;">
+            <div class="form-group" style="margin-bottom:10px;">
+              <label data-i18n="lblOfficialRepo">官方代码源与分支</label>
+              <div style="padding: 9px 12px; background: rgba(0,0,0,0.35); border: 1px solid var(--border); border-radius: 8px; font-size: 12.5px; color: #93c5fd; font-family: var(--font-mono); display:flex; align-items:center; justify-content:space-between;">
+                <span>weichen-ink/file-master-server <span style="color:var(--muted); font-size:11px;">(branch: main)</span></span>
+                <span style="font-size:11px; background:rgba(16,185,129,0.2); color:#34d399; padding:1px 6px; border-radius:4px;" data-i18n="lblOfficialLocked">🔒 官方锁定</span>
+              </div>
+            </div>
+            <div class="form-group" style="margin-bottom:10px;">
+              <label data-i18n="lblEnableMirror">是否开启加速</label>
+              <select id="f_enable_mirror" class="form-input" onchange="toggleMirrorPresetSelect()">
+                <option value="false" data-i18n="optMirrorOff">关闭 (官方直连)</option>
+                <option value="true" data-i18n="optMirrorOn">开启加速</option>
+              </select>
+            </div>
+            <div class="form-group" id="group_mirror_preset" style="margin-bottom:10px;">
+              <label data-i18n="lblMirrorPreset">加速服务器选择</label>
+              <select id="f_upstream_mirror_preset" class="form-input">
+                <option value="https://ghproxy.net/">ghproxy.net (推荐 / 通用高速)</option>
+                <option value="https://gh-proxy.com/">gh-proxy.com (备用镜像)</option>
+                <option value="https://mirror.ghproxy.com/">mirror.ghproxy.com (备用镜像)</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; font-size:12px; color:var(--muted); padding-top:4px;">
+            <div>
+              <span>本地提交版本: <code class="inline-code" id="updLocalCommit">加载中...</code></span>
+              <span id="updRemoteStatus" style="margin-left:10px;"></span>
+            </div>
+            <span id="updLastChecked"></span>
+          </div>
+
+          <div id="updLogBox" class="hidden" style="margin-top:12px; padding:12px; background:#090d16; border:1px solid var(--border); border-radius:8px; font-family:var(--font-mono); font-size:12px; color:#cbd5e1; max-height:220px; overflow-y:auto; white-space:pre-wrap; line-height:1.5;"></div>
+        </div>
+
+        <!-- ☁️ Backup & Disaster Recovery Center -->
+        <div class="stat-card" style="border:1px solid rgba(56,189,248,0.28);">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
+            <div>
+              <h3 style="font-size:15px; display:flex; align-items:center; gap:8px;" data-i18n="lblBackupTitle">
+                ☁️ 系统灾备与 Linux 云备份
+              </h3>
+              <p style="font-size:12px; color:var(--muted); margin-top:4px;" data-i18n="lblBackupDesc">
+                支持一键打包导出快照归档（.tar.gz），或通过 Linux rclone 工具配置定时增量云同步。
+              </p>
+            </div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <a class="btn btn-outline" href="/api/platform/backup/download?scope=config" target="_blank" style="text-decoration:none;" data-i18n="btnExportConfig">
+                📦 导出配置与索引 (.tar.gz)
+              </a>
+              <a class="btn btn-primary" href="/api/platform/backup/download?scope=full" target="_blank" style="text-decoration:none;" data-i18n="btnExportFull">
+                🗄️ 导出完整全量库 (.tar.gz)
+              </a>
+            </div>
+          </div>
+          <div style="background:rgba(15,23,42,0.75); border:1px solid var(--border); border-radius:8px; padding:12px 14px; font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:12px; color:#cbd5e1; line-height:1.6;">
+            <div style="color:var(--muted); margin-bottom:4px;" data-i18n="lblRcloneHint"># Linux 环境通过 rclone 定时增量同步云端示例：</div>
+            <div>rclone sync ./storage/raw remote:filemaster-backup/raw --transfers=8 --fast-list</div>
+            <div>rclone sync ./data remote:filemaster-backup/data</div>
+          </div>
         </div>
       </section>
 
