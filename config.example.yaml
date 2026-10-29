@@ -11,6 +11,8 @@ base_url: http://localhost:3000
 trust_proxy: loopback
 
 # Upstream Git repository for one-click hot updates & automatic restarts
+# Enable hot update capability explicitly (true | false)
+hot_update: false
 upstream_repo: https://github.com/weichen-ink/file-master-server.git
 upstream_branch: main
 

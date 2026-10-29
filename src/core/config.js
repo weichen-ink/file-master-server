@@ -52,9 +52,14 @@ image_host:
   const randToken = 'fm_' + crypto.randomBytes(16).toString('hex');
   const randRawSecret = 'raw-' + crypto.randomBytes(4).toString('hex');
 
+  // Hash generated password with scrypt for security
+  const salt = crypto.randomBytes(16).toString('hex');
+  const derived = crypto.scryptSync(randPassword, salt, 64).toString('hex');
+  const hashedPassword = `scrypt:${salt}:${derived}`;
+
   let generated = template
     .replace(/admin_path:\s*['"]?[^\r\n]*['"]?/, `admin_path: ${randAdminPath}`)
-    .replace(/password:\s*['"]?[^\r\n]*['"]?/, `password: "${randPassword}"`)
+    .replace(/password:\s*['"]?[^\r\n]*['"]?/, `password: "${hashedPassword}"`)
     .replace(/api_token:\s*['"]?[^\r\n]*['"]?/, `api_token: "${randToken}"`)
     .replace(/raw_secret_path:\s*['"]?[^\r\n]*['"]?/, `raw_secret_path: ${randRawSecret}`);
 
@@ -84,6 +89,7 @@ function getConfig() {
         site_name: parsed.site_name || 'FileMaster Server',
         port: Number(parsed.port) || 3000,
         base_url: String(parsed.base_url || 'http://localhost:3000').replace(/\/+$/, ''),
+        hot_update: Boolean(parsed.hot_update),
         upstream_repo: String(
           parsed.upstream_repo || 'https://github.com/weichen-ink/file-master-server.git'
         ).trim(),
@@ -180,6 +186,7 @@ function updateConfigPreservingComments(patch) {
     'site_name',
     'port',
     'base_url',
+    'hot_update',
     'upstream_repo',
     'upstream_branch',
     'admin_path',

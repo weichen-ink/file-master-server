@@ -419,8 +419,52 @@ function clearCacheDir() {
   fs.mkdirSync(CACHE_DIR, { recursive: true });
 }
 
+let isIndexWarming = false;
+
+function warmShaIndexAsync() {
+  if (isIndexWarming) return;
+  isIndexWarming = true;
+  setTimeout(() => {
+    try {
+      ensureDirs();
+      const idx = getShaIndex();
+      let added = 0;
+      const years = fs.readdirSync(RAW_DIR).filter((d) => isValidYearSeg(d));
+      for (const year of years) {
+        const yearPath = path.join(RAW_DIR, year);
+        if (!fs.statSync(yearPath).isDirectory()) continue;
+        const months = fs.readdirSync(yearPath).filter((m) => isValidMonthSeg(m));
+        for (const month of months) {
+          const monthPath = path.join(yearPath, month);
+          if (!fs.statSync(monthPath).isDirectory()) continue;
+          const files = fs.readdirSync(monthPath);
+          for (const file of files) {
+            if (!isAllowedAttachmentFile(file)) continue;
+            const fullPath = path.join(monthPath, file);
+            const stat = fs.statSync(fullPath);
+            const sha = getFileSha256(fullPath, stat);
+            if (!idx[sha]) {
+              idx[sha] = { year, month, filename: file };
+              added++;
+            }
+          }
+        }
+      }
+      if (added > 0) {
+        writeJsonData('sha_index', idx);
+        console.log(`[ImageHost] Warm startup: indexed ${added} missing asset(s) into sha_index.json`);
+      }
+    } catch (err) {
+      console.warn('[ImageHost] Warm index background error:', err.message);
+    } finally {
+      isIndexWarming = false;
+    }
+  }, 200).unref();
+}
+
 function registerImageHostModule(app) {
   ensureDirs();
+  warmShaIndexAsync();
   const initCfg = getConfig();
   const wmPath = path.resolve(ROOT_DIR, initCfg.image_host.watermark_image || './watermark.png');
   ensureDefaultWatermark(wmPath, initCfg.image_host.watermark_text).catch(() => {});

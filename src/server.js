@@ -7,6 +7,8 @@ const {
   updateConfigPreservingComments
 } = require('./core/config');
 const {
+  hashPassword,
+  verifyPassword,
   getClientIp,
   checkIpBan,
   recordLoginFailure,
@@ -14,6 +16,7 @@ const {
   generateTotpSecret,
   verifyTotp,
   createSessionToken,
+  revokeSessionToken,
   isAdminAuthenticated,
   requireAdmin
 } = require('./core/security');
@@ -90,7 +93,7 @@ app.post('/api/platform/login', (req, res) => {
   const { username, password, totpCode, rememberMe } = req.body || {};
 
   const userOk = String(username || '').trim() === cfg.username;
-  const passOk = String(password || '') === cfg.password;
+  const passOk = verifyPassword(password, cfg.password);
   const totpOk = verifyTotp(cfg.totp_secret, totpCode);
 
   if (!userOk || !passOk || !totpOk) {
@@ -116,6 +119,13 @@ app.post('/api/platform/login', (req, res) => {
 });
 
 app.post('/api/platform/logout', (req, res) => {
+  const cookieHeader = req.headers.cookie || '';
+  const match = cookieHeader.match(/filemaster_session=([^;]+)/);
+  if (match) {
+    try {
+      revokeSessionToken(decodeURIComponent(match[1].trim()));
+    } catch {}
+  }
   res.setHeader('Set-Cookie', 'filemaster_session=; Path=/; HttpOnly; Max-Age=0');
   res.json({ success: true });
 });
@@ -134,22 +144,38 @@ app.get('/api/platform/metrics', requireAdmin, (req, res) => {
 });
 
 app.get('/api/platform/config', requireAdmin, (req, res) => {
+  const cfg = getConfig();
+  // Sanitize sensitive credentials to prevent credential exposure in browser DevTools
+  const safeConfig = {
+    ...cfg,
+    password: '',
+    hasPassword: Boolean(cfg.password),
+    hasTotp: Boolean(cfg.totp_secret)
+  };
   res.json({
-    config: getConfig(),
+    config: safeConfig,
     rawYaml: getRawConfigYaml()
   });
 });
 
 app.put('/api/platform/config', requireAdmin, (req, res) => {
   try {
-    const oldAdminPath = getConfig().admin_path;
+    const oldCfg = getConfig();
+    const oldAdminPath = oldCfg.admin_path;
     const { mode, rawYaml, patch } = req.body || {};
 
     let updatedCfg;
     if (mode === 'raw') {
       updatedCfg = saveRawConfigYaml(rawYaml);
     } else {
-      updatedCfg = updateConfigPreservingComments(patch || {});
+      const cleanPatch = { ...(patch || {}) };
+      // If password field is empty/unset, preserve existing password
+      if (!cleanPatch.password) {
+        delete cleanPatch.password;
+      } else if (!cleanPatch.password.startsWith('scrypt:')) {
+        cleanPatch.password = hashPassword(cleanPatch.password);
+      }
+      updatedCfg = updateConfigPreservingComments(cleanPatch);
     }
 
     // Re-issue session cookie so password or admin path change doesn't break current session
@@ -159,9 +185,16 @@ app.put('/api/platform/config', requireAdmin, (req, res) => {
       `filemaster_session=${encodeURIComponent(newToken)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${30 * 24 * 60 * 60}`
     );
 
+    const safeConfig = {
+      ...updatedCfg,
+      password: '',
+      hasPassword: Boolean(updatedCfg.password),
+      hasTotp: Boolean(updatedCfg.totp_secret)
+    };
+
     res.json({
       success: true,
-      config: updatedCfg,
+      config: safeConfig,
       rawYaml: getRawConfigYaml(),
       adminPathChanged: oldAdminPath !== updatedCfg.admin_path,
       newAdminPath: updatedCfg.admin_path
@@ -184,6 +217,13 @@ app.get('/api/platform/update/status', requireAdmin, async (req, res) => {
 
 app.post('/api/platform/update/pull', requireAdmin, async (req, res) => {
   try {
+    const cfg = getConfig();
+    if (!cfg.hot_update) {
+      return res.status(403).json({
+        error: 'Hot update feature is currently disabled. Enable "hot_update: true" in config.yaml to allow online repository updates.'
+      });
+    }
+
     const { upstream_repo, upstream_branch } = req.body || {};
     const patch = {};
     if (typeof upstream_repo === 'string' && upstream_repo.trim()) {

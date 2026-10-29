@@ -52,6 +52,30 @@ function loadOrCreateInstanceSalt() {
 
 const SERVER_BOOT_SALT = loadOrCreateInstanceSalt();
 
+function hashPassword(password) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const derived = crypto.scryptSync(String(password || ''), salt, 64).toString('hex');
+  return `scrypt:${salt}:${derived}`;
+}
+
+function verifyPassword(password, storedHashOrPlain) {
+  if (!storedHashOrPlain) return false;
+  const str = String(storedHashOrPlain);
+  if (str.startsWith('scrypt:')) {
+    const parts = str.split(':');
+    if (parts.length !== 3) return false;
+    const [, salt, expectedDerived] = parts;
+    const actualDerived = crypto.scryptSync(String(password || ''), salt, 64).toString('hex');
+    if (actualDerived.length !== expectedDerived.length) return false;
+    return crypto.timingSafeEqual(Buffer.from(actualDerived), Buffer.from(expectedDerived));
+  }
+  // Fallback for legacy plaintext password with constant time comparison
+  const inputBuf = Buffer.from(String(password || ''));
+  const storedBuf = Buffer.from(str);
+  if (inputBuf.length !== storedBuf.length) return false;
+  return crypto.timingSafeEqual(inputBuf, storedBuf);
+}
+
 function getSigningSecret(cfg) {
   return crypto
     .createHash('sha256')
@@ -194,8 +218,33 @@ function createSessionToken(cfg) {
   return `${payload}.${sig}`;
 }
 
+// Session revocation tracking
+function isSessionRevoked(token) {
+  try {
+    const revoked = readJsonData('revoked_sessions', []);
+    return Array.isArray(revoked) && revoked.includes(token);
+  } catch {
+    return false;
+  }
+}
+
+function revokeSessionToken(token) {
+  if (!token) return;
+  try {
+    const revoked = readJsonData('revoked_sessions', []);
+    const list = Array.isArray(revoked) ? revoked : [];
+    if (!list.includes(token)) {
+      list.push(token);
+      // Keep list bounded to last 500 revoked tokens
+      if (list.length > 500) list.shift();
+      writeJsonData('revoked_sessions', list);
+    }
+  } catch {}
+}
+
 function verifySessionToken(token, cfg) {
   if (!token || !token.includes('.')) return false;
+  if (isSessionRevoked(token)) return false;
   const [payload, sig] = token.split('.');
   const expectedSig = crypto.createHmac('sha256', getSigningSecret(cfg)).update(payload).digest('base64url');
   if (sig.length !== expectedSig.length) return false;
@@ -258,7 +307,8 @@ function requireApiOrAdmin(req, res, next) {
   const cfg = getConfig();
   const authHeader = req.headers.authorization || '';
   const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : authHeader.trim();
-  const token = bearerToken || req.headers['x-api-token'] || req.query.token;
+  // Only accept token via Authorization header or X-API-Token header (reject query params to prevent token leakage in access logs)
+  const token = bearerToken || req.headers['x-api-token'];
 
   if (cfg.api_token && typeof token === 'string' && token.length === cfg.api_token.length) {
     if (crypto.timingSafeEqual(Buffer.from(token), Buffer.from(cfg.api_token))) {
@@ -271,6 +321,8 @@ function requireApiOrAdmin(req, res, next) {
 }
 
 module.exports = {
+  hashPassword,
+  verifyPassword,
   getClientIp,
   checkIpBan,
   recordLoginFailure,
@@ -279,6 +331,8 @@ module.exports = {
   generateTotpSecret,
   verifyTotp,
   createSessionToken,
+  verifySessionToken,
+  revokeSessionToken,
   isAdminAuthenticated,
   requireAdmin,
   requireApiOrAdmin
