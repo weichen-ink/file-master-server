@@ -77,3 +77,4 @@ test('Setup Wizard & Image Optimization: uninitialized mode, setup flow, and opt
     }
   }
 });
+

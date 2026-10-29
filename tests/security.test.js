@@ -73,3 +73,42 @@ test('Config: GET /api/platform/config desensitizes password and credentials', a
   assert.ok(cfg.port > 0, 'Config port should be defined');
 });
 
+test('Security: sliding-window rate limiter blocks excessive requests with 429', () => {
+  const { createRateLimiter } = require(path.join(serverRoot, 'src/core/security'));
+  const limiter = createRateLimiter({ windowMs: 60000, max: 3, message: 'Rate limited' });
+
+  const makeReq = () => ({ headers: {}, socket: { remoteAddress: '10.99.0.1' } });
+  const makeRes = () => ({
+    statusCode: 200,
+    status(c) { this.statusCode = c; return this; },
+    json(d) { this.body = d; return this; }
+  });
+
+  for (let i = 0; i < 3; i++) {
+    let passed = false;
+    const res = makeRes();
+    limiter(makeReq(), res, () => { passed = true; });
+    assert.strictEqual(passed, true, `Request #${i + 1} should pass`);
+  }
+
+  let blockedPassed = false;
+  const blockedRes = makeRes();
+  limiter(makeReq(), blockedRes, () => { blockedPassed = true; });
+  assert.strictEqual(blockedPassed, false, '4th request within window must be blocked');
+  assert.strictEqual(blockedRes.statusCode, 429, 'Blocked request must return HTTP 429');
+});
+
+test('ImageHost: scanAllImages caches results in memory and invalidates on invalidateScanCache()', () => {
+  const { scanAllImages, invalidateScanCache } = require(path.join(serverRoot, 'src/modules/image-host'));
+  const cfg = getConfig();
+  invalidateScanCache();
+  const firstScan = scanAllImages(cfg);
+  const secondScan = scanAllImages(cfg);
+  assert.strictEqual(firstScan, secondScan, 'Repeated scan within TTL must return cached object reference');
+
+  invalidateScanCache();
+  const thirdScan = scanAllImages(cfg);
+  assert.notStrictEqual(firstScan, thirdScan, 'Scan after invalidateScanCache() must re-compute');
+});
+
+

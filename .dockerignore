@@ -1,0 +1,9 @@
+node_modules
+storage
+data
+config.yaml
+watermark.png
+.git
+.DS_Store
+*.log
+tests

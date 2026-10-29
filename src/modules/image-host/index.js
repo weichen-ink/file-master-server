@@ -3,7 +3,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const multer = require('multer');
 const { STORAGE_DIR, ROOT_DIR, TRASH_DIR, UPLOAD_TMP_DIR, getConfig, readJsonData, writeJsonData } = require('../../core/config');
-const { requireAdmin, requireApiOrAdmin, getClientIp } = require('../../core/security');
+const { requireAdmin, requireApiOrAdmin, getClientIp, createRateLimiter } = require('../../core/security');
 const { appendAuditLog } = require('../../core/audit');
 const {
   NEEDS_TRANSCODE_EXTS,
@@ -253,11 +253,28 @@ function getShaIndex() {
   return shaIndex;
 }
 
-function updateShaIndex(sha256, info) {
-  if (!sha256 || !info) return;
+function updateShaIndex(sha256, info, flush = true) {
+  if (!sha256 || !info) return false;
   const idx = getShaIndex();
+  const prev = idx[sha256];
+  if (prev && prev.year === info.year && prev.month === info.month && prev.filename === info.filename) {
+    return false;
+  }
   idx[sha256] = info;
-  writeJsonData('sha_index', idx);
+  if (flush) {
+    writeJsonData('sha_index', idx);
+  }
+  return true;
+}
+
+let cachedScanData = null;
+let cachedScanTime = 0;
+let cachedScanCfgKey = '';
+const SCAN_CACHE_TTL_MS = 30 * 1000;
+
+function invalidateScanCache() {
+  cachedScanData = null;
+  cachedScanTime = 0;
 }
 
 function removeShaIndex(sha256) {
@@ -327,12 +344,19 @@ function findRawFile(year, month, requestedFilename, requireSameExt = false) {
 /**
  * Scans all raw assets and compiles summary metrics.
  */
-function scanAllImages(cfg) {
+function scanAllImages(cfg, forceRefresh = false) {
+  const cfgKey = `${cfg.base_url}|${cfg.image_host?.raw_secret_path}|${cfg.image_host?.enable_optimization}`;
+  const now = Date.now();
+  if (!forceRefresh && cachedScanData && cfgKey === cachedScanCfgKey && now - cachedScanTime < SCAN_CACHE_TTL_MS) {
+    return cachedScanData;
+  }
+
   ensureDirs();
   const protectedMap = getProtectedMap();
   const list = [];
   let totalRawBytes = 0;
   let totalCacheBytes = 0;
+  let shaIndexDirty = false;
 
   const years = fs
     .readdirSync(RAW_DIR)
@@ -384,7 +408,9 @@ function scanAllImages(cfg) {
           : relPath;
         const rawSecret = cfg.image_host.raw_secret_path;
         const sha256 = getFileSha256(fullRawPath, stat);
-        updateShaIndex(sha256, { year, month, filename: file });
+        if (updateShaIndex(sha256, { year, month, filename: file }, false)) {
+          shaIndexDirty = true;
+        }
         const locked = isItemLocked(year, month, file, protectedMap);
         const inProtectedFolder = year === 'protected';
 
@@ -412,9 +438,13 @@ function scanAllImages(cfg) {
     }
   }
 
+  if (shaIndexDirty) {
+    writeJsonData('sha_index', getShaIndex());
+  }
+
   list.sort((a, b) => b.createdAt - a.createdAt);
   const optimizationEnabled = cfg.image_host?.enable_optimization !== false;
-  return {
+  const result = {
     images: list,
     optimizationEnabled,
     stats: {
@@ -423,6 +453,10 @@ function scanAllImages(cfg) {
       totalCacheBytes
     }
   };
+  cachedScanData = result;
+  cachedScanTime = now;
+  cachedScanCfgKey = cfgKey;
+  return result;
 }
 
 /**
@@ -433,6 +467,7 @@ function clearCacheDir() {
     fs.rmSync(CACHE_DIR, { recursive: true, force: true });
   }
   fs.mkdirSync(CACHE_DIR, { recursive: true });
+  invalidateScanCache();
 }
 
 let isIndexWarming = false;
@@ -589,6 +624,8 @@ function registerImageHostModule(app) {
         try { fs.unlinkSync(tmpPath); } catch {}
       }
 
+      invalidateScanCache();
+
       const cfg = getConfig();
       const rawSecret = cfg.image_host.raw_secret_path;
       const isProcessableImage = PROCESSABLE_IMAGE_EXTS.has(origExt);
@@ -643,8 +680,14 @@ function registerImageHostModule(app) {
     }
   };
 
-  app.post('/api/image/upload', requireApiOrAdmin, upload.any(), handleUpload);
-  app.post('/api/upload', requireApiOrAdmin, upload.any(), handleUpload);
+  const uploadRateLimiter = createRateLimiter({
+    windowMs: 60 * 1000,
+    max: 120,
+    message: 'Upload rate limit exceeded. Please wait before uploading more files.'
+  });
+
+  app.post('/api/image/upload', uploadRateLimiter, requireApiOrAdmin, upload.any(), handleUpload);
+  app.post('/api/upload', uploadRateLimiter, requireApiOrAdmin, upload.any(), handleUpload);
 
   // 2. Public route: GET /pub/:year/:month/:filename
   // (Images processed with sharp WebP compression + watermark; documents/media streamed directly)
@@ -680,6 +723,7 @@ function registerImageHostModule(app) {
       if (!fs.existsSync(cacheFilePath)) {
         const cfg = getConfig();
         await processAndCacheImage(rawFilePath, cacheFilePath, cfg.image_host);
+        invalidateScanCache();
       }
 
       res.setHeader('Content-Type', 'image/webp');
@@ -758,6 +802,7 @@ function registerImageHostModule(app) {
     }
 
     const finalLocked = setItemLockState(year, month, filename, locked);
+    invalidateScanCache();
     appendAuditLog({
       action: locked ? 'lock' : 'unlock',
       ip: getClientIp(req),
@@ -822,6 +867,8 @@ function registerImageHostModule(app) {
     if (isPathWithin(cacheFilePath, CACHE_DIR) && fs.existsSync(cacheFilePath)) fs.unlinkSync(cacheFilePath);
     if (isPathWithin(rawPreviewCachePath, CACHE_DIR) && fs.existsSync(rawPreviewCachePath)) fs.unlinkSync(rawPreviewCachePath);
 
+    invalidateScanCache();
+
     appendAuditLog({
       action: 'delete_to_trash',
       ip: getClientIp(req),
@@ -843,5 +890,6 @@ function registerImageHostModule(app) {
 
 module.exports = {
   registerImageHostModule,
-  scanAllImages
+  scanAllImages,
+  invalidateScanCache
 };

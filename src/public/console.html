@@ -1784,6 +1784,10 @@
       if (!confirm(`Pull latest code from:\n${upstream_repo} (branch: ${upstream_branch})\n\nand automatically restart the server? (Your config.yaml will be preserved)`)) {
         return;
       }
+      const confirmPassword = prompt('Security verification: Please enter your administrator password to confirm hot update:');
+      if (!confirmPassword) {
+        return;
+      }
 
       const btnPull = document.getElementById('btnPullUpdate');
       const btnCheck = document.getElementById('btnCheckUpdate');
@@ -1798,7 +1802,7 @@
         const res = await fetch('/api/platform/update/pull', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ upstream_repo, upstream_branch })
+          body: JSON.stringify({ upstream_repo, upstream_branch, confirmPassword })
         });
         const data = await res.json();
         if (!res.ok) {

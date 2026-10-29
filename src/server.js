@@ -21,7 +21,8 @@ const {
   createSessionToken,
   revokeSessionToken,
   isAdminAuthenticated,
-  requireAdmin
+  requireAdmin,
+  createRateLimiter
 } = require('./core/security');
 const { collectRuntimeMetrics } = require('./core/metrics');
 const {
@@ -163,7 +164,13 @@ app.post('/api/platform/setup', (req, res) => {
   }
 });
 
-app.post('/api/platform/login', (req, res) => {
+const loginRateLimiter = createRateLimiter({
+  windowMs: 60 * 1000,
+  max: 20,
+  message: 'Too many login requests from this IP. Please try again in a minute.'
+});
+
+app.post('/api/platform/login', loginRateLimiter, (req, res) => {
   const ip = getClientIp(req);
   const ban = checkIpBan(ip);
   if (ban.banned) {
@@ -314,7 +321,13 @@ app.post('/api/platform/update/pull', requireAdmin, async (req, res) => {
       });
     }
 
-    const { upstream_repo, upstream_branch } = req.body || {};
+    const { upstream_repo, upstream_branch, confirmPassword } = req.body || {};
+    if (!confirmPassword || !verifyPassword(confirmPassword, cfg.password)) {
+      return res.status(403).json({
+        error: 'Secondary password verification failed. Please enter your valid administrator password to confirm hot update.'
+      });
+    }
+
     const patch = {};
     if (typeof upstream_repo === 'string' && upstream_repo.trim()) {
       patch.upstream_repo = upstream_repo.trim();
@@ -325,6 +338,13 @@ app.post('/api/platform/update/pull', requireAdmin, async (req, res) => {
     if (Object.keys(patch).length > 0) {
       updateConfigPreservingComments(patch);
     }
+
+    appendAuditLog({
+      action: 'hot_update_pull',
+      ip: getClientIp(req),
+      upstream_repo: patch.upstream_repo || cfg.upstream_repo,
+      upstream_branch: patch.upstream_branch || cfg.upstream_branch
+    });
 
     const result = await performHotUpdate();
     res.on('finish', () => {

@@ -1,0 +1,16 @@
+services:
+  file-master-server:
+    build: .
+    container_name: file-master-server
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+    volumes:
+      - ./storage:/app/storage
+      - ./data:/app/data
+      # Note: On first run without config.yaml, visit http://localhost:3000/setup to initialize!
+      # If you already have config.yaml, you can also mount it directly:
+      # - ./config.yaml:/app/config.yaml

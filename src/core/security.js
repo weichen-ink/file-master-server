@@ -320,6 +320,32 @@ function requireApiOrAdmin(req, res, next) {
   return res.status(401).json({ error: 'Unauthorized: invalid API token or credentials' });
 }
 
+/**
+ * Sliding-window per-IP rate limiter middleware.
+ */
+function createRateLimiter({ windowMs = 60 * 1000, max = 30, message = 'Too many requests, please slow down.' } = {}) {
+  const hits = new Map();
+  return (req, res, next) => {
+    const ip = getClientIp(req);
+    const now = Date.now();
+    const record = hits.get(ip) || [];
+    const recent = record.filter((ts) => now - ts < windowMs);
+    if (recent.length >= max) {
+      hits.set(ip, recent);
+      return res.status(429).json({ error: message });
+    }
+    recent.push(now);
+    hits.set(ip, recent);
+    // Periodic map cleanup
+    if (hits.size > 1000) {
+      for (const [k, v] of hits.entries()) {
+        if (v.every((ts) => now - ts >= windowMs)) hits.delete(k);
+      }
+    }
+    next();
+  };
+}
+
 module.exports = {
   hashPassword,
   verifyPassword,
@@ -335,5 +361,6 @@ module.exports = {
   revokeSessionToken,
   isAdminAuthenticated,
   requireAdmin,
-  requireApiOrAdmin
+  requireApiOrAdmin,
+  createRateLimiter
 };
