@@ -19,6 +19,7 @@ const {
 } = require('./core/security');
 const { collectRuntimeMetrics } = require('./core/metrics');
 const {
+  readPackageVersion,
   getUpdateStatus,
   performHotUpdate,
   restartServerProcess
@@ -28,10 +29,32 @@ const { registerImageHostModule } = require('./modules/image-host');
 let httpServer = null;
 
 const app = express();
+const initCfg = getConfig();
+if (initCfg.trust_proxy !== false) {
+  app.set('trust proxy', initCfg.trust_proxy || 'loopback');
+}
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // ================= 1. Platform Authentication and Status APIs =================
+// Public version contract for client plugin compatibility checks
+app.get('/api/platform/version', (req, res) => {
+  res.json({
+    name: 'file-master-server',
+    version: readPackageVersion(),
+    apiVersion: 1,
+    minPluginVersion: '0.1.0',
+    features: {
+      webp: true,
+      watermark: true,
+      shaDeduplication: true,
+      protectedLocks: true,
+      hotUpdate: true
+    }
+  });
+});
+
 app.get('/api/platform/status', (req, res) => {
   const cfg = getConfig();
   const authenticated = isAdminAuthenticated(req);

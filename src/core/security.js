@@ -6,6 +6,34 @@ const ipFailures = new Map();
 const BAN_DURATION_MS = 24 * 60 * 60 * 1000; // 24-hour lockout
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30-day session retention
 
+// Load persisted bans from data/ip_bans.json on server boot
+function loadPersistedBans() {
+  try {
+    const data = readJsonData('ip_bans', {});
+    const now = Date.now();
+    for (const [ip, item] of Object.entries(data)) {
+      if (item && item.bannedUntil && item.bannedUntil > now) {
+        ipFailures.set(ip, item);
+      }
+    }
+  } catch {}
+}
+
+function syncPersistedBans() {
+  try {
+    const data = {};
+    const now = Date.now();
+    for (const [ip, item] of ipFailures.entries()) {
+      if (item && item.bannedUntil && item.bannedUntil > now) {
+        data[ip] = item;
+      }
+    }
+    writeJsonData('ip_bans', data);
+  } catch {}
+}
+
+loadPersistedBans();
+
 // Persist instance salt in data/security_meta.json so hot updates & restarts keep active sessions alive,
 // while changing username, password, or admin_path still immediately invalidates older cookies.
 function loadOrCreateInstanceSalt() {
@@ -32,6 +60,7 @@ function getSigningSecret(cfg) {
 }
 
 function getClientIp(req) {
+  if (req.ip) return req.ip;
   const xff = req.headers['x-forwarded-for'];
   if (xff) return String(xff).split(',')[0].trim();
   const realIp = req.headers['x-real-ip'];
@@ -54,6 +83,7 @@ function checkIpBan(ip) {
   // Auto unban if ban window has elapsed
   if (record.bannedUntil && Date.now() >= record.bannedUntil) {
     ipFailures.delete(ip);
+    syncPersistedBans();
     return { banned: false, remainingAttempts: getConfig().max_login_attempts };
   }
 
@@ -73,13 +103,19 @@ function recordLoginFailure(ip) {
   if (record.count >= max) {
     record.bannedUntil = Date.now() + BAN_DURATION_MS;
     console.warn(`[Security] IP ${ip} failed ${record.count} consecutive attempts; banned for 24 hours`);
+    ipFailures.set(ip, record);
+    syncPersistedBans();
+  } else {
+    ipFailures.set(ip, record);
   }
-  ipFailures.set(ip, record);
   return Math.max(0, max - record.count);
 }
 
 function clearLoginFailures(ip) {
-  ipFailures.delete(ip);
+  if (ipFailures.has(ip)) {
+    ipFailures.delete(ip);
+    syncPersistedBans();
+  }
 }
 
 function getSecurityStats() {

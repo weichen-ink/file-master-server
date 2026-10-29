@@ -390,6 +390,7 @@ function restartServerProcess(httpServer, serverEntryFile) {
 }
 
 module.exports = {
+  readPackageVersion,
   getUpdateStatus,
   performHotUpdate,
   restartServerProcess

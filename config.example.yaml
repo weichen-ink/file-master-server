@@ -7,6 +7,9 @@ site_name: FileMaster Server
 port: 3000
 base_url: http://localhost:3000
 
+# Reverse proxy trust setting (e.g. loopback, 127.0.0.1, or false if directly exposed)
+trust_proxy: loopback
+
 # Upstream Git repository for one-click hot updates & automatic restarts
 upstream_repo: https://github.com/weichen-ink/file-master-server.git
 upstream_branch: main
@@ -48,3 +51,4 @@ image_host:
   watermark_image: ./watermark.png
   watermark_text: "© FileMaster"
   watermark_color: "#ffffff"
+
