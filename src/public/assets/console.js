@@ -497,6 +497,19 @@ function selectFolder(folderKey) {
   selectedFolder = folderKey;
   renderFolderTree();
   renderGallery();
+  if (window.matchMedia('(max-width: 600px)').matches) toggleFolderPanel(false);
+}
+
+function toggleFolderPanel(force) {
+  const panel = document.querySelector('.folder-panel');
+  const button = document.getElementById('folderToggleBtn');
+  const open = force ?? !panel.classList.contains('is-open');
+  panel.classList.toggle('is-open', open);
+  button.setAttribute('aria-expanded', String(open));
+  button.dataset.i18nAriaLabel = open ? 'folderCollapse' : 'folderExpand';
+  button.dataset.i18nTitle = button.dataset.i18nAriaLabel;
+  button.setAttribute('aria-label', t(button.dataset.i18nAriaLabel));
+  button.title = t(button.dataset.i18nTitle);
 }
 
 function toggleYearCollapse(year, ev) {
@@ -609,9 +622,9 @@ function renderGallery() {
   const stEl = document.getElementById('currentFolderStats');
 
   if (selectedFolder === 'all') {
-    bcEl.textContent = `🗂️ ${t('allAssets')} (storage/raw/*)`;
+    bcEl.textContent = t('allAssets');
   } else {
-    bcEl.textContent = `📂 storage/raw/${selectedFolder}/`;
+    bcEl.textContent = selectedFolder;
   }
   stEl.textContent = t('folderStatsHint', { count: filtered.length, bytes: formatBytes(filteredBytes) });
 

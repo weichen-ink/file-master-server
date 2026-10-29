@@ -208,6 +208,18 @@ body {
   justify-content: space-between;
   align-items: center;
 }
+.folder-toggle {
+  display: none;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: #fff;
+  color: var(--text);
+  cursor: pointer;
+}
+.folder-toggle:focus-visible { outline: 2px solid #54aa9a; outline-offset: 2px; }
 .folder-btn {
   display: flex;
   align-items: center;
@@ -716,6 +728,13 @@ body {
   #tab-image-host .stat-hint { display: none; }
   .stat-card { padding: 16px; }
   .upload-zone { padding: 16px 12px; margin-bottom: 18px; }
+  #tab-image-host .upload-zone { display: none; }
+  .folder-panel { padding: 6px 8px; }
+  .folder-panel-header { padding: 2px 4px; margin: 0; border: 0; gap: 8px; }
+  .folder-panel-header #folderCountHint { margin-left: auto; }
+  .folder-toggle { display: inline-block; }
+  .folder-panel:not(.is-open) #folderTreeList { display: none; }
+  .folder-panel.is-open #folderTreeList { padding-top: 8px; border-top: 1px solid var(--border); margin-top: 6px; }
   .form-grid-two, .form-grid-three, .form-grid-four,
   .form-grid-port, .form-grid-text, .form-grid-upstream { grid-template-columns: minmax(0, 1fr); }
   .form-grid-upstream > :first-child { grid-column: auto; }
