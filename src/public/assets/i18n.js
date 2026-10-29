@@ -12,6 +12,10 @@ const I18N = {
     navMaintenance: "系统维护",
     navHotUpdate: "更新服务",
     navLogout: "退出登录",
+    openMenu: "打开导航",
+    closeMenu: "关闭导航",
+    btnShowSecret: "显示",
+    btnHideSecret: "隐藏",
     langToggle: "🌐 English",
     brandSubtitle: "文件与图片服务",
 
@@ -54,6 +58,8 @@ const I18N = {
     trackWebp: "WebP",
     btnDirectUrl: "文件链接",
     btnMarkdown: "Markdown",
+    copyFileLink: "复制文件链接",
+    moreFileActions: "更多操作",
     shareBtn: "🔗 分享",
     deleteBtn: "🗑️ 删除",
     lockBtn: "开启保护",
@@ -170,6 +176,7 @@ const I18N = {
     // 系统配置子标签
     subtabGeneral: "基本设置",
     subtabMedia: "图片处理",
+    subtabIntegration: "客户端接入",
     subtabRawYaml: "配置文件",
 
     // 配置表单
@@ -299,6 +306,10 @@ const I18N = {
     navMaintenance: "Maintenance",
     navHotUpdate: "Update server",
     navLogout: "Sign Out",
+    openMenu: "Open navigation",
+    closeMenu: "Close navigation",
+    btnShowSecret: "Show",
+    btnHideSecret: "Hide",
     langToggle: "🌐 简体中文",
     brandSubtitle: "File and image server",
 
@@ -341,6 +352,8 @@ const I18N = {
     trackWebp: "WebP",
     btnDirectUrl: "File URL",
     btnMarkdown: "Markdown",
+    copyFileLink: "Copy file link",
+    moreFileActions: "More actions",
     shareBtn: "🔗 Share",
     deleteBtn: "🗑️ Delete",
     lockBtn: "Protect",
@@ -457,6 +470,7 @@ const I18N = {
     // Settings Subtabs
     subtabGeneral: "General",
     subtabMedia: "Image processing",
+    subtabIntegration: "Integrations",
     subtabRawYaml: "Config file",
 
     // Settings Form
@@ -608,6 +622,11 @@ function applyLocaleToStaticDom() {
   document.querySelectorAll('[data-i18n-title]').forEach((el) => {
     const key = el.getAttribute('data-i18n-title');
     if (key) el.title = t(key);
+  });
+
+  document.querySelectorAll('[data-i18n-aria-label]').forEach((el) => {
+    const key = el.getAttribute('data-i18n-aria-label');
+    if (key) el.setAttribute('aria-label', t(key));
   });
 
   const langBtn = document.getElementById('btnLangSwitch');

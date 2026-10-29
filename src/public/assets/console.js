@@ -29,6 +29,40 @@ async function copyText(text, label) {
   }
 }
 
+function toggleSecretField(id, button) {
+  const input = document.getElementById(id);
+  const showing = input.type === 'password';
+  input.type = showing ? 'text' : 'password';
+  button.dataset.i18n = showing ? 'btnHideSecret' : 'btnShowSecret';
+  button.textContent = t(button.dataset.i18n);
+}
+
+function toggleHeadersVisibility() {
+  const value = document.getElementById('epHeadersJson');
+  const button = document.getElementById('btnRevealHeaders');
+  const showing = value.dataset.revealed !== 'true';
+  value.dataset.revealed = String(showing);
+  value.textContent = showing ? (value.dataset.value || '-') : '••••••••';
+  button.dataset.i18n = showing ? 'btnHideSecret' : 'btnShowSecret';
+  button.textContent = t(button.dataset.i18n);
+}
+
+function maskSecrets() {
+  for (const id of ['f_api_token', 'f_totp_secret']) {
+    const input = document.getElementById(id);
+    input.type = 'password';
+    const button = input.parentElement.querySelector('button');
+    button.dataset.i18n = 'btnShowSecret';
+    button.textContent = t('btnShowSecret');
+  }
+  const headers = document.getElementById('epHeadersJson');
+  headers.dataset.revealed = 'false';
+  headers.textContent = '••••••••';
+  const button = document.getElementById('btnRevealHeaders');
+  button.dataset.i18n = 'btnShowSecret';
+  button.textContent = t('btnShowSecret');
+}
+
 function formatDuration(sec) {
   const s = Math.max(0, Math.floor(sec || 0));
   const d = Math.floor(s / 86400);
@@ -99,7 +133,9 @@ async function loadServerMetrics(manual = false) {
     document.getElementById('epPort').textContent = site.endpoints.port;
     document.getElementById('epLocalUrl').textContent = site.endpoints.localUploadUrl;
     document.getElementById('epUploadUrl').textContent = site.endpoints.uploadUrl;
-    document.getElementById('epHeadersJson').textContent = site.endpoints.piclistHeaders;
+    const headersEl = document.getElementById('epHeadersJson');
+    headersEl.dataset.value = site.endpoints.piclistHeaders;
+    headersEl.textContent = headersEl.dataset.revealed === 'true' ? site.endpoints.piclistHeaders : '••••••••';
     document.getElementById('epRawPattern').textContent = site.endpoints.rawUrlPattern;
     document.getElementById('epPubPattern').textContent = site.endpoints.pubUrlPattern;
   }
@@ -116,16 +152,33 @@ function toggleMetricsTimer() {
   }
 }
 
+function setMobileNav(open) {
+  const layout = document.getElementById('appView');
+  const menuButton = document.getElementById('mobileMenuButton');
+  layout.classList.toggle('nav-open', open);
+  menuButton.setAttribute('aria-expanded', String(open));
+  if (!open && document.activeElement?.closest('.sidebar')) menuButton.focus();
+}
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && document.getElementById('appView').classList.contains('nav-open')) {
+    setMobileNav(false);
+  }
+});
+
 function switchTab(tabId, btnEl) {
+  maskSecrets();
   document.querySelectorAll('main > section').forEach(s => s.classList.add('hidden'));
   const target = document.getElementById('tab-' + tabId);
   if (target) target.classList.remove('hidden');
   document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
   if (btnEl) btnEl.classList.add('active');
+  setMobileNav(false);
   if (tabId === 'status') {
     loadServerMetrics(false);
   } else if (tabId === 'settings' || tabId === 'security' || tabId === 'maintenance' || tabId === 'platform') {
     loadConfigForEdit();
+    if (tabId === 'settings') loadServerMetrics(false);
   } else if (tabId === 'future-files') {
     loadShares();
   }
@@ -133,6 +186,7 @@ function switchTab(tabId, btnEl) {
 }
 
 function switchSettingsSubtab(subtabId, btnEl) {
+  maskSecrets();
   document.querySelectorAll('.subtab-settings-content').forEach(s => s.classList.add('hidden'));
   const target = document.getElementById('subtab-settings-' + subtabId);
   if (target) target.classList.remove('hidden');
@@ -151,7 +205,8 @@ async function initApp() {
   isOptimizationEnabled = data.optimizationEnabled !== false;
   document.title = data.siteName + ' - Console';
   document.getElementById('loginSiteName').textContent = data.siteName;
-  document.getElementById('navSiteName').textContent = '⚡ ' + data.siteName;
+  document.getElementById('navSiteName').textContent = data.siteName;
+  document.getElementById('mobileSiteName').textContent = data.siteName;
 
   if (data.totpEnabled) {
     document.getElementById('totpGroup').classList.remove('hidden');
@@ -233,6 +288,7 @@ function getSelectedUpstreamMirror() {
 }
 
 function fillConfigForm(cfg, rawYaml) {
+  maskSecrets();
   document.getElementById('rawYamlEditor').value = rawYaml || '';
   document.getElementById('f_site_name').value = cfg.site_name || '';
   document.getElementById('f_base_url').value = cfg.base_url || '';
@@ -335,7 +391,8 @@ async function saveConfigForm() {
   }
 
   fillConfigForm(data.config, data.rawYaml);
-  document.getElementById('navSiteName').textContent = '⚡ ' + data.config.site_name;
+  document.getElementById('navSiteName').textContent = data.config.site_name;
+  document.getElementById('mobileSiteName').textContent = data.config.site_name;
   showToast('✅ ' + t('configSaved'));
 
   if (data.adminPathChanged) {
@@ -360,7 +417,8 @@ async function saveConfigRaw() {
     return;
   }
   fillConfigForm(data.config, data.rawYaml);
-  document.getElementById('navSiteName').textContent = '⚡ ' + data.config.site_name;
+  document.getElementById('navSiteName').textContent = data.config.site_name;
+  document.getElementById('mobileSiteName').textContent = data.config.site_name;
   showToast('✅ ' + t('rawSaved'));
   if (data.adminPathChanged) {
     setTimeout(() => {
@@ -588,17 +646,17 @@ function renderGallery() {
       : `<div class="img-thumb-wrap" onclick="window.open('${item.rawPreviewPath}', '_blank')" style="flex-direction:column; gap:6px; cursor:pointer;">
            ${lockBadgeHtml}
            <div style="font-size:28px;">${badgeLabel.split(' ')[0]}</div>
-           <div style="font-size:12px; color:#93c5fd; font-weight:600;">${badgeLabel.split(' ')[1] || ''} (${(item.ext || '').toUpperCase()})</div>
+           <div style="font-size:12px; color:var(--primary); font-weight:600;">${badgeLabel.split(' ')[1] || ''} (${(item.ext || '').toUpperCase()})</div>
            <span class="img-tag">${item.year}/${item.month}</span>
          </div>`;
 
-    const lockBtnHtml = `<button class="btn btn-outline" onclick="toggleLockImage('${item.year}', '${item.month}', '${item.filename}', ${!isLocked})" style="${isLocked ? 'border-color:#f59e0b; color:#fbbf24;' : ''}">${isLocked ? t('unlockBtn') : t('lockBtn')}</button>`;
+    const lockBtnHtml = `<button class="btn btn-outline" onclick="toggleLockImage('${item.year}', '${item.month}', '${item.filename}', ${!isLocked})" style="${isLocked ? 'border-color:#d99b46; color:#855000;' : ''}">${isLocked ? t('unlockBtn') : t('lockBtn')}</button>`;
 
     const optRowHtml = (isOptimizationEnabled && item.isProcessableImage && item.pubUrl)
       ? `<div class="track-row">
            <span class="track-tag track-webp">${t('trackWebp')}</span>
            <button class="btn btn-outline" onclick="copyText('${optMdText}', 'Optimized Markdown')">${t('btnMarkdown')}</button>
-           <button class="btn btn-outline" style="border-color:rgba(16,185,129,0.5); color:#6ee7b7;" onclick="copyText('${item.pubUrl}', 'Optimized WebP URL')">${t('btnDirectUrl')}</button>
+           <button class="btn btn-outline" style="border-color:#a6d1be; color:#167a5c;" onclick="copyText('${item.pubUrl}', 'Optimized WebP URL')">${t('btnDirectUrl')}</button>
          </div>`
       : '';
 
@@ -620,21 +678,27 @@ function renderGallery() {
           </div>
         </div>
         <div class="card-actions">
-          <div class="link-tracks">
-            <div class="track-row">
-              <span class="track-tag track-raw">${t('trackRaw')}</span>
-              <button class="btn btn-outline" onclick="copyText('${rawMdText}', 'Raw Markdown')">${t('btnMarkdown')}</button>
-              <button class="btn btn-primary" onclick="copyText('${item.rawUrl}', 'Raw URL')">${t('btnDirectUrl')}</button>
+          <button class="btn btn-primary btn-block" onclick="copyText('${item.rawUrl}', t('copyFileLink'))">${t('copyFileLink')}</button>
+          <details class="card-more">
+            <summary>${t('moreFileActions')}</summary>
+            <div class="card-more-panel">
+              <div class="link-tracks">
+                <div class="track-row">
+                  <span class="track-tag track-raw">${t('trackRaw')}</span>
+                  <button class="btn btn-outline" onclick="copyText('${rawMdText}', 'Raw Markdown')">${t('btnMarkdown')}</button>
+                  <button class="btn btn-outline" onclick="copyText('${item.rawUrl}', 'Raw URL')">${t('btnDirectUrl')}</button>
+                </div>
+                ${optRowHtml}
+              </div>
+              <div class="card-footer-actions">
+                <button class="btn btn-outline" onclick="createShareLink('${item.year}', '${item.month}', '${item.filename}')" title="${t('shareTooltip')}">${t('shareBtn')}</button>
+                <div class="card-footer-right">
+                  ${lockBtnHtml}
+                  <button class="btn btn-danger" ${isLocked ? `disabled style="opacity:0.45; cursor:not-allowed;" title="${t('delLockedTooltip')}"` : ''} onclick="deleteImage('${item.year}', '${item.month}', '${item.filename}', ${isLocked})">${t('deleteBtn')}</button>
+                </div>
+              </div>
             </div>
-            ${optRowHtml}
-          </div>
-          <div class="card-footer-actions">
-            <button class="btn btn-outline" onclick="createShareLink('${item.year}', '${item.month}', '${item.filename}')" title="${t('shareTooltip')}">${t('shareBtn')}</button>
-            <div class="card-footer-right">
-              ${lockBtnHtml}
-              <button class="btn btn-danger" ${isLocked ? `disabled style="opacity:0.45; cursor:not-allowed;" title="${t('delLockedTooltip')}"` : ''} onclick="deleteImage('${item.year}', '${item.month}', '${item.filename}', ${isLocked})">${t('deleteBtn')}</button>
-            </div>
-          </div>
+          </details>
         </div>
       </div>
     </div>
@@ -764,16 +828,16 @@ async function loadShares() {
     }
 
     container.innerHTML = `
-      <div style="overflow-x:auto;">
-        <table style="width:100%; border-collapse:collapse; font-size:13px;">
+      <div class="share-table-wrap">
+        <table class="share-table">
           <thead>
-            <tr style="border-bottom:1px solid var(--border); text-align:left; color:var(--muted);">
-              <th style="padding:10px 8px;">${t('shareColAsset')}</th>
-              <th style="padding:10px 8px;">${t('shareColLink')}</th>
-              <th style="padding:10px 8px;">${t('shareColDownloads')}</th>
-              <th style="padding:10px 8px;">${t('shareColExpires')}</th>
-              <th style="padding:10px 8px;">${t('shareColStatus')}</th>
-              <th style="padding:10px 8px; text-align:right;">${t('shareColActions')}</th>
+            <tr>
+              <th>${t('shareColAsset')}</th>
+              <th>${t('shareColLink')}</th>
+              <th>${t('shareColDownloads')}</th>
+              <th>${t('shareColExpires')}</th>
+              <th>${t('shareColStatus')}</th>
+              <th>${t('shareColActions')}</th>
             </tr>
           </thead>
           <tbody>
@@ -781,16 +845,16 @@ async function loadShares() {
               const expText = s.expiresAt > 0 ? new Date(s.expiresAt).toLocaleString(currentLocale === 'zh' ? 'zh-CN' : 'en-US') : t('shareNeverExpire');
               const dlText = s.maxDownloads > 0 ? `${s.downloads} / ${s.maxDownloads}` : `${s.downloads} (∞)`;
               const statusBadge = s.expired
-                ? `<span style="color:#f87171; font-weight:600;">${t('shareStatusExpired')}</span>`
-                : `<span style="color:#34d399; font-weight:600;">${t('shareStatusActive')}</span>`;
+                ? `<span class="share-status expired">${t('shareStatusExpired')}</span>`
+                : `<span class="share-status active">${t('shareStatusActive')}</span>`;
               return `
-                <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                  <td style="padding:10px 8px; font-weight:600;">${s.year}/${s.month}/${s.filename}</td>
-                  <td style="padding:10px 8px;"><code class="inline-code">${s.shareUrl}</code></td>
-                  <td style="padding:10px 8px;">${dlText}</td>
-                  <td style="padding:10px 8px;">${expText}</td>
-                  <td style="padding:10px 8px;">${statusBadge}</td>
-                  <td style="padding:10px 8px; text-align:right; display:flex; gap:6px; justify-content:flex-end;">
+                <tr>
+                  <td data-label="${t('shareColAsset')}">${s.year}/${s.month}/${s.filename}</td>
+                  <td data-label="${t('shareColLink')}"><code class="inline-code share-url" title="${s.shareUrl}">${s.shareUrl}</code></td>
+                  <td data-label="${t('shareColDownloads')}">${dlText}</td>
+                  <td data-label="${t('shareColExpires')}">${expText}</td>
+                  <td data-label="${t('shareColStatus')}">${statusBadge}</td>
+                  <td class="share-actions" data-label="${t('shareColActions')}">
                     <button class="btn btn-primary" style="padding:4px 10px; font-size:12px;" onclick="copyText('${s.shareUrl}', t('shareColLink'))">${t('shareBtnCopy')}</button>
                     <button class="btn btn-danger" style="padding:4px 10px; font-size:12px;" onclick="revokeShare('${s.id}')">${t('shareBtnRevoke')}</button>
                   </td>
