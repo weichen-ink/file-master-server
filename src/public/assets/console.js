@@ -25,7 +25,7 @@ async function copyText(text, label) {
     await navigator.clipboard.writeText(text);
     showToast(`✅ ${t('copied', { label })}`);
   } catch {
-    prompt('Copy manually:', text);
+    prompt(t('copyManually'), text);
   }
 }
 
@@ -36,10 +36,10 @@ function formatDuration(sec) {
   const m = Math.floor((s % 3600) / 60);
   const r = s % 60;
   const parts = [];
-  if (d > 0) parts.push(`${d}d`);
-  if (h > 0 || d > 0) parts.push(`${h}h`);
-  if (m > 0 || h > 0 || d > 0) parts.push(`${m}m`);
-  parts.push(`${r}s`);
+  if (d > 0) parts.push(t('durationDays', { count: d }));
+  if (h > 0 || d > 0) parts.push(t('durationHours', { count: h }));
+  if (m > 0 || h > 0 || d > 0) parts.push(t('durationMinutes', { count: m }));
+  parts.push(t('durationSeconds', { count: r }));
   return parts.join(' ');
 }
 
@@ -60,39 +60,39 @@ async function loadServerMetrics(manual = false) {
   const cpuBar = document.getElementById('mCpuBar');
   cpuBar.style.width = `${Math.min(100, host.cpu.loadPercent1m)}%`;
   cpuBar.style.background = getBarColor(host.cpu.loadPercent1m);
-  document.getElementById('mCpuDetail').textContent = `${host.cpu.cores} Core(s) · 1m Load ${host.cpu.loadAvg[0]}`;
+  document.getElementById('mCpuDetail').textContent = t('metricCpuDetail', { cores: host.cpu.cores, load: host.cpu.loadAvg[0] });
 
   document.getElementById('mRamUsage').textContent = `${host.memory.usagePercent}%`;
   const ramBar = document.getElementById('mRamBar');
   ramBar.style.width = `${Math.min(100, host.memory.usagePercent)}%`;
   ramBar.style.background = getBarColor(host.memory.usagePercent);
-  document.getElementById('mRamDetail').textContent = `Used ${formatBytes(host.memory.used)} / Total ${formatBytes(host.memory.total)}`;
+  document.getElementById('mRamDetail').textContent = t('metricUsedTotal', { used: formatBytes(host.memory.used), total: formatBytes(host.memory.total) });
 
   document.getElementById('mDiskUsage').textContent = `${host.disk.usagePercent}%`;
   const diskBar = document.getElementById('mDiskBar');
   diskBar.style.width = `${Math.min(100, host.disk.usagePercent)}%`;
   diskBar.style.background = getBarColor(host.disk.usagePercent);
-  document.getElementById('mDiskDetail').textContent = `Available ${formatBytes(host.disk.free)} / Total ${formatBytes(host.disk.total)}`;
+  document.getElementById('mDiskDetail').textContent = t('metricAvailableTotal', { available: formatBytes(host.disk.free), total: formatBytes(host.disk.total) });
 
   // 2. Host specs
   document.getElementById('mHostName').textContent = host.hostname;
   document.getElementById('mOsPlatform').textContent = host.platform;
   document.getElementById('mCpuModel').textContent = host.cpu.model;
-  document.getElementById('mCpuCores').textContent = `${host.cpu.cores} Cores`;
+  document.getElementById('mCpuCores').textContent = t('metricCores', { count: host.cpu.cores });
   document.getElementById('mLoadAvg').textContent = host.cpu.loadAvg.join(' / ');
-  document.getElementById('mMemSummary').textContent = `${formatBytes(host.memory.total)} (Free: ${formatBytes(host.memory.free)})`;
-  document.getElementById('mDiskSummary').textContent = `${formatBytes(host.disk.total)} (Free: ${formatBytes(host.disk.free)})`;
+  document.getElementById('mMemSummary').textContent = t('metricTotalFree', { total: formatBytes(host.memory.total), free: formatBytes(host.memory.free) });
+  document.getElementById('mDiskSummary').textContent = t('metricTotalFree', { total: formatBytes(host.disk.total), free: formatBytes(host.disk.free) });
   document.getElementById('mHostUptime').textContent = formatDuration(host.uptimeSec);
 
   // 3. Node process specs
   document.getElementById('mSitePort').textContent = `${site.port} (${site.baseUrl})`;
   document.getElementById('mSiteUptime').textContent = formatDuration(site.uptimeSec);
-  document.getElementById('mSiteStartTime').textContent = new Date(site.startedAt).toLocaleString('en-US');
+  document.getElementById('mSiteStartTime').textContent = new Date(site.startedAt).toLocaleString(currentLocale === 'zh' ? 'zh-CN' : 'en-US');
   document.getElementById('mNodePid').textContent = `${site.nodeVersion} (PID: ${site.pid})`;
   document.getElementById('mProcMem').textContent = `RSS ${formatBytes(site.processMemory.rss)} / Heap ${formatBytes(site.processMemory.heapUsed)}`;
-  document.getElementById('mSiteRawBytes').textContent = `${formatBytes(site.storage.rawBytes)} (${site.storage.imageCount} raw files)`;
+  document.getElementById('mSiteRawBytes').textContent = t('metricRawFiles', { size: formatBytes(site.storage.rawBytes), count: site.storage.imageCount });
   document.getElementById('mSiteCacheBytes').textContent = formatBytes(site.storage.cacheBytes);
-  document.getElementById('mSiteSec').textContent = `Banned IPs: ${site.security.activeBans} | 2FA: ${site.security.totpEnabled ? 'Enabled' : 'Disabled'}`;
+  document.getElementById('mSiteSec').textContent = t('metricSecurity', { count: site.security.activeBans, status: t(site.security.totpEnabled ? 'statusOn' : 'statusOff') });
 
   // 4. PicList endpoints
   if (site.endpoints) {
@@ -326,7 +326,7 @@ async function saveConfigForm() {
   });
   const data = await res.json();
   if (!res.ok) {
-    alert(data.error || 'Failed to save configuration');
+    alert(data.error || t('errorSaveConfig'));
     return;
   }
 
@@ -356,7 +356,7 @@ async function saveConfigRaw() {
   });
   const data = await res.json();
   if (!res.ok) {
-    alert(data.error || 'Invalid YAML syntax: failed to save');
+    alert(data.error || t('errorSaveYaml'));
     return;
   }
   fillConfigForm(data.config, data.rawYaml);
@@ -388,7 +388,7 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
   });
   const data = await res.json();
   if (!res.ok) {
-    errBox.textContent = data.error || 'Authentication failed';
+    errBox.textContent = data.error || t('errorLogin');
     errBox.classList.remove('hidden');
     return;
   }
@@ -656,7 +656,7 @@ async function uploadFiles(files) {
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      alert('Upload failed: ' + (err.error || res.statusText));
+      alert(t('errorUpload', { error: err.error || res.statusText }));
     }
   }
   document.getElementById('fileInput').value = '';
@@ -672,7 +672,7 @@ async function toggleLockImage(year, month, filename, locked) {
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    alert(data.error || 'Action failed');
+    alert(data.error || t('errorAction'));
     return;
   }
   showToast(locked ? `🔒 ${t('lockSuccess', { filename })}` : `🔓 ${t('unlockSuccess', { filename })}`);
@@ -709,7 +709,7 @@ async function deleteImage(year, month, filename, isLocked) {
     showToast('🗑️ ' + t('assetDeleted'));
     loadImages();
   } else {
-    alert(data.error || 'Failed to delete asset');
+    alert(data.error || t('errorDelete'));
   }
 }
 
@@ -741,10 +741,10 @@ async function createShareLink(year, month, filename) {
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    alert(data.error || 'Failed to create share link');
+    alert(data.error || t('errorShare'));
     return;
   }
-  await copyText(data.share.shareUrl, 'Expiring Share Link');
+  await copyText(data.share.shareUrl, t('shareColLink'));
   loadShares();
 }
 
@@ -778,7 +778,7 @@ async function loadShares() {
           </thead>
           <tbody>
             ${shares.map(s => {
-              const expText = s.expiresAt > 0 ? new Date(s.expiresAt).toLocaleString() : t('shareNeverExpire');
+              const expText = s.expiresAt > 0 ? new Date(s.expiresAt).toLocaleString(currentLocale === 'zh' ? 'zh-CN' : 'en-US') : t('shareNeverExpire');
               const dlText = s.maxDownloads > 0 ? `${s.downloads} / ${s.maxDownloads}` : `${s.downloads} (∞)`;
               const statusBadge = s.expired
                 ? `<span style="color:#f87171; font-weight:600;">${t('shareStatusExpired')}</span>`
@@ -791,7 +791,7 @@ async function loadShares() {
                   <td style="padding:10px 8px;">${expText}</td>
                   <td style="padding:10px 8px;">${statusBadge}</td>
                   <td style="padding:10px 8px; text-align:right; display:flex; gap:6px; justify-content:flex-end;">
-                    <button class="btn btn-primary" style="padding:4px 10px; font-size:12px;" onclick="copyText('${s.shareUrl}', 'Share Link')">${t('shareBtnCopy')}</button>
+                    <button class="btn btn-primary" style="padding:4px 10px; font-size:12px;" onclick="copyText('${s.shareUrl}', t('shareColLink'))">${t('shareBtnCopy')}</button>
                     <button class="btn btn-danger" style="padding:4px 10px; font-size:12px;" onclick="revokeShare('${s.id}')">${t('shareBtnRevoke')}</button>
                   </td>
                 </tr>
@@ -909,14 +909,14 @@ async function checkRemoteUpdate() {
     const res = await fetch('/api/platform/update/status?fetch=1');
     const st = await res.json();
     if (!res.ok) {
-      throw new Error(st.error || 'Failed to check remote repository');
+      throw new Error(st.error || t('checkFailed'));
     }
 
-    checkedEl.textContent = 'Checked at ' + new Date().toLocaleTimeString();
+    checkedEl.textContent = t('checkedAt', { time: new Date().toLocaleTimeString(currentLocale === 'zh' ? 'zh-CN' : 'en-US') });
     if (st.hasUpdate) {
       statusEl.innerHTML = `<span style="color:var(--warn); font-weight:600;">${t('checkAvailable', { count: st.commitsBehind, commit: st.remoteShortCommit })}</span>`;
       if (st.incomingCommits && st.incomingCommits.length > 0) {
-        appendUpdateLog(`Incoming commits from ${st.upstreamBranch}:\n` + st.incomingCommits.map(c => '  • ' + c).join('\n'), true);
+        appendUpdateLog(t('updateIncoming', { branch: st.upstreamBranch }) + '\n' + st.incomingCommits.map(c => '  • ' + c).join('\n'), true);
       }
       showToast(t('checkAvailable', { count: st.commitsBehind, commit: st.remoteShortCommit }));
     } else {
@@ -925,7 +925,7 @@ async function checkRemoteUpdate() {
     }
   } catch (err) {
     statusEl.innerHTML = `<span style="color:var(--danger);">${t('checkFailed')}</span>`;
-    appendUpdateLog(`Error checking updates: ${err.message}`, true);
+    appendUpdateLog(t('updateCheckError', { error: err.message }), true);
   } finally {
     btn.disabled = false;
     btn.textContent = t('btnCheckUpdates');
@@ -947,7 +947,7 @@ async function waitForServerReconnect(maxAttempts = 25) {
       }
     } catch {}
   }
-  appendUpdateLog('⚠️ Reconnect timed out. Please refresh the page manually.');
+  appendUpdateLog(t('reconnectTimeout'));
   return false;
 }
 
@@ -966,7 +966,7 @@ async function triggerHotUpdate() {
   btnCheck.disabled = true;
   btnRestart.disabled = true;
   btnPull.textContent = '⏳ ' + t('pullingUpdate');
-  appendUpdateLog(`Starting hot update from official repo [${upstream_branch}]${mirrorHint}...`, true);
+  appendUpdateLog(t('updateStarting', { branch: upstream_branch, mirrorHint }), true);
 
   try {
     const res = await fetch('/api/platform/update/pull', {
@@ -976,7 +976,7 @@ async function triggerHotUpdate() {
     });
     const data = await res.json();
     if (!res.ok) {
-      throw new Error(data.error || 'Hot update failed');
+      throw new Error(data.error || t('errorUpdateGeneric'));
     }
 
     if (Array.isArray(data.logs)) {
@@ -985,8 +985,8 @@ async function triggerHotUpdate() {
     btnPull.textContent = '🔄 ' + t('restartingServer');
     await waitForServerReconnect();
   } catch (err) {
-    appendUpdateLog(`❌ Hot update failed: ${err.message}`);
-    alert('Hot update failed: ' + err.message);
+    appendUpdateLog(t('updateFailed', { error: err.message }));
+    alert(t('errorUpdate', { error: err.message }));
   } finally {
     btnPull.disabled = false;
     btnCheck.disabled = false;
@@ -1000,14 +1000,14 @@ async function triggerServerRestartOnly() {
   const btnRestart = document.getElementById('btnRestartOnly');
   btnRestart.disabled = true;
   btnRestart.textContent = '⏳ ' + t('restartingServer');
-  appendUpdateLog('Triggering graceful server process restart...', true);
+  appendUpdateLog(t('restartStarting'), true);
 
   try {
     const res = await fetch('/api/platform/restart', { method: 'POST' });
-    if (!res.ok) throw new Error('Failed to trigger restart');
+    if (!res.ok) throw new Error(res.statusText || String(res.status));
     await waitForServerReconnect();
   } catch (err) {
-    appendUpdateLog(`❌ Restart error: ${err.message}`);
+    appendUpdateLog(t('restartFailed', { error: err.message }));
   } finally {
     btnRestart.disabled = false;
     btnRestart.textContent = t('btnRestartOnly');

@@ -30,7 +30,7 @@
         <div class="form-group" style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
           <label style="display:inline-flex; align-items:center; gap:8px; margin:0; cursor:pointer; color:var(--text); font-size:13px;">
             <input type="checkbox" id="rememberAccount" checked style="width:15px; height:15px; accent-color:var(--primary); cursor:pointer;" />
-            <span data-i18n="loginRemember">在此设备上记住登录状态 (30 天)</span>
+            <span data-i18n="loginRemember">保持登录 30 天</span>
           </label>
         </div>
         <button type="submit" class="btn btn-primary btn-block" data-i18n="loginSubmit">登录系统</button>
@@ -226,21 +226,21 @@
             <span class="kv-key" data-i18n="piclistUploadUrl">API 上传接口地址</span>
             <span class="kv-val" style="display:flex; align-items:center; gap:8px;">
               <code class="inline-code" id="epUploadUrl">-</code>
-              <button class="btn btn-outline" style="padding:4px 10px; font-size:12px;" onclick="copyText(document.getElementById('epUploadUrl').textContent, 'Upload URL')" data-i18n="btnCopy">复制</button>
+              <button class="btn btn-outline" style="padding:4px 10px; font-size:12px;" onclick="copyText(document.getElementById('epUploadUrl').textContent, t('piclistUploadUrl'))" data-i18n="btnCopy">复制</button>
             </span>
           </div>
           <div class="kv-row">
             <span class="kv-key" data-i18n="piclistFields">POST 表单字段 / JSON 响应路径</span>
             <span class="kv-val" style="display:flex; align-items:center; gap:8px;">
-              <span>Field: <code class="inline-code">file</code></span>
-              <span>JSON Path: <code class="inline-code">url</code></span>
+              <span><span data-i18n="piclistField">表单字段</span>：<code class="inline-code">file</code></span>
+              <span><span data-i18n="piclistResponse">响应路径</span>：<code class="inline-code">url</code></span>
             </span>
           </div>
           <div class="kv-row">
             <span class="kv-key" data-i18n="piclistHeaders">自定义 Header 请求头</span>
             <span class="kv-val" style="display:flex; align-items:center; gap:8px;">
               <code class="inline-code" id="epHeadersJson">-</code>
-              <button class="btn btn-primary" style="padding:4px 10px; font-size:12px;" onclick="copyText(document.getElementById('epHeadersJson').textContent, 'Headers JSON')" data-i18n="btnCopyHeaders">复制 Header 请求头</button>
+              <button class="btn btn-primary" style="padding:4px 10px; font-size:12px;" onclick="copyText(document.getElementById('epHeadersJson').textContent, t('piclistHeaders'))" data-i18n="btnCopyHeaders">复制请求头</button>
             </span>
           </div>
           <div class="kv-row">
@@ -259,7 +259,7 @@
         <div class="page-header">
           <div>
             <h2 data-i18n="navSettings">⚙️ 系统配置中心</h2>
-            <p data-i18n="lblAssetManagerDesc">管理服务公网访问地址、端口与媒体自适应转码参数。</p>
+            <p data-i18n="settingsDesc">设置访问地址、图片处理和文件链接。</p>
           </div>
           <div class="tab-pills" id="settingsTabPills">
             <button class="tab-pill active" onclick="switchSettingsSubtab('general', this)" data-i18n="subtabGeneral">基本参数</button>
@@ -425,7 +425,7 @@
             </div>
             <div class="form-group">
               <label data-i18n="lblPassword">管理员密码 (留空表示保持原密码不变)</label>
-              <input type="password" id="f_password" class="form-input" placeholder="留空保持原密码不变" />
+              <input type="password" id="f_password" class="form-input" data-i18n-placeholder="passwordPlaceholder" placeholder="留空则不修改密码" />
             </div>
           </div>
 
@@ -450,7 +450,7 @@
               <span data-i18n="lblTotpSecret">双重验证密钥 (TOTP, 留空即关闭)</span>
               <a href="javascript:void(0)" onclick="generateNewTotp()" style="color:var(--primary); text-decoration:none; font-size:12px;" data-i18n="btnGenerateTotp">✨ 生成新密钥</a>
             </label>
-            <input type="text" id="f_totp_secret" class="form-input" placeholder="留空即仅使用账号密码登录" />
+            <input type="text" id="f_totp_secret" class="form-input" data-i18n-placeholder="totpPlaceholder" placeholder="留空则关闭双重验证" />
           </div>
 
           <div id="totpResultBox" class="hidden" style="margin-top:12px; padding:10px 14px; background:#090d16; border-radius:8px; border:1px solid var(--border); font-size:12px;">
@@ -489,7 +489,7 @@
             <div class="form-group" style="margin-bottom:10px;">
               <label data-i18n="lblOfficialRepo">官方代码源与分支</label>
               <div style="padding: 9px 12px; background: rgba(0,0,0,0.35); border: 1px solid var(--border); border-radius: 8px; font-size: 12.5px; color: #93c5fd; font-family: var(--font-mono); display:flex; align-items:center; justify-content:space-between;">
-                <span>weichen-ink/file-master-server <span style="color:var(--muted); font-size:11px;">(branch: main)</span></span>
+                <span>weichen-ink/file-master-server <span style="color:var(--muted); font-size:11px;" data-i18n="branchMain">分支：main</span></span>
                 <span style="font-size:11px; background:rgba(16,185,129,0.2); color:#34d399; padding:1px 6px; border-radius:4px;" data-i18n="lblOfficialLocked">🔒 官方锁定</span>
               </div>
             </div>
@@ -503,9 +503,9 @@
             <div class="form-group" id="group_mirror_preset" style="margin-bottom:10px;">
               <label data-i18n="lblMirrorPreset">加速服务器选择</label>
               <select id="f_upstream_mirror_preset" class="form-input">
-                <option value="https://ghproxy.net/">ghproxy.net (推荐 / 通用高速)</option>
-                <option value="https://gh-proxy.com/">gh-proxy.com (备用镜像)</option>
-                <option value="https://mirror.ghproxy.com/">mirror.ghproxy.com (备用镜像)</option>
+                <option value="https://ghproxy.net/" data-i18n="mirrorPrimary">ghproxy.net（常用）</option>
+                <option value="https://gh-proxy.com/" data-i18n="mirrorBackupOne">gh-proxy.com（备用）</option>
+                <option value="https://mirror.ghproxy.com/" data-i18n="mirrorBackupTwo">mirror.ghproxy.com（备用）</option>
               </select>
             </div>
           </div>

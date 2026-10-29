@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>FileMaster Server - 初始化安装向导</title>
+  <title>FileMaster Server</title>
   <style>
     :root {
       --bg: #0b0f19;
@@ -192,9 +192,10 @@
 <body>
   <div class="setup-card">
     <div class="header">
-      <span class="badge">✨ First-Time Setup Wizard</span>
-      <h1>⚡ FileMaster 图床与资产服务初始化</h1>
-      <p>检测到尚未创建 <code style="color:#93c5fd;">config.yaml</code>，请确认或自定义以下基础配置以完成初始化</p>
+      <button type="button" class="btn btn-outline" id="languageToggle" onclick="toggleSetupLanguage()" style="float:right; padding:4px 8px;">English</button>
+      <span class="badge" data-i18n="badge">首次设置</span>
+      <h1 data-i18n="title">设置 FileMaster Server</h1>
+      <p data-i18n="intro">创建管理员账号并设置文件访问地址。</p>
     </div>
 
     <div id="errBox" class="error-msg"></div>
@@ -202,107 +203,156 @@
     <form id="setupForm" onsubmit="submitSetup(event)">
       <!-- 1. 管理员账号与凭证 -->
       <div class="section">
-        <div class="section-title">🔐 1. 管理员账号与 API 凭证</div>
+        <div class="section-title" data-i18n="accountTitle">1. 账号与令牌</div>
         <div class="grid-2">
           <div class="form-group">
-            <label>管理员用户名 (username)</label>
+            <label data-i18n="username">管理员用户名</label>
             <input type="text" id="s_username" class="form-input" value="admin" required />
           </div>
           <div class="form-group">
-            <label>后台访问路径 (admin_path)</label>
+            <label data-i18n="adminPath">管理页面路径</label>
             <input type="text" id="s_admin_path" class="form-input" value="admin" required />
-            <div class="hint">默认通过 <code style="color:#93c5fd;">/admin</code> 访问管理台</div>
+            <div class="hint" data-i18n="adminPathHint">默认访问路径为 /admin</div>
           </div>
         </div>
 
         <div class="form-group">
-          <label>管理员登录密码 (password — 可直接使用生成的随机密码，或清空填写自己的密码)</label>
+          <label data-i18n="password">管理员密码</label>
           <div class="input-row">
-            <input type="text" id="s_password" class="form-input" placeholder="请输入管理员密码..." required />
-            <button type="button" class="btn btn-outline" onclick="randomPass()">🎲 随机生成</button>
-            <button type="button" class="btn btn-outline" onclick="document.getElementById('s_password').value=''; document.getElementById('s_password').focus();">🧹 清空自填</button>
+            <input type="text" id="s_password" class="form-input" data-i18n-placeholder="passwordPlaceholder" placeholder="输入管理员密码" required />
+            <button type="button" class="btn btn-outline" onclick="randomPass()" data-i18n="generate">生成密码</button>
+            <button type="button" class="btn btn-outline" onclick="document.getElementById('s_password').value=''; document.getElementById('s_password').focus();" data-i18n="clear">清空</button>
           </div>
-          <div class="hint">密码将在保存时使用 <code style="color:#93c5fd;">scrypt</code> 加盐哈希加密存储，不会明文落盘。</div>
+          <div class="hint" data-i18n="passwordHint">密码只会以加密哈希形式保存。</div>
         </div>
 
         <div class="form-group">
-          <label>上传与插件 API Token (api_token)</label>
+          <label data-i18n="apiToken">上传 API 令牌</label>
           <div class="input-row">
             <input type="text" id="s_api_token" class="form-input" required />
-            <button type="button" class="btn btn-outline" onclick="randomToken()">🎲 重新生成</button>
+            <button type="button" class="btn btn-outline" onclick="randomToken()" data-i18n="regenerate">重新生成</button>
           </div>
-          <div class="hint">用于 Obsidian 插件或 PicList 上传鉴权。</div>
+          <div class="hint" data-i18n="apiTokenHint">Obsidian 插件和其他上传工具需要使用此令牌。</div>
         </div>
       </div>
 
       <!-- 2. 图床路径与图片自动优化 -->
       <div class="section">
-        <div class="section-title">🖼️ 2. 图床路径与自动优化功能</div>
+        <div class="section-title" data-i18n="imageTitle">2. 图片与链接</div>
 
         <label class="opt-toggle-box">
           <input type="checkbox" id="s_enable_optimization" checked onchange="toggleOptFields()" />
           <div>
-            <div style="font-size:13.5px; font-weight:600; color:var(--text);">⚡ 开启图片自动优化 (WebP 压缩与处理后链接)</div>
-            <div class="hint" style="margin-top:2px;">
-              开启后，每张图片下方将同时展示 <strong>「📎 复制原始链接」</strong> 与 <strong>「⚡ 复制优化链接」</strong> 两个按钮；若关闭，则仅提供原始图片链接。
-            </div>
+            <div style="font-size:13.5px; font-weight:600; color:var(--text);" data-i18n="optimize">生成 WebP 图片</div>
+            <div class="hint" style="margin-top:2px;" data-i18n="optimizeHint">保留原图，并提供体积更小的 WebP 链接。</div>
           </div>
         </label>
 
         <div class="grid-3">
           <div class="form-group">
-            <label>原始图片路径前缀 (raw)</label>
+            <label data-i18n="rawPath">原文件链接前缀</label>
             <input type="text" id="s_raw_path" class="form-input" value="raw" required />
-            <div class="hint">如 <code style="color:#93c5fd;">/raw/2026/10/a.png</code></div>
+            <div class="hint" data-i18n="rawPathHint">例如 /raw/2026/10/a.png</div>
           </div>
           <div class="form-group">
-            <label>优化图片路径前缀 (pub)</label>
+            <label data-i18n="pubPath">WebP 链接前缀</label>
             <input type="text" id="s_pub_path" class="form-input" value="pub" required />
-            <div class="hint">如 <code style="color:#10b981;">/pub/2026/10/a.webp</code></div>
+            <div class="hint" data-i18n="pubPathHint">例如 /pub/2026/10/a.webp</div>
           </div>
           <div class="form-group" id="grp_webp_quality">
-            <label>优化图 WebP 质量 (1-100)</label>
+            <label data-i18n="webpQuality">WebP 质量（10–100）</label>
             <input type="number" id="s_webp_quality" class="form-input" value="82" min="10" max="100" />
           </div>
           <div class="form-group" id="grp_max_width">
-            <label>优化图最大宽度 (px)</label>
+            <label data-i18n="maxWidth">图片最大宽度（像素）</label>
             <input type="number" id="s_max_width" class="form-input" value="1920" min="0" />
           </div>
         </div>
 
         <div class="form-group" id="grp_watermark" style="margin-top:10px;">
-          <label>优化图动态水印 (watermark_enable)</label>
+          <label data-i18n="watermark">WebP 图片水印</label>
           <select id="s_watermark_enable" class="form-input">
-            <option value="true">开启水印 (默认在优化后的图片右下角添加水印)</option>
-            <option value="false">关闭水印 (仅做 WebP 压缩与尺寸优化)</option>
+            <option value="true" data-i18n="watermarkOn">开启（默认右下角）</option>
+            <option value="false" data-i18n="watermarkOff">关闭</option>
           </select>
         </div>
       </div>
 
       <!-- 3. 站点与网络设置 -->
       <div class="section">
-        <div class="section-title">🌐 3. 站点与服务端口</div>
+        <div class="section-title" data-i18n="serverTitle">3. 服务器地址</div>
         <div class="grid-3">
           <div class="form-group">
-            <label>站点名称 (site_name)</label>
+            <label data-i18n="siteName">站点名称</label>
             <input type="text" id="s_site_name" class="form-input" value="FileMaster Server" required />
           </div>
           <div class="form-group">
-            <label>外部访问地址 (base_url)</label>
+            <label data-i18n="baseUrl">公开访问地址</label>
             <input type="text" id="s_base_url" class="form-input" required />
           </div>
           <div class="form-group">
-            <label>监听端口 (port)</label>
+            <label data-i18n="port">监听端口</label>
             <input type="number" id="s_port" class="form-input" value="3000" required />
           </div>
         </div>
       </div>
 
-      <button type="submit" id="submitBtn" class="btn btn-primary">🚀 完成初始化并进入管理后台</button>
+      <button type="submit" id="submitBtn" class="btn btn-primary" data-i18n="submit">完成设置</button>
     </form>
   </div>
 
   <script>
+    const setupCopy = {
+      zh: {
+        badge: '首次设置', title: '设置 FileMaster Server', intro: '创建管理员账号并设置文件访问地址。',
+        accountTitle: '1. 账号与令牌', username: '管理员用户名', adminPath: '管理页面路径',
+        adminPathHint: '默认访问路径为 /admin', password: '管理员密码', passwordPlaceholder: '输入管理员密码',
+        generate: '生成密码', clear: '清空', passwordHint: '密码只会以加密哈希形式保存。',
+        apiToken: '上传 API 令牌', regenerate: '重新生成', apiTokenHint: 'Obsidian 插件和其他上传工具需要使用此令牌。',
+        imageTitle: '2. 图片与链接', optimize: '生成 WebP 图片', optimizeHint: '保留原图，并提供体积更小的 WebP 链接。',
+        rawPath: '原文件链接前缀', rawPathHint: '例如 /raw/2026/10/a.png',
+        pubPath: 'WebP 链接前缀', pubPathHint: '例如 /pub/2026/10/a.webp',
+        webpQuality: 'WebP 质量（10–100）', maxWidth: '图片最大宽度（像素）', watermark: 'WebP 图片水印',
+        watermarkOn: '开启（默认右下角）', watermarkOff: '关闭', serverTitle: '3. 服务器地址',
+        siteName: '站点名称', baseUrl: '公开访问地址', port: '监听端口', submit: '完成设置',
+        missingPassword: '请输入管理员密码，或点击“生成密码”。', saving: '正在保存设置...', setupFailed: '设置失败'
+      },
+      en: {
+        badge: 'First-time setup', title: 'Set up FileMaster Server', intro: 'Create an admin account and set the public file URL.',
+        accountTitle: '1. Account and token', username: 'Admin username', adminPath: 'Admin page path',
+        adminPathHint: 'Default path: /admin', password: 'Admin password', passwordPlaceholder: 'Enter an admin password',
+        generate: 'Generate password', clear: 'Clear', passwordHint: 'Your password is stored only as a salted hash.',
+        apiToken: 'Upload API token', regenerate: 'Regenerate', apiTokenHint: 'The Obsidian plugin and other upload apps use this token.',
+        imageTitle: '2. Images and links', optimize: 'Generate WebP images', optimizeHint: 'Keep originals and provide smaller WebP image URLs.',
+        rawPath: 'Original file URL prefix', rawPathHint: 'For example: /raw/2026/10/a.png',
+        pubPath: 'WebP URL prefix', pubPathHint: 'For example: /pub/2026/10/a.webp',
+        webpQuality: 'WebP quality (10–100)', maxWidth: 'Maximum image width (px)', watermark: 'WebP image watermark',
+        watermarkOn: 'On (bottom right by default)', watermarkOff: 'Off', serverTitle: '3. Server address',
+        siteName: 'Site name', baseUrl: 'Public URL', port: 'Listening port', submit: 'Finish setup',
+        missingPassword: 'Enter an admin password or click Generate password.', saving: 'Saving settings...', setupFailed: 'Setup failed'
+      }
+    };
+    let setupLocale = localStorage.getItem('filemaster_lang') === 'en' ? 'en' : 'zh';
+
+    function setupText(key) { return setupCopy[setupLocale][key]; }
+
+    function applySetupLanguage() {
+      document.documentElement.lang = setupLocale === 'zh' ? 'zh-CN' : 'en';
+      document.querySelectorAll('[data-i18n]').forEach((el) => {
+        el.textContent = setupText(el.dataset.i18n);
+      });
+      document.querySelectorAll('[data-i18n-placeholder]').forEach((el) => {
+        el.placeholder = setupText(el.dataset.i18nPlaceholder);
+      });
+      document.getElementById('languageToggle').textContent = setupLocale === 'zh' ? 'English' : '简体中文';
+    }
+
+    function toggleSetupLanguage() {
+      setupLocale = setupLocale === 'zh' ? 'en' : 'zh';
+      localStorage.setItem('filemaster_lang', setupLocale);
+      applySetupLanguage();
+    }
+
     function genRandomHex(len) {
       const arr = new Uint8Array(len);
       window.crypto.getRandomValues(arr);
@@ -355,14 +405,14 @@
 
       const password = document.getElementById('s_password').value.trim();
       if (!password) {
-        errBox.textContent = '请填写管理员密码，或点击「随机生成」按钮生成密码。';
+        errBox.textContent = setupText('missingPassword');
         errBox.style.display = 'block';
         return;
       }
 
       const btn = document.getElementById('submitBtn');
       btn.disabled = true;
-      btn.textContent = '⏳ 正在保存配置并初始化...';
+      btn.textContent = setupText('saving');
 
       const payload = {
         site_name: document.getElementById('s_site_name').value.trim(),
@@ -388,17 +438,18 @@
         });
         const data = await res.json();
         if (!res.ok) {
-          throw new Error(data.error || '初始化失败');
+          throw new Error(data.error || setupText('setupFailed'));
         }
         window.location.href = data.redirectUrl || ('/' + payload.admin_path.replace(/^\/+/, ''));
       } catch (err) {
         errBox.textContent = err.message;
         errBox.style.display = 'block';
         btn.disabled = false;
-        btn.textContent = '🚀 完成初始化并进入管理后台';
+        btn.textContent = setupText('submit');
       }
     }
 
+    applySetupLanguage();
     loadDefaults();
   </script>
 </body>
