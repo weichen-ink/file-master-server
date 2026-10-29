@@ -1,7 +1,11 @@
 const express = require('express');
+const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { execFile } = require('node:child_process');
 const {
+  ROOT_DIR,
+  UPLOAD_TMP_DIR,
   isConfigInitialized,
   initializeConfigFromSetup,
   getConfig,
@@ -33,6 +37,7 @@ const {
 } = require('./core/updater');
 const { appendAuditLog } = require('./core/audit');
 const { registerImageHostModule } = require('./modules/image-host');
+const { registerShareModule } = require('./modules/share');
 
 let httpServer = null;
 
@@ -370,9 +375,57 @@ app.post('/api/platform/restart', requireAdmin, (req, res) => {
   res.json({ success: true, restarting: true });
 });
 
+// ================= 1.6 Backup & Archive Export API =================
+app.get('/api/platform/backup/download', requireAdmin, (req, res) => {
+  const scope = req.query.scope === 'full' ? 'full' : 'config';
+  const dateStr = new Date().toISOString().slice(0, 10);
+  const archiveName = `filemaster-backup-${scope}-${dateStr}.tar.gz`;
+  fs.mkdirSync(UPLOAD_TMP_DIR, { recursive: true });
+  const tmpArchivePath = path.join(UPLOAD_TMP_DIR, `${Date.now()}_${crypto.randomBytes(6).toString('hex')}.tar.gz`);
+
+  const targets = [];
+  for (const candidate of ['config.yaml', 'config.example.yaml', 'watermark.png', 'data']) {
+    if (fs.existsSync(path.join(ROOT_DIR, candidate))) {
+      targets.push(candidate);
+    }
+  }
+  if (scope === 'full' && fs.existsSync(path.join(ROOT_DIR, 'storage', 'raw'))) {
+    targets.push('storage/raw');
+  }
+
+  if (targets.length === 0) {
+    return res.status(400).json({ error: 'No backup targets found on disk' });
+  }
+
+  execFile('tar', ['-czf', tmpArchivePath, '-C', ROOT_DIR, ...targets], { timeout: 120000 }, (err) => {
+    if (err || !fs.existsSync(tmpArchivePath)) {
+      if (fs.existsSync(tmpArchivePath)) {
+        try { fs.unlinkSync(tmpArchivePath); } catch {}
+      }
+      return res.status(500).json({ error: 'Failed to create tar.gz archive: ' + (err ? err.message : 'unknown error') });
+    }
+
+    appendAuditLog({
+      action: 'backup_export',
+      ip: getClientIp(req),
+      scope
+    });
+
+    res.setHeader('Content-Type', 'application/gzip');
+    res.setHeader('Content-Disposition', `attachment; filename="${archiveName}"`);
+    const stream = fs.createReadStream(tmpArchivePath);
+    stream.on('close', () => {
+      try { if (fs.existsSync(tmpArchivePath)) fs.unlinkSync(tmpArchivePath); } catch {}
+    });
+    stream.pipe(res);
+  });
+});
+
 // ================= 2. Mount Platform Modules =================
 // Module 1: Image Host & Asset Manager
 registerImageHostModule(app);
+// Module 2: Lightweight Secure File Sharing with Expiring Links (/s/:shareId)
+registerShareModule(app);
 
 // Additional modules (Countdowns, File Share, etc.) can be mounted here
 

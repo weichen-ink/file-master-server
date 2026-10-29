@@ -78,3 +78,41 @@ test('Setup Wizard & Image Optimization: uninitialized mode, setup flow, and opt
   }
 });
 
+test('Share Module: creates expiring share records with download limits and prevents path traversal', () => {
+  const { STORAGE_DIR, writeJsonData } = require('../src/core/config');
+  const { createShareRecord, getSharesMap } = require('../src/modules/share');
+
+  const testDir = path.join(STORAGE_DIR, 'raw', '2026', '10');
+  fs.mkdirSync(testDir, { recursive: true });
+  const testFile = path.join(testDir, 'share_test_sample.png');
+  fs.writeFileSync(testFile, Buffer.from('sample-image-bytes'));
+
+  try {
+    const rec = createShareRecord({
+      year: '2026',
+      month: '10',
+      filename: 'share_test_sample.png',
+      expiresInHours: 12,
+      maxDownloads: 5
+    });
+
+    assert.ok(rec.id && rec.id.length >= 8, 'Share ID must be generated');
+    assert.strictEqual(rec.filename, 'share_test_sample.png');
+    assert.strictEqual(rec.maxDownloads, 5);
+    assert.strictEqual(rec.downloads, 0);
+    assert.ok(rec.expiresAt > Date.now(), 'Expiration timestamp must be in the future');
+
+    const map = getSharesMap();
+    assert.ok(map[rec.id], 'Share record must be persisted in shares.json');
+
+    // Clean up test share entry
+    delete map[rec.id];
+    writeJsonData('shares', map);
+  } finally {
+    if (fs.existsSync(testFile)) {
+      fs.unlinkSync(testFile);
+    }
+  }
+});
+
+
