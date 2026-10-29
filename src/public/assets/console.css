@@ -415,3 +415,4 @@ body {
 .kv-row:last-child { border-bottom: none; }
 .kv-key { color: var(--muted); }
 .kv-val { font-weight: 600; text-align: right; word-break: break-all; }
+

@@ -211,7 +211,9 @@ function fillConfigForm(cfg, rawYaml) {
   document.getElementById('f_site_name').value = cfg.site_name || '';
   document.getElementById('f_base_url').value = cfg.base_url || '';
   document.getElementById('f_port').value = cfg.port || 3000;
-  document.getElementById('f_upstream_repo').value = cfg.upstream_repo || '';
+  if (document.getElementById('f_upstream_mirror')) {
+    document.getElementById('f_upstream_mirror').value = cfg.upstream_mirror || '';
+  }
   document.getElementById('f_upstream_branch').value = cfg.upstream_branch || 'main';
   document.getElementById('f_admin_path').value = cfg.admin_path || '';
   document.getElementById('f_max_login_attempts').value = cfg.max_login_attempts || 3;
@@ -243,7 +245,7 @@ async function saveConfigForm() {
     site_name: document.getElementById('f_site_name').value.trim(),
     base_url: document.getElementById('f_base_url').value.trim().replace(/\/+$/, ''),
     port: Number(document.getElementById('f_port').value) || 3000,
-    upstream_repo: document.getElementById('f_upstream_repo').value.trim(),
+    upstream_mirror: document.getElementById('f_upstream_mirror') ? document.getElementById('f_upstream_mirror').value.trim() : '',
     upstream_branch: document.getElementById('f_upstream_branch').value.trim() || 'main',
     admin_path: document.getElementById('f_admin_path').value.trim().replace(/^\/+|\/+$/g, ''),
     max_login_attempts: Number(document.getElementById('f_max_login_attempts').value) || 3,
@@ -843,15 +845,13 @@ async function checkRemoteUpdate() {
   statusEl.innerHTML = `<span style="color:var(--muted);">Fetching remote branch...</span>`;
 
   try {
-    const upstream_repo = document.getElementById('f_upstream_repo').value.trim();
+    const upstream_mirror = document.getElementById('f_upstream_mirror') ? document.getElementById('f_upstream_mirror').value.trim() : '';
     const upstream_branch = document.getElementById('f_upstream_branch').value.trim() || 'main';
-    if (upstream_repo) {
-      await fetch('/api/platform/config', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode: 'form', patch: { upstream_repo, upstream_branch } })
-      });
-    }
+    await fetch('/api/platform/config', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: 'form', patch: { upstream_mirror, upstream_branch } })
+    });
 
     const res = await fetch('/api/platform/update/status?fetch=1');
     const st = await res.json();
@@ -899,17 +899,10 @@ async function waitForServerReconnect(maxAttempts = 25) {
 }
 
 async function triggerHotUpdate() {
-  const upstream_repo = document.getElementById('f_upstream_repo').value.trim();
+  const upstream_mirror = document.getElementById('f_upstream_mirror') ? document.getElementById('f_upstream_mirror').value.trim() : '';
   const upstream_branch = document.getElementById('f_upstream_branch').value.trim() || 'main';
-  if (!upstream_repo) {
-    alert('Please enter an Upstream Git Repository URL first.');
-    return;
-  }
-  if (!confirm(`Pull latest code from:\n${upstream_repo} (branch: ${upstream_branch})\n\nand automatically restart the server? (Your config.yaml will be preserved)`)) {
-    return;
-  }
-  const confirmPassword = prompt('Security verification: Please enter your administrator password to confirm hot update:');
-  if (!confirmPassword) {
+  const mirrorHint = upstream_mirror ? ` (加速镜像: ${upstream_mirror})` : ' (官方直连)';
+  if (!confirm(`确定拉取官方仓库最新代码 [${upstream_branch}]${mirrorHint} 并平滑重启服务吗？（现有配置与数据将完全保留）`)) {
     return;
   }
 
@@ -920,13 +913,13 @@ async function triggerHotUpdate() {
   btnCheck.disabled = true;
   btnRestart.disabled = true;
   btnPull.textContent = '⏳ Pulling & Updating...';
-  appendUpdateLog(`Starting hot update from ${upstream_repo} (${upstream_branch})...`, true);
+  appendUpdateLog(`Starting hot update from official repo [${upstream_branch}]${mirrorHint}...`, true);
 
   try {
     const res = await fetch('/api/platform/update/pull', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ upstream_repo, upstream_branch, confirmPassword })
+      body: JSON.stringify({ upstream_mirror, upstream_branch })
     });
     const data = await res.json();
     if (!res.ok) {
@@ -969,3 +962,4 @@ async function triggerServerRestartOnly() {
 }
 
 initApp();
+

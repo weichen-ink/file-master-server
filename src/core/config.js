@@ -26,8 +26,9 @@ function getExampleConfigTemplate() {
 port: 3000
 base_url: http://localhost:3000
 trust_proxy: loopback
-hot_update: false
+hot_update: true
 upstream_repo: https://github.com/weichen-ink/file-master-server.git
+upstream_mirror: ""
 upstream_branch: main
 admin_path: admin
 username: admin
@@ -61,10 +62,11 @@ function normalizeParsedConfig(parsed, needsSetup = false) {
     port: Number(parsed.port) || 3000,
     base_url: String(parsed.base_url || 'http://localhost:3000').replace(/\/+$/, ''),
     trust_proxy: parsed.trust_proxy !== undefined ? parsed.trust_proxy : 'loopback',
-    hot_update: Boolean(parsed.hot_update),
+    hot_update: parsed.hot_update !== false,
     upstream_repo: String(
       parsed.upstream_repo || 'https://github.com/weichen-ink/file-master-server.git'
     ).trim(),
+    upstream_mirror: String(parsed.upstream_mirror || '').trim(),
     upstream_branch: String(parsed.upstream_branch || 'main').trim() || 'main',
     admin_path: String(parsed.admin_path || 'admin').replace(/^\/+|\/+$/g, '') || 'admin',
     username: String(parsed.username || 'admin'),

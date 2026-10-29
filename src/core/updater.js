@@ -19,6 +19,32 @@ const WATERMARK_PATH = path.join(ROOT_DIR, 'watermark.png');
 
 let updateInProgress = false;
 
+const OFFICIAL_UPSTREAM_REPO = 'https://github.com/weichen-ink/file-master-server.git';
+
+/**
+ * Resolves the effective clone/fetch URL by combining an optional mirror accelerator prefix
+ * with the locked official repository.
+ * Examples:
+ *   - mirrorPrefix: "" -> "https://github.com/weichen-ink/file-master-server.git"
+ *   - mirrorPrefix: "https://ghproxy.net/" -> "https://ghproxy.net/https://github.com/weichen-ink/file-master-server.git"
+ *   - mirrorPrefix: "https://gitclone.com/github.com/weichen-ink/file-master-server.git" -> as-is
+ */
+function getEffectiveUpstreamRepo(mirrorPrefix = '') {
+  const m = String(mirrorPrefix || '').trim();
+  if (!m) return OFFICIAL_UPSTREAM_REPO;
+  if (m.includes('weichen-ink/file-master-server')) {
+    return m;
+  }
+  return m.replace(/\/+$/, '') + '/' + OFFICIAL_UPSTREAM_REPO;
+}
+
+function validateGitMirror(mirror) {
+  if (!mirror) return true;
+  const trimmed = String(mirror).trim();
+  if (trimmed.startsWith('-') || /[\r\n\0`$;|&]/.test(trimmed)) return false;
+  return /^https?:\/\/[\w.-]+(:\d+)?(\/[\w.\-\/~]+)?\/?$/i.test(trimmed);
+}
+
 function validateGitRemote(repo) {
   if (typeof repo !== 'string') return false;
   const trimmed = repo.trim();
@@ -88,14 +114,19 @@ function readPackageVersion() {
  */
 async function getUpdateStatus({ fetchRemote = false } = {}) {
   const cfg = getConfig();
-  const upstreamRepo = cfg.upstream_repo || '';
-  const upstreamBranch = cfg.upstream_branch || 'main';
+  const officialRepo = OFFICIAL_UPSTREAM_REPO;
+  const upstreamMirror = (cfg.upstream_mirror || '').trim();
+  const effectiveRepo = getEffectiveUpstreamRepo(upstreamMirror || cfg.upstream_repo);
+  const upstreamBranch = (cfg.upstream_branch || 'main').trim() || 'main';
   const version = readPackageVersion();
   const hasGitDir = fs.existsSync(path.join(ROOT_DIR, '.git'));
 
   const result = {
     version,
-    upstreamRepo,
+    officialRepo,
+    upstreamMirror,
+    effectiveRepo,
+    upstreamRepo: effectiveRepo,
     upstreamBranch,
     hasGitDir,
     localCommit: null,
@@ -143,15 +174,15 @@ async function getUpdateStatus({ fetchRemote = false } = {}) {
     // Ignore if origin is not set
   }
 
-  if (fetchRemote && upstreamRepo) {
-    if (!validateGitRemote(upstreamRepo)) {
-      throw new Error(`Invalid upstream repository URL: "${upstreamRepo}"`);
+  if (fetchRemote && effectiveRepo) {
+    if (!validateGitRemote(effectiveRepo)) {
+      throw new Error(`Invalid upstream repository URL: "${effectiveRepo}"`);
     }
     if (!validateGitBranch(upstreamBranch)) {
       throw new Error(`Invalid upstream branch name: "${upstreamBranch}"`);
     }
-    await ensureGitInitialized(upstreamRepo);
-    await runCmd('git', ['fetch', '--prune', '--', upstreamRepo, upstreamBranch], 30000);
+    await ensureGitInitialized(effectiveRepo);
+    await runCmd('git', ['fetch', '--prune', '--', effectiveRepo, upstreamBranch], 30000);
 
     const { stdout: remoteLog } = await runCmd(
       'git',
@@ -242,23 +273,22 @@ function restoreAndMergeUserConfig(userRawYaml, upstreamRawYaml) {
 }
 
 /**
- * Pulls latest changes from configured upstream repository, preserves config.yaml & watermark.png,
- * updates npm dependencies if package.json changed, and returns execution details.
+ * Pulls latest changes from locked official upstream repository (or configured mirror accelerator),
+ * preserves config.yaml & watermark.png, updates npm dependencies if package.json changed,
+ * and returns execution details.
  */
-async function performHotUpdate() {
+async function performHotUpdate(options = {}) {
   if (updateInProgress) {
     throw new Error('An update is already in progress. Please wait.');
   }
 
   const cfg = getConfig();
-  const upstreamRepo = (cfg.upstream_repo || '').trim();
-  const upstreamBranch = (cfg.upstream_branch || 'main').trim() || 'main';
+  const upstreamMirror = (options.upstream_mirror ?? cfg.upstream_mirror ?? '').trim();
+  const effectiveRepo = getEffectiveUpstreamRepo(upstreamMirror || options.upstream_repo || cfg.upstream_repo);
+  const upstreamBranch = (options.upstream_branch || cfg.upstream_branch || 'main').trim() || 'main';
 
-  if (!upstreamRepo) {
-    throw new Error('Upstream repository URL (upstream_repo) is not configured in config.yaml.');
-  }
-  if (!validateGitRemote(upstreamRepo)) {
-    throw new Error(`Invalid upstream repository URL format: "${upstreamRepo}"`);
+  if (!validateGitRemote(effectiveRepo)) {
+    throw new Error(`Invalid effective repository URL format: "${effectiveRepo}"`);
   }
   if (!validateGitBranch(upstreamBranch)) {
     throw new Error(`Invalid upstream branch name format: "${upstreamBranch}"`);
@@ -285,9 +315,9 @@ async function performHotUpdate() {
     const beforeStatus = await getUpdateStatus({ fetchRemote: false });
     const fromCommit = beforeStatus.localShortCommit || 'unknown';
 
-    logStep(`Fetching latest commits from ${upstreamRepo} (branch: ${upstreamBranch})...`);
-    await ensureGitInitialized(upstreamRepo);
-    await runCmd('git', ['fetch', '--prune', '--', upstreamRepo, upstreamBranch], 45000);
+    logStep(`Fetching latest commits from ${effectiveRepo} (branch: ${upstreamBranch})...`);
+    await ensureGitInitialized(effectiveRepo);
+    await runCmd('git', ['fetch', '--prune', '--', effectiveRepo, upstreamBranch], 45000);
 
     const { stdout: targetHashOut } = await runCmd('git', ['rev-parse', '--short', 'FETCH_HEAD'], 5000);
     const toCommit = targetHashOut || 'FETCH_HEAD';
@@ -405,6 +435,9 @@ function restartServerProcess(httpServer, serverEntryFile) {
 }
 
 module.exports = {
+  OFFICIAL_UPSTREAM_REPO,
+  getEffectiveUpstreamRepo,
+  validateGitMirror,
   readPackageVersion,
   getUpdateStatus,
   performHotUpdate,

@@ -290,13 +290,20 @@
               </div>
             </div>
 
-            <div style="display:grid; grid-template-columns: 1fr 180px; gap:12px;">
+            <div style="display:grid; grid-template-columns: 1fr 1fr 160px; gap:12px;">
               <div class="form-group" style="margin-bottom:10px;">
-                <label>Upstream Git Repository URL (upstream_repo)</label>
-                <input type="text" id="f_upstream_repo" class="form-input" placeholder="https://github.com/weichen-ink/file-master-server.git" />
+                <label>官方仓库 (Official Repo - 锁定安全保护)</label>
+                <div style="padding: 9px 12px; background: rgba(0,0,0,0.35); border: 1px solid var(--border); border-radius: 8px; font-size: 12.5px; color: #93c5fd; font-family: var(--font-mono); display:flex; align-items:center; justify-content:space-between;">
+                  <span>weichen-ink/file-master-server</span>
+                  <span style="font-size:11px; background:rgba(16,185,129,0.2); color:#34d399; padding:1px 6px; border-radius:4px;">🔒 官方锁定</span>
+                </div>
               </div>
               <div class="form-group" style="margin-bottom:10px;">
-                <label>Upstream Branch (upstream_branch)</label>
+                <label>GitHub 加速镜像源 (upstream_mirror, 可选)</label>
+                <input type="text" id="f_upstream_mirror" class="form-input" placeholder="留空官方直连，或如: https://ghproxy.net/" />
+              </div>
+              <div class="form-group" style="margin-bottom:10px;">
+                <label>分支 (upstream_branch)</label>
                 <input type="text" id="f_upstream_branch" class="form-input" placeholder="main" />
               </div>
             </div>

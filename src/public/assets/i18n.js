@@ -85,3 +85,4 @@ function toggleConsoleLanguage() {
   if (typeof renderFolderTree === 'function') renderFolderTree();
   if (typeof renderGallery === 'function') renderGallery();
 }
+

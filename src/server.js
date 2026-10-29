@@ -33,7 +33,8 @@ const {
   readPackageVersion,
   getUpdateStatus,
   performHotUpdate,
-  restartServerProcess
+  restartServerProcess,
+  validateGitMirror
 } = require('./core/updater');
 const { appendAuditLog } = require('./core/audit');
 const { registerImageHostModule } = require('./modules/image-host');
@@ -320,22 +321,19 @@ app.get('/api/platform/update/status', requireAdmin, async (req, res) => {
 app.post('/api/platform/update/pull', requireAdmin, async (req, res) => {
   try {
     const cfg = getConfig();
-    if (!cfg.hot_update) {
+    if (cfg.hot_update === false) {
       return res.status(403).json({
-        error: 'Hot update feature is currently disabled. Enable "hot_update: true" in config.yaml to allow online repository updates.'
+        error: 'Hot update feature is explicitly disabled (hot_update: false) in config.yaml.'
       });
     }
 
-    const { upstream_repo, upstream_branch, confirmPassword } = req.body || {};
-    if (!confirmPassword || !verifyPassword(confirmPassword, cfg.password)) {
-      return res.status(403).json({
-        error: 'Secondary password verification failed. Please enter your valid administrator password to confirm hot update.'
-      });
-    }
-
+    const { upstream_mirror, upstream_branch } = req.body || {};
     const patch = {};
-    if (typeof upstream_repo === 'string' && upstream_repo.trim()) {
-      patch.upstream_repo = upstream_repo.trim();
+    if (typeof upstream_mirror === 'string') {
+      if (!validateGitMirror(upstream_mirror)) {
+        return res.status(400).json({ error: 'Invalid mirror URL format' });
+      }
+      patch.upstream_mirror = upstream_mirror.trim();
     }
     if (typeof upstream_branch === 'string' && upstream_branch.trim()) {
       patch.upstream_branch = upstream_branch.trim();
@@ -347,11 +345,14 @@ app.post('/api/platform/update/pull', requireAdmin, async (req, res) => {
     appendAuditLog({
       action: 'hot_update_pull',
       ip: getClientIp(req),
-      upstream_repo: patch.upstream_repo || cfg.upstream_repo,
-      upstream_branch: patch.upstream_branch || cfg.upstream_branch
+      upstream_mirror: patch.upstream_mirror ?? cfg.upstream_mirror ?? '',
+      upstream_branch: patch.upstream_branch || cfg.upstream_branch || 'main'
     });
 
-    const result = await performHotUpdate();
+    const result = await performHotUpdate({
+      upstream_mirror: patch.upstream_mirror,
+      upstream_branch: patch.upstream_branch
+    });
     res.on('finish', () => {
       setTimeout(() => {
         restartServerProcess(httpServer, __filename);

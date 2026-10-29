@@ -11,9 +11,11 @@ base_url: http://localhost:3000
 trust_proxy: loopback
 
 # Upstream Git repository for one-click hot updates & automatic restarts
-# Enable hot update capability explicitly (true | false)
-hot_update: false
-upstream_repo: https://github.com/weichen-ink/file-master-server.git
+# Hot update capability: true | false (default: true)
+hot_update: true
+# Official upstream repository is locked to https://github.com/weichen-ink/file-master-server.git
+# Optional GitHub acceleration mirror prefix (e.g. "https://ghproxy.net/" or leave "" for direct GitHub connection)
+upstream_mirror: ""
 upstream_branch: main
 
 # ----------------- 2. Unified Security & Authentication -----------------
