@@ -14,3 +14,4 @@ services:
       # Note: On first run without config.yaml, visit http://localhost:3000/setup to initialize!
       # If you already have config.yaml, you can also mount it directly:
       # - ./config.yaml:/app/config.yaml
+

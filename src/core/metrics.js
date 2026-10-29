@@ -53,7 +53,17 @@ function collectRuntimeMetrics() {
   const loadPercent1m = Math.min(100, Math.round((loadAvg[0] / cpuCount) * 1000) / 10);
 
   const memTotal = os.totalmem();
-  const memFree = os.freemem();
+  let memFree = os.freemem();
+  // On Linux, /proc/meminfo MemAvailable accurately reflects reclaimable page cache & buffers
+  if (process.platform === 'linux' && fs.existsSync('/proc/meminfo')) {
+    try {
+      const meminfo = fs.readFileSync('/proc/meminfo', 'utf8');
+      const availMatch = meminfo.match(/^MemAvailable:\s+(\d+)\s+kB/m);
+      if (availMatch) {
+        memFree = parseInt(availMatch[1], 10) * 1024;
+      }
+    } catch {}
+  }
   const memUsed = Math.max(0, memTotal - memFree);
   const memPercent = memTotal > 0 ? Math.round((memUsed / memTotal) * 1000) / 10 : 0;
 

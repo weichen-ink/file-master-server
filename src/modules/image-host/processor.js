@@ -13,6 +13,10 @@ const NEEDS_TRANSCODE_EXTS = new Set(['.heic', '.heif', '.tif', '.tiff']);
 
 /**
  * Transcodes HEIC/HEIF/TIFF originals into high-quality JPEG previews for browser rendering and sharp watermarking.
+ * Linux-first pipeline:
+ *   1. Native Sharp/libvips (handles TIFF natively on Linux and HEIC when libheif is linked)
+ *   2. Linux CLI decoders: heif-convert (libheif-examples) -> ffmpeg
+ *   3. macOS fallback: /usr/bin/sips (only attempted when process.platform === 'darwin')
  */
 async function ensureTranscodedPreviewJpeg(rawFilePath, previewCachePath) {
   if (fs.existsSync(previewCachePath)) {
@@ -25,31 +29,69 @@ async function ensureTranscodedPreviewJpeg(rawFilePath, previewCachePath) {
 
   fs.mkdirSync(path.dirname(previewCachePath), { recursive: true });
   const tmpPath = `${previewCachePath}.${process.pid}.${Date.now()}.tmp.jpg`;
-
-  try {
-    // Prefer macOS native hardware-accelerated sips for HEIC/HEIF/TIFF transcoding
-    await execFileAsync('/usr/bin/sips', [
-      '-s',
-      'format',
-      'jpeg',
-      '-s',
-      'formatOptions',
-      '92',
-      rawFilePath,
-      '--out',
-      tmpPath
-    ]);
-    fs.renameSync(tmpPath, previewCachePath);
-    return previewCachePath;
-  } catch (sipsErr) {
+  const cleanupTmp = () => {
     if (fs.existsSync(tmpPath)) {
       try { fs.unlinkSync(tmpPath); } catch {}
     }
-    // Fallback to sharp directly if supported on current OS or platform
+  };
+
+  // 1. Try in-process Sharp (libvips) first - works out-of-the-box on Linux for TIFF and libheif-enabled builds
+  try {
     await sharp(rawFilePath).rotate().jpeg({ quality: 92 }).toFile(tmpPath);
     fs.renameSync(tmpPath, previewCachePath);
     return previewCachePath;
+  } catch {
+    cleanupTmp();
   }
+
+  // 2. Try Linux native heif-convert (apt package: libheif-examples)
+  try {
+    await execFileAsync('heif-convert', ['-q', '92', rawFilePath, tmpPath]);
+    if (fs.existsSync(tmpPath) && fs.statSync(tmpPath).size > 0) {
+      fs.renameSync(tmpPath, previewCachePath);
+      return previewCachePath;
+    }
+  } catch {
+    cleanupTmp();
+  }
+
+  // 3. Try cross-platform ffmpeg on Linux/Windows/macOS
+  try {
+    await execFileAsync('ffmpeg', ['-y', '-v', 'error', '-i', rawFilePath, '-frames:v', '1', '-q:v', '2', tmpPath]);
+    if (fs.existsSync(tmpPath) && fs.statSync(tmpPath).size > 0) {
+      fs.renameSync(tmpPath, previewCachePath);
+      return previewCachePath;
+    }
+  } catch {
+    cleanupTmp();
+  }
+
+  // 4. If running on macOS local dev environment, try /usr/bin/sips
+  if (process.platform === 'darwin') {
+    try {
+      await execFileAsync('/usr/bin/sips', [
+        '-s',
+        'format',
+        'jpeg',
+        '-s',
+        'formatOptions',
+        '92',
+        rawFilePath,
+        '--out',
+        tmpPath
+      ]);
+      if (fs.existsSync(tmpPath) && fs.statSync(tmpPath).size > 0) {
+        fs.renameSync(tmpPath, previewCachePath);
+        return previewCachePath;
+      }
+    } catch {
+      cleanupTmp();
+    }
+  }
+
+  throw new Error(
+    `Unable to transcode ${path.basename(rawFilePath)}. On Linux, install "libheif-examples" or "ffmpeg" (apt-get install -y libheif-examples ffmpeg).`
+  );
 }
 
 /**

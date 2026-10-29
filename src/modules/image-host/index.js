@@ -689,6 +689,33 @@ function registerImageHostModule(app) {
   app.post('/api/image/upload', uploadRateLimiter, requireApiOrAdmin, upload.any(), handleUpload);
   app.post('/api/upload', uploadRateLimiter, requireApiOrAdmin, upload.any(), handleUpload);
 
+  // 1.5 Server-side preview transcode endpoint (for Obsidian client local HEIC/HEIF/TIFF previewing via Linux server)
+  app.post('/api/image/preview-transcode', uploadRateLimiter, requireApiOrAdmin, upload.any(), async (req, res) => {
+    let tmpInput = null;
+    let tmpOutput = null;
+    try {
+      const fileObj = req.file || (req.files && req.files[0]);
+      if (!fileObj || !fileObj.path) {
+        return res.status(400).json({ error: 'No image file provided' });
+      }
+      tmpInput = fileObj.path;
+      tmpOutput = `${tmpInput}.preview.jpg`;
+      await ensureTranscodedPreviewJpeg(tmpInput, tmpOutput);
+      const jpegBuf = fs.readFileSync(tmpOutput);
+      res.setHeader('Content-Type', 'image/jpeg');
+      return res.send(jpegBuf);
+    } catch (err) {
+      return res.status(500).json({ error: 'Preview transcode failed: ' + err.message });
+    } finally {
+      if (tmpInput && fs.existsSync(tmpInput)) {
+        try { fs.unlinkSync(tmpInput); } catch {}
+      }
+      if (tmpOutput && fs.existsSync(tmpOutput)) {
+        try { fs.unlinkSync(tmpOutput); } catch {}
+      }
+    }
+  });
+
   // 2. Public route: GET /pub/:year/:month/:filename
   // (Images processed with sharp WebP compression + watermark; documents/media streamed directly)
   app.get('/pub/:year/:month/:filename', async (req, res) => {

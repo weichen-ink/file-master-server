@@ -6,6 +6,7 @@ const YAML = require('yaml');
 const {
   ROOT_DIR,
   CONFIG_PATH,
+  EXAMPLE_CONFIG_PATH,
   DATA_DIR,
   getConfig,
   getRawConfigYaml,
@@ -294,8 +295,9 @@ async function performHotUpdate() {
     logStep(`Applying update (${fromCommit} -> ${toCommit})...`);
     await runCmd('git', ['reset', '--hard', 'FETCH_HEAD'], 15000);
 
-    // Read the newly pulled upstream config.yaml before restoring user's config
-    const upstreamRawYaml = fs.existsSync(CONFIG_PATH) ? fs.readFileSync(CONFIG_PATH, 'utf8') : '';
+    // Read the newly pulled upstream config.example.yaml (or config.yaml) before restoring user's config
+    const templatePath = fs.existsSync(EXAMPLE_CONFIG_PATH) ? EXAMPLE_CONFIG_PATH : CONFIG_PATH;
+    const upstreamRawYaml = fs.existsSync(templatePath) ? fs.readFileSync(templatePath, 'utf8') : '';
     restoreAndMergeUserConfig(userRawYaml, upstreamRawYaml);
     logStep(`Restored and merged user config.yaml (all credentials & settings preserved)`);
 
@@ -342,17 +344,30 @@ async function performHotUpdate() {
 }
 
 /**
- * Gracefully restarts the current Node.js server process across all runtime modes:
+ * Gracefully restarts the current Node.js server process across all Linux & cross-platform runtime modes:
  * - node --watch (touches server.js to trigger built-in watcher reload)
- * - PM2 / systemd (closes HTTP server and exits with 0 so supervisor respawns)
+ * - Linux systemd / Docker / PM2 supervisor (closes HTTP server and exits with 0 so supervisor respawns cleanly)
  * - Standalone `node src/server.js` / `npm start` (closes HTTP server to free port, then spawns fresh process)
  */
 function restartServerProcess(httpServer, serverEntryFile) {
   const isWatchMode = process.execArgv.some((arg) => arg === '--watch' || arg.startsWith('--watch=')) ||
     process.env.npm_lifecycle_event === 'dev';
   const isPm2 = process.env.pm_id !== undefined || Boolean(process.env.PM2_HOME);
+  const isSystemd = Boolean(process.env.INVOCATION_ID || process.env.JOURNAL_STREAM);
+  const isDocker = process.pid === 1 || fs.existsSync('/.dockerenv');
+  const isManagedBySupervisor = isPm2 || isSystemd || isDocker;
 
-  console.log(`[HotUpdate] Restarting server process (mode: ${isWatchMode ? 'watch' : isPm2 ? 'pm2' : 'standalone'})...`);
+  const modeLabel = isWatchMode
+    ? 'watch'
+    : isPm2
+      ? 'pm2'
+      : isSystemd
+        ? 'systemd'
+        : isDocker
+          ? 'docker'
+          : 'standalone';
+
+  console.log(`[HotUpdate] Restarting server process (mode: ${modeLabel})...`);
 
   if (isWatchMode && serverEntryFile && fs.existsSync(serverEntryFile)) {
     const now = new Date();
@@ -365,7 +380,7 @@ function restartServerProcess(httpServer, serverEntryFile) {
     if (respawned) return;
     respawned = true;
 
-    if (!isPm2) {
+    if (!isManagedBySupervisor) {
       const entry = serverEntryFile || path.join(ROOT_DIR, 'src/server.js');
       const child = spawn(process.execPath, [entry, ...process.argv.slice(2)], {
         cwd: ROOT_DIR,
