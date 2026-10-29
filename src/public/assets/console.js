@@ -570,7 +570,8 @@ function renderGallery() {
       document: t('catDocument')
     };
     const badgeLabel = iconMap[item.category] || t('catAttachment');
-    const mdText = isImg ? `![](${item.rawUrl})` : `[📎 ${item.filename}](${item.rawUrl})`;
+    const rawMdText = isImg ? `![](${item.rawUrl})` : `[📎 ${item.filename}](${item.rawUrl})`;
+    const optMdText = isImg && item.pubUrl ? `![](${item.pubUrl})` : rawMdText;
     const isLocked = Boolean(item.locked);
     const inProtFolder = Boolean(item.inProtectedFolder);
     const lockBadgeHtml = isLocked
@@ -594,8 +595,12 @@ function renderGallery() {
       ? `<button class="btn btn-outline" disabled title="${t('protectedFolderLockedHint')}" style="opacity:0.7; cursor:not-allowed;">${t('protectedBtn')}</button>`
       : `<button class="btn btn-outline" onclick="toggleLockImage('${item.year}', '${item.month}', '${item.filename}', ${!isLocked})" style="${isLocked ? 'border-color:#f59e0b; color:#fbbf24;' : ''}">${isLocked ? t('unlockBtn') : t('lockBtn')}</button>`;
 
-    const optBtnHtml = (isOptimizationEnabled && item.isProcessableImage)
-      ? `<button class="btn btn-outline" style="border-color:rgba(59,130,246,0.5); color:#60a5fa;" onclick="copyText('${item.pubUrl}', 'Optimized Image URL')" title="${t('copyOptTooltip')}">${t('copyOptBtn')}</button>`
+    const optRowHtml = (isOptimizationEnabled && item.isProcessableImage && item.pubUrl)
+      ? `<div class="track-row">
+           <span class="track-tag track-webp">${t('trackWebp')}</span>
+           <button class="btn btn-outline" onclick="copyText('${optMdText}', 'Optimized Markdown')">${t('btnMarkdown')}</button>
+           <button class="btn btn-outline" style="border-color:rgba(16,185,129,0.5); color:#6ee7b7;" onclick="copyText('${item.pubUrl}', 'Optimized WebP URL')">${t('btnDirectUrl')}</button>
+         </div>`
       : '';
 
     const rightMetaHtml = !isImg
@@ -616,12 +621,21 @@ function renderGallery() {
           </div>
         </div>
         <div class="card-actions">
-          <button class="btn btn-primary" onclick="copyText('${item.rawUrl}', 'Raw Original URL')" title="${t('copyRawTooltip')}">${t('copyRawBtn')}</button>
-          ${optBtnHtml}
-          <button class="btn btn-outline" onclick="copyText('${mdText}', 'Markdown Link')" title="${t('copyMdTooltip')}">${t('copyMdBtn')}</button>
-          <button class="btn btn-outline" onclick="createShareLink('${item.year}', '${item.month}', '${item.filename}')" title="${t('shareTooltip')}">${t('shareBtn')}</button>
-          ${lockBtnHtml}
-          <button class="btn btn-danger" ${isLocked ? `disabled style="opacity:0.45; cursor:not-allowed;" title="${t('delLockedTooltip')}"` : ''} onclick="deleteImage('${item.year}', '${item.month}', '${item.filename}', ${isLocked})">${t('deleteBtn')}</button>
+          <div class="link-tracks">
+            <div class="track-row">
+              <span class="track-tag track-raw">${t('trackRaw')}</span>
+              <button class="btn btn-outline" onclick="copyText('${rawMdText}', 'Raw Markdown')">${t('btnMarkdown')}</button>
+              <button class="btn btn-primary" onclick="copyText('${item.rawUrl}', 'Raw URL')">${t('btnDirectUrl')}</button>
+            </div>
+            ${optRowHtml}
+          </div>
+          <div class="card-footer-actions">
+            <button class="btn btn-outline" onclick="createShareLink('${item.year}', '${item.month}', '${item.filename}')" title="${t('shareTooltip')}">${t('shareBtn')}</button>
+            <div class="card-footer-right">
+              ${lockBtnHtml}
+              <button class="btn btn-danger" ${isLocked ? `disabled style="opacity:0.45; cursor:not-allowed;" title="${t('delLockedTooltip')}"` : ''} onclick="deleteImage('${item.year}', '${item.month}', '${item.filename}', ${isLocked})">${t('deleteBtn')}</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
