@@ -17,13 +17,12 @@ upstream_repo: https://github.com/weichen-ink/file-master-server.git
 upstream_branch: main
 
 # ----------------- 2. Unified Security & Authentication -----------------
-# Stealth admin entry point (any request to /, /admin, /login returns 404;
-# only /panel-<secret> loads the management console).
-admin_path: panel-change-me
+# Admin console entry path (e.g. /admin)
+admin_path: admin
 
-# Administrator credentials
+# Administrator credentials (initialized via web setup wizard on first launch)
 username: admin
-password: change-this-password
+password: ""
 
 # Brute-force protection: IP is banned for 24h after exceeding failed attempts
 max_login_attempts: 3
@@ -40,9 +39,10 @@ api_token: ""
 
 # ----------------- [Module 1: Image Host] -----------------
 image_host:
-  raw_secret_path: raw-change-me # Obfuscated path prefix for accessing original lossless files
-  webp_quality: 82 # WebP compression quality for public files (/pub/*, 1-100)
-  max_width: 1920 # Maximum width constraint for public images (0 for unlimited)
+  raw_secret_path: raw # Path prefix for accessing original lossless files (/raw/YYYY/MM/file.ext)
+  enable_optimization: true # Enable automatic image optimization (/pub/YYYY/MM/file.webp): true | false
+  webp_quality: 82 # WebP compression quality for optimized files (/pub/*, 1-100)
+  max_width: 1920 # Maximum width constraint for optimized images (0 for unlimited)
   watermark_enable: true # Enable dynamic watermarking: true | false
   watermark_type: image # Mode: image (PNG) | text (rendered text) | tile (repeating diagonal)
   watermark_pos: bottom-right # Position: bottom-right | bottom-left | top-right | top-left | center

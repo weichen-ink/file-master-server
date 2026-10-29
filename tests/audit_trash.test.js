@@ -31,3 +31,4 @@ test('Trash Retention: directory config is defined within storage directory', ()
   assert.ok(TRASH_DIR, 'TRASH_DIR should be defined');
   assert.ok(TRASH_DIR.startsWith(STORAGE_DIR), 'TRASH_DIR should reside in STORAGE_DIR');
 });
+

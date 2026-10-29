@@ -1,6 +1,9 @@
 const express = require('express');
 const path = require('node:path');
+const crypto = require('node:crypto');
 const {
+  isConfigInitialized,
+  initializeConfigFromSetup,
   getConfig,
   getRawConfigYaml,
   saveRawConfigYaml,
@@ -88,9 +91,12 @@ app.get('/api/platform/version', (req, res) => {
 
 app.get('/api/platform/status', (req, res) => {
   const cfg = getConfig();
-  const authenticated = isAdminAuthenticated(req);
+  const needsSetup = !isConfigInitialized();
+  const authenticated = !needsSetup && isAdminAuthenticated(req);
   res.json({
     siteName: cfg.site_name,
+    needsSetup,
+    optimizationEnabled: cfg.image_host?.enable_optimization !== false,
     authenticated,
     username: authenticated ? cfg.username : null,
     totpEnabled: Boolean(cfg.totp_secret),
@@ -106,6 +112,55 @@ app.get('/api/platform/status', (req, res) => {
         }
       : null
   });
+});
+
+// First-time Setup Wizard APIs (permanently locked once config.yaml exists)
+app.get('/api/platform/setup-defaults', (req, res) => {
+  if (isConfigInitialized()) {
+    return res.status(403).json({ error: 'Server is already initialized' });
+  }
+  const cfg = getConfig();
+  res.json({
+    site_name: cfg.site_name,
+    port: cfg.port,
+    base_url: cfg.base_url,
+    admin_path: cfg.admin_path || 'admin',
+    username: cfg.username || 'admin',
+    suggested_password: crypto.randomBytes(6).toString('hex'),
+    suggested_api_token: 'fm_' + crypto.randomBytes(16).toString('hex'),
+    raw_secret_path: cfg.image_host?.raw_secret_path || 'raw',
+    enable_optimization: cfg.image_host?.enable_optimization !== false,
+    webp_quality: cfg.image_host?.webp_quality ?? 82,
+    max_width: cfg.image_host?.max_width ?? 1920,
+    watermark_enable: cfg.image_host?.watermark_enable !== false
+  });
+});
+
+app.post('/api/platform/setup', (req, res) => {
+  if (isConfigInitialized()) {
+    return res.status(403).json({ error: 'Server is already initialized' });
+  }
+  try {
+    const newCfg = initializeConfigFromSetup(req.body || {});
+    const token = createSessionToken(newCfg);
+    res.setHeader(
+      'Set-Cookie',
+      `filemaster_session=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${30 * 24 * 60 * 60}`
+    );
+    appendAuditLog({
+      action: 'initial_setup',
+      ip: getClientIp(req),
+      username: newCfg.username,
+      adminPath: newCfg.admin_path,
+      enableOptimization: newCfg.image_host.enable_optimization
+    });
+    res.json({
+      success: true,
+      redirectUrl: `/${newCfg.admin_path}`
+    });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 app.post('/api/platform/login', (req, res) => {
@@ -301,8 +356,27 @@ registerImageHostModule(app);
 
 // Additional modules (Countdowns, File Share, etc.) can be mounted here
 
-// ================= 3. Stealth Admin Console & Scanner Blocker =================
+// ================= 3. Setup Wizard & Admin Console Routing =================
+app.get('/setup', (req, res) => {
+  if (!isConfigInitialized()) {
+    return res.sendFile(path.join(__dirname, 'public/setup.html'));
+  }
+  const cfg = getConfig();
+  return res.redirect(`/${cfg.admin_path}`);
+});
+
+app.get('/', (req, res) => {
+  if (!isConfigInitialized()) {
+    return res.redirect('/setup');
+  }
+  const cfg = getConfig();
+  return res.redirect(`/${cfg.admin_path}`);
+});
+
 app.get('/:customAdminPath', (req, res, next) => {
+  if (!isConfigInitialized()) {
+    return res.redirect('/setup');
+  }
   const cfg = getConfig();
   if (req.params.customAdminPath === cfg.admin_path) {
     const ip = getClientIp(req);
@@ -315,7 +389,7 @@ app.get('/:customAdminPath', (req, res, next) => {
   next();
 });
 
-// Any requests to /, /admin, /login, or unmapped routes return generic 404 to avoid scanner detection
+// Unmapped routes return 404
 app.use((req, res) => {
   res.status(404).send('Not Found');
 });
@@ -328,10 +402,18 @@ function startServer(port, retriesLeft = 6) {
   const srv = app.listen(port, () => {
     httpServer = srv;
     const cfg = getConfig();
-    console.log(`🚀 ${cfg.site_name} is running!`);
-    console.log(`🔒 Stealth Console: ${cfg.base_url}/${cfg.admin_path}`);
-    console.log(`🖼️ Raw Asset Route: ${cfg.base_url}/${cfg.image_host.raw_secret_path}/YYYY/MM/filename.ext`);
-    console.log(`🌐 Public WebP Route: ${cfg.base_url}/pub/YYYY/MM/filename.webp`);
+    if (!isConfigInitialized()) {
+      console.log('---------------------------------------------------------');
+      console.log(`✨ [Setup Wizard] No config.yaml found! Visit http://localhost:${port}/setup to initialize.`);
+      console.log('---------------------------------------------------------');
+    } else {
+      console.log(`🚀 ${cfg.site_name} is running!`);
+      console.log(`🔒 Admin Console: ${cfg.base_url}/${cfg.admin_path}`);
+      console.log(`🖼️ Raw Original Route: ${cfg.base_url}/${cfg.image_host.raw_secret_path}/YYYY/MM/filename.ext`);
+      if (cfg.image_host.enable_optimization !== false) {
+        console.log(`⚡ Optimized WebP Route: ${cfg.base_url}/pub/YYYY/MM/filename.webp`);
+      }
+    }
   });
 
   srv.on('error', (err) => {

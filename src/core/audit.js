@@ -30,3 +30,4 @@ module.exports = {
   appendAuditLog,
   AUDIT_LOG_FILE
 };
+

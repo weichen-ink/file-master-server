@@ -413,8 +413,10 @@ function scanAllImages(cfg) {
   }
 
   list.sort((a, b) => b.createdAt - a.createdAt);
+  const optimizationEnabled = cfg.image_host?.enable_optimization !== false;
   return {
     images: list,
+    optimizationEnabled,
     stats: {
       totalCount: list.length,
       totalRawBytes,
@@ -607,6 +609,7 @@ function registerImageHostModule(app) {
       // Preserve Unicode and CJK filename characters in readable URL format
       const readableFile = formatReadableUrlSegment(filename);
       const readableBase = formatReadableUrlSegment(baseName);
+      const optimizationEnabled = cfg.image_host?.enable_optimization !== false;
       const rawUrl = `${cfg.base_url}/${rawSecret}/${year}/${month}/${readableFile}`;
       const pubUrl = isProcessableImage
         ? `${cfg.base_url}/pub/${year}/${month}/${readableBase}.webp`
@@ -622,6 +625,7 @@ function registerImageHostModule(app) {
         deduplicated,
         locked,
         inProtectedFolder: year === 'protected',
+        optimizationEnabled,
         sha256: fullSha256,
         category,
         year,
@@ -646,6 +650,10 @@ function registerImageHostModule(app) {
   // (Images processed with sharp WebP compression + watermark; documents/media streamed directly)
   app.get('/pub/:year/:month/:filename', async (req, res) => {
     try {
+      const cfg = getConfig();
+      if (cfg.image_host?.enable_optimization === false) {
+        return res.status(404).send('Image optimization is disabled');
+      }
       const year = sanitizeSegment(req.params.year);
       const month = sanitizeSegment(req.params.month);
       const filename = sanitizeSegment(req.params.filename);

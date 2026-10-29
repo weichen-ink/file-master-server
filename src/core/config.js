@@ -13,27 +13,31 @@ const UPLOAD_TMP_DIR = path.join(STORAGE_DIR, 'tmp');
 let cachedConfig = null;
 let lastMtimeMs = 0;
 
-function ensureConfigExists() {
-  if (fs.existsSync(CONFIG_PATH)) return;
+function isConfigInitialized() {
+  return fs.existsSync(CONFIG_PATH);
+}
 
+function getExampleConfigTemplate() {
   const examplePath = path.join(ROOT_DIR, 'config.example.yaml');
-  let template = '';
   if (fs.existsSync(examplePath)) {
-    template = fs.readFileSync(examplePath, 'utf8');
-  } else {
-    template = `site_name: FileMaster Server
+    return fs.readFileSync(examplePath, 'utf8');
+  }
+  return `site_name: FileMaster Server
 port: 3000
 base_url: http://localhost:3000
+trust_proxy: loopback
+hot_update: false
 upstream_repo: https://github.com/weichen-ink/file-master-server.git
 upstream_branch: main
-admin_path: panel-change-me
+admin_path: admin
 username: admin
-password: change-this-password
+password: ""
 max_login_attempts: 3
 totp_secret: ""
 api_token: ""
 image_host:
-  raw_secret_path: raw-change-me
+  raw_secret_path: raw
+  enable_optimization: true
   webp_quality: 82
   max_width: 1920
   watermark_enable: true
@@ -47,78 +51,114 @@ image_host:
   watermark_text: "© FileMaster"
   watermark_color: "#ffffff"
 `;
+}
+
+function normalizeParsedConfig(parsed, needsSetup = false) {
+  const img = parsed.image_host || {};
+  return {
+    needsSetup,
+    site_name: parsed.site_name || 'FileMaster Server',
+    port: Number(parsed.port) || 3000,
+    base_url: String(parsed.base_url || 'http://localhost:3000').replace(/\/+$/, ''),
+    trust_proxy: parsed.trust_proxy !== undefined ? parsed.trust_proxy : 'loopback',
+    hot_update: Boolean(parsed.hot_update),
+    upstream_repo: String(
+      parsed.upstream_repo || 'https://github.com/weichen-ink/file-master-server.git'
+    ).trim(),
+    upstream_branch: String(parsed.upstream_branch || 'main').trim() || 'main',
+    admin_path: String(parsed.admin_path || 'admin').replace(/^\/+|\/+$/g, '') || 'admin',
+    username: String(parsed.username || 'admin'),
+    password: String(parsed.password || ''),
+    max_login_attempts: Number(parsed.max_login_attempts) || 3,
+    totp_secret: String(parsed.totp_secret || '').trim(),
+    api_token: String(parsed.api_token || ''),
+    image_host: {
+      raw_secret_path: 'raw',
+      enable_optimization: true,
+      webp_quality: 82,
+      max_width: 1920,
+      watermark_enable: true,
+      watermark_type: 'image',
+      watermark_pos: 'bottom-right',
+      watermark_opacity: 0.65,
+      watermark_scale: 0.16,
+      watermark_margin: 24,
+      watermark_min_width: 320,
+      watermark_image: './watermark.png',
+      watermark_text: '© FileMaster',
+      watermark_color: '#ffffff',
+      ...img,
+      enable_optimization: img.enable_optimization !== false
+    }
+  };
+}
+
+/**
+ * Initializes config.yaml from the web setup wizard based on config.example.yaml.
+ */
+function initializeConfigFromSetup(setupData = {}) {
+  if (isConfigInitialized()) {
+    throw new Error('Server is already initialized');
+  }
+  const template = getExampleConfigTemplate();
+  const doc = YAML.parseDocument(template);
+
+  const siteName = String(setupData.site_name || 'FileMaster Server').trim() || 'FileMaster Server';
+  const port = Number(setupData.port) || 3000;
+  const baseUrl = String(setupData.base_url || `http://localhost:${port}`).trim().replace(/\/+$/, '');
+  const adminPath = String(setupData.admin_path || 'admin').trim().replace(/^\/+|\/+$/g, '') || 'admin';
+  const username = String(setupData.username || 'admin').trim() || 'admin';
+  const plainPassword = String(setupData.password || '').trim();
+  if (!plainPassword) {
+    throw new Error('Password cannot be empty');
   }
 
-  const randAdminPath = 'panel-' + crypto.randomBytes(4).toString('hex');
-  const randPassword = crypto.randomBytes(8).toString('hex');
-  const randToken = 'fm_' + crypto.randomBytes(16).toString('hex');
-  const randRawSecret = 'raw-' + crypto.randomBytes(4).toString('hex');
-
-  // Hash generated password with scrypt for security
   const salt = crypto.randomBytes(16).toString('hex');
-  const derived = crypto.scryptSync(randPassword, salt, 64).toString('hex');
+  const derived = crypto.scryptSync(plainPassword, salt, 64).toString('hex');
   const hashedPassword = `scrypt:${salt}:${derived}`;
 
-  let generated = template
-    .replace(/admin_path:\s*['"]?[^\r\n]*['"]?/, `admin_path: ${randAdminPath}`)
-    .replace(/password:\s*['"]?[^\r\n]*['"]?/, `password: "${hashedPassword}"`)
-    .replace(/api_token:\s*['"]?[^\r\n]*['"]?/, `api_token: "${randToken}"`)
-    .replace(/raw_secret_path:\s*['"]?[^\r\n]*['"]?/, `raw_secret_path: ${randRawSecret}`);
+  const apiToken =
+    String(setupData.api_token || '').trim() || 'fm_' + crypto.randomBytes(16).toString('hex');
+  const rawPath =
+    String(setupData.raw_secret_path || 'raw').trim().replace(/^\/+|\/+$/g, '') || 'raw';
+  const enableOptimization = setupData.enable_optimization !== false && setupData.enable_optimization !== 'false';
+  const webpQuality = Number(setupData.webp_quality) || 82;
+  const maxWidth = setupData.max_width !== undefined ? Number(setupData.max_width) : 1920;
+  const watermarkEnable = setupData.watermark_enable !== false && setupData.watermark_enable !== 'false';
 
-  fs.writeFileSync(CONFIG_PATH, generated, 'utf8');
-  console.log('---------------------------------------------------------');
-  console.log('⚡ [Security Setup] Generated config.yaml with fresh credentials:');
-  console.log(`   Admin Console: /${randAdminPath}`);
-  console.log(`   Username:      admin`);
-  console.log(`   Password:      ${randPassword}`);
-  console.log(`   API Token:     ${randToken}`);
-  console.log(`   Raw Secret:    /${randRawSecret}`);
-  console.log('---------------------------------------------------------');
+  doc.set('site_name', siteName);
+  doc.set('port', port);
+  doc.set('base_url', baseUrl);
+  doc.set('admin_path', adminPath);
+  doc.set('username', username);
+  doc.set('password', hashedPassword);
+  doc.set('api_token', apiToken);
+
+  doc.setIn(['image_host', 'raw_secret_path'], rawPath);
+  doc.setIn(['image_host', 'enable_optimization'], enableOptimization);
+  doc.setIn(['image_host', 'webp_quality'], webpQuality);
+  doc.setIn(['image_host', 'max_width'], maxWidth);
+  doc.setIn(['image_host', 'watermark_enable'], watermarkEnable);
+
+  return saveRawConfigYaml(doc.toString());
 }
 
 /**
  * Dynamically loads and caches config.yaml from the root directory.
- * Reloads automatically when the file mtime changes to support hot updates.
+ * If config.yaml does not exist yet, returns uninitialized defaults for setup wizard mode.
  */
 function getConfig() {
-  ensureConfigExists();
+  if (!fs.existsSync(CONFIG_PATH)) {
+    const raw = getExampleConfigTemplate();
+    const parsed = YAML.parse(raw) || {};
+    return normalizeParsedConfig(parsed, true);
+  }
   try {
     const stat = fs.statSync(CONFIG_PATH);
     if (!cachedConfig || stat.mtimeMs !== lastMtimeMs) {
       const raw = fs.readFileSync(CONFIG_PATH, 'utf8');
       const parsed = YAML.parse(raw) || {};
-      cachedConfig = {
-        site_name: parsed.site_name || 'FileMaster Server',
-        port: Number(parsed.port) || 3000,
-        base_url: String(parsed.base_url || 'http://localhost:3000').replace(/\/+$/, ''),
-        hot_update: Boolean(parsed.hot_update),
-        upstream_repo: String(
-          parsed.upstream_repo || 'https://github.com/weichen-ink/file-master-server.git'
-        ).trim(),
-        upstream_branch: String(parsed.upstream_branch || 'main').trim() || 'main',
-        admin_path: String(parsed.admin_path || 'panel-9x7k2m').replace(/^\/+|\/+$/g, ''),
-        username: String(parsed.username || 'admin'),
-        password: String(parsed.password || 'admin-password-123'),
-        max_login_attempts: Number(parsed.max_login_attempts) || 3,
-        totp_secret: String(parsed.totp_secret || '').trim(),
-        api_token: String(parsed.api_token || ''),
-        image_host: {
-          raw_secret_path: 'raw-8f9a2b',
-          webp_quality: 82,
-          max_width: 1920,
-          watermark_enable: true,
-          watermark_type: 'image',
-          watermark_pos: 'bottom-right',
-          watermark_opacity: 0.65,
-          watermark_scale: 0.16,
-          watermark_margin: 24,
-          watermark_min_width: 320,
-          watermark_image: './watermark.png',
-          watermark_text: '© FileMaster',
-          watermark_color: '#ffffff',
-          ...(parsed.image_host || {})
-        }
-      };
+      cachedConfig = normalizeParsedConfig(parsed, false);
       lastMtimeMs = stat.mtimeMs;
     }
     return cachedConfig;
@@ -159,6 +199,9 @@ function writeJsonData(moduleName, data) {
  * Returns raw config.yaml string including comments and formatting.
  */
 function getRawConfigYaml() {
+  if (!fs.existsSync(CONFIG_PATH)) {
+    return getExampleConfigTemplate();
+  }
   return fs.readFileSync(CONFIG_PATH, 'utf8');
 }
 
@@ -208,6 +251,7 @@ function updateConfigPreservingComments(patch) {
   if (patch.image_host && typeof patch.image_host === 'object') {
     const imgKeys = [
       'raw_secret_path',
+      'enable_optimization',
       'webp_quality',
       'max_width',
       'watermark_enable',
@@ -238,6 +282,8 @@ module.exports = {
   STORAGE_DIR,
   TRASH_DIR,
   UPLOAD_TMP_DIR,
+  isConfigInitialized,
+  initializeConfigFromSetup,
   getConfig,
   getRawConfigYaml,
   saveRawConfigYaml,

@@ -507,7 +507,7 @@
               <input type="checkbox" id="uploadToProtectedChk" style="accent-color:#f59e0b; cursor:pointer;" />
               <span>🛡️ Upload to Protected Folder</span>
             </label>
-            <button class="btn btn-outline" onclick="clearWatermarkCache()">🔄 Rebuild Watermark Cache</button>
+            <button id="btnRebuildCache" class="btn btn-outline" onclick="clearWatermarkCache()">🔄 Rebuild Watermark Cache</button>
             <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">+ Upload Files</button>
             <input type="file" id="fileInput" multiple class="hidden" onchange="uploadFiles(this.files)" />
           </div>
@@ -524,10 +524,10 @@
             <div class="stat-val" id="statRawSize">0 MB</div>
             <div class="stat-hint">Archived by YYYY/MM</div>
           </div>
-          <div class="stat-card">
-            <div class="stat-label">Public Watermark Cache (storage/cache)</div>
+          <div class="stat-card" id="cardCacheStat">
+            <div class="stat-label">Optimized Image Cache (storage/cache)</div>
             <div class="stat-val" id="statCacheSize">0 MB</div>
-            <div class="stat-hint">Optimized WebP cache for Astro blogs</div>
+            <div class="stat-hint" id="statCacheHint">Optimized WebP cache (/pub/*)</div>
           </div>
         </div>
 
@@ -784,82 +784,94 @@
             </div>
 
             <div class="stat-card">
-              <h3 style="font-size:16px; margin-bottom:14px;">🖼️ 2. Image Host & Watermark</h3>
-              <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px;">
+              <h3 style="font-size:16px; margin-bottom:14px;">🖼️ 2. Image Host & Auto-Optimization</h3>
+              <div style="display:grid; grid-template-columns: 1fr 2fr; gap:10px; margin-bottom: 4px;">
                 <div class="form-group">
-                  <label>Raw Secret Prefix</label>
-                  <input type="text" id="f_raw_secret_path" class="form-input" />
+                  <label>Original Path Prefix (raw)</label>
+                  <input type="text" id="f_raw_secret_path" class="form-input" placeholder="raw" />
                 </div>
                 <div class="form-group">
-                  <label>WebP Quality (1-100)</label>
-                  <input type="number" id="f_webp_quality" class="form-input" min="10" max="100" />
-                </div>
-                <div class="form-group">
-                  <label>Max Width (px)</label>
-                  <input type="number" id="f_max_width" class="form-input" min="0" />
-                </div>
-              </div>
-
-              <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px;">
-                <div class="form-group">
-                  <label>Watermark Enabled</label>
-                  <select id="f_watermark_enable" class="form-input">
-                    <option value="true">Enabled (true)</option>
-                    <option value="false">Disabled (false)</option>
-                  </select>
-                </div>
-                <div class="form-group">
-                  <label>Watermark Mode</label>
-                  <select id="f_watermark_type" class="form-input">
-                    <option value="image">PNG Image (image)</option>
-                    <option value="text">Corner Text (text)</option>
-                    <option value="tile">Repeating Tile (tile)</option>
-                  </select>
-                </div>
-                <div class="form-group">
-                  <label>Watermark Position</label>
-                  <select id="f_watermark_pos" class="form-input">
-                    <option value="bottom-right">Bottom-Right</option>
-                    <option value="bottom-left">Bottom-Left</option>
-                    <option value="top-right">Top-Right</option>
-                    <option value="top-left">Top-Left</option>
-                    <option value="center">Center</option>
+                  <label>⚡ Auto Image Optimization (enable_optimization)</label>
+                  <select id="f_enable_optimization" class="form-input" onchange="toggleConsoleOptFields()">
+                    <option value="true">Enabled — Show both Copy Raw & Copy Optimized buttons (true)</option>
+                    <option value="false">Disabled — Copy Raw Original URL only (false)</option>
                   </select>
                 </div>
               </div>
 
-              <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:10px;">
-                <div class="form-group">
-                  <label>Opacity (0.1 - 1.0)</label>
-                  <input type="number" id="f_watermark_opacity" class="form-input" step="0.05" min="0.05" max="1" />
+              <div id="optConfigSection">
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                  <div class="form-group">
+                    <label>WebP Quality (1-100)</label>
+                    <input type="number" id="f_webp_quality" class="form-input" min="10" max="100" />
+                  </div>
+                  <div class="form-group">
+                    <label>Max Width (px)</label>
+                    <input type="number" id="f_max_width" class="form-input" min="0" />
+                  </div>
                 </div>
-                <div class="form-group">
-                  <label>Scale (0.05 - 0.8)</label>
-                  <input type="number" id="f_watermark_scale" class="form-input" step="0.01" min="0.05" max="0.8" />
-                </div>
-                <div class="form-group">
-                  <label>Margin (px)</label>
-                  <input type="number" id="f_watermark_margin" class="form-input" min="0" />
-                </div>
-                <div class="form-group">
-                  <label>Min Width for Watermark</label>
-                  <input type="number" id="f_watermark_min_width" class="form-input" min="0" />
-                </div>
-              </div>
 
-              <div class="form-group">
-                <label>Watermark Image Path (watermark_image)</label>
-                <input type="text" id="f_watermark_image" class="form-input" />
-              </div>
-
-              <div style="display:grid; grid-template-columns: 2fr 1fr; gap:10px;">
-                <div class="form-group" style="margin-bottom:0;">
-                  <label>Watermark Text (watermark_text)</label>
-                  <input type="text" id="f_watermark_text" class="form-input" />
+                <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px;">
+                  <div class="form-group">
+                    <label>Watermark Enabled</label>
+                    <select id="f_watermark_enable" class="form-input">
+                      <option value="true">Enabled (true)</option>
+                      <option value="false">Disabled (false)</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Watermark Mode</label>
+                    <select id="f_watermark_type" class="form-input">
+                      <option value="image">PNG Image (image)</option>
+                      <option value="text">Corner Text (text)</option>
+                      <option value="tile">Repeating Tile (tile)</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Watermark Position</label>
+                    <select id="f_watermark_pos" class="form-input">
+                      <option value="bottom-right">Bottom-Right</option>
+                      <option value="bottom-left">Bottom-Left</option>
+                      <option value="top-right">Top-Right</option>
+                      <option value="top-left">Top-Left</option>
+                      <option value="center">Center</option>
+                    </select>
+                  </div>
                 </div>
-                <div class="form-group" style="margin-bottom:0;">
-                  <label>Text Color (watermark_color)</label>
-                  <input type="text" id="f_watermark_color" class="form-input" />
+
+                <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:10px;">
+                  <div class="form-group">
+                    <label>Opacity (0.1 - 1.0)</label>
+                    <input type="number" id="f_watermark_opacity" class="form-input" step="0.05" min="0.05" max="1" />
+                  </div>
+                  <div class="form-group">
+                    <label>Scale (0.05 - 0.8)</label>
+                    <input type="number" id="f_watermark_scale" class="form-input" step="0.01" min="0.05" max="0.8" />
+                  </div>
+                  <div class="form-group">
+                    <label>Margin (px)</label>
+                    <input type="number" id="f_watermark_margin" class="form-input" min="0" />
+                  </div>
+                  <div class="form-group">
+                    <label>Min Width for Watermark</label>
+                    <input type="number" id="f_watermark_min_width" class="form-input" min="0" />
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label>Watermark Image Path (watermark_image)</label>
+                  <input type="text" id="f_watermark_image" class="form-input" />
+                </div>
+
+                <div style="display:grid; grid-template-columns: 2fr 1fr; gap:10px;">
+                  <div class="form-group" style="margin-bottom:0;">
+                    <label>Watermark Text (watermark_text)</label>
+                    <input type="text" id="f_watermark_text" class="form-input" />
+                  </div>
+                  <div class="form-group" style="margin-bottom:0;">
+                    <label>Text Color (watermark_color)</label>
+                    <input type="text" id="f_watermark_color" class="form-input" />
+                  </div>
                 </div>
               </div>
             </div>
@@ -1083,6 +1095,11 @@
     async function initApp() {
       const res = await fetch('/api/platform/status');
       const data = await res.json();
+      if (data.needsSetup) {
+        window.location.href = '/setup';
+        return;
+      }
+      isOptimizationEnabled = data.optimizationEnabled !== false;
       document.title = data.siteName + ' - Console';
       document.getElementById('loginSiteName').textContent = data.siteName;
       document.getElementById('navSiteName').textContent = '⚡ ' + data.siteName;
@@ -1139,6 +1156,15 @@
       loadLocalUpdateStatus();
     }
 
+    function toggleConsoleOptFields() {
+      const enabled = document.getElementById('f_enable_optimization')?.value === 'true';
+      const sec = document.getElementById('optConfigSection');
+      if (sec) {
+        sec.style.opacity = enabled ? '1' : '0.45';
+        sec.style.pointerEvents = enabled ? 'auto' : 'none';
+      }
+    }
+
     function fillConfigForm(cfg, rawYaml) {
       document.getElementById('rawYamlEditor').value = rawYaml || '';
       document.getElementById('f_site_name').value = cfg.site_name || '';
@@ -1154,7 +1180,8 @@
       document.getElementById('f_totp_secret').value = cfg.totp_secret || '';
 
       const img = cfg.image_host || {};
-      document.getElementById('f_raw_secret_path').value = img.raw_secret_path || '';
+      document.getElementById('f_raw_secret_path').value = img.raw_secret_path || 'raw';
+      document.getElementById('f_enable_optimization').value = String(img.enable_optimization !== false);
       document.getElementById('f_webp_quality').value = img.webp_quality ?? 82;
       document.getElementById('f_max_width').value = img.max_width ?? 1920;
       document.getElementById('f_watermark_enable').value = String(Boolean(img.watermark_enable));
@@ -1167,6 +1194,7 @@
       document.getElementById('f_watermark_image').value = img.watermark_image || './watermark.png';
       document.getElementById('f_watermark_text').value = img.watermark_text || '';
       document.getElementById('f_watermark_color').value = img.watermark_color || '#ffffff';
+      toggleConsoleOptFields();
     }
 
     async function saveConfigForm() {
@@ -1183,7 +1211,8 @@
         api_token: document.getElementById('f_api_token').value.trim(),
         totp_secret: document.getElementById('f_totp_secret').value.trim(),
         image_host: {
-          raw_secret_path: document.getElementById('f_raw_secret_path').value.trim().replace(/^\/+|\/+$/g, ''),
+          raw_secret_path: document.getElementById('f_raw_secret_path').value.trim().replace(/^\/+|\/+$/g, '') || 'raw',
+          enable_optimization: document.getElementById('f_enable_optimization').value === 'true',
           webp_quality: Number(document.getElementById('f_webp_quality').value) || 82,
           max_width: Number(document.getElementById('f_max_width').value) || 0,
           watermark_enable: document.getElementById('f_watermark_enable').value === 'true',
@@ -1289,6 +1318,7 @@
     }
 
     let selectedFolder = 'all';
+    let isOptimizationEnabled = true;
     const collapsedYears = new Set();
 
     async function loadImages() {
@@ -1296,11 +1326,23 @@
       if (!res.ok) return;
       const data = await res.json();
       allImages = data.images || [];
+      isOptimizationEnabled = data.optimizationEnabled !== false;
 
       document.getElementById('navImgCount').textContent = data.stats.totalCount;
       document.getElementById('statCount').textContent = data.stats.totalCount;
       document.getElementById('statRawSize').textContent = formatBytes(data.stats.totalRawBytes);
-      document.getElementById('statCacheSize').textContent = formatBytes(data.stats.totalCacheBytes);
+      document.getElementById('statCacheSize').textContent = isOptimizationEnabled
+        ? formatBytes(data.stats.totalCacheBytes)
+        : 'Off';
+
+      const btnCache = document.getElementById('btnRebuildCache');
+      if (btnCache) btnCache.style.display = isOptimizationEnabled ? '' : 'none';
+      const hintEl = document.getElementById('statCacheHint');
+      if (hintEl) {
+        hintEl.textContent = isOptimizationEnabled
+          ? 'Optimized WebP cache (/pub/*)'
+          : 'Auto-optimization is disabled in Settings';
+      }
 
       renderFolderTree();
       renderGallery();
@@ -1467,6 +1509,16 @@
           ? `<button class="btn btn-outline" disabled title="Resides inside protected folder: deletion is permanently locked" style="opacity:0.7; cursor:not-allowed;">🛡️ Protected</button>`
           : `<button class="btn btn-outline" onclick="toggleLockImage('${item.year}', '${item.month}', '${item.filename}', ${!isLocked})" style="${isLocked ? 'border-color:#f59e0b; color:#fbbf24;' : ''}">${isLocked ? '🔓 Unlock' : '🔒 Lock'}</button>`;
 
+        const optBtnHtml = (isOptimizationEnabled && item.isProcessableImage)
+          ? `<button class="btn btn-outline" style="border-color:rgba(59,130,246,0.5); color:#60a5fa;" onclick="copyText('${item.pubUrl}', 'Optimized Image URL')" title="Copy optimized WebP link (/pub/*)">⚡ 复制优化链接</button>`
+          : '';
+
+        const rightMetaHtml = !isImg
+          ? 'Direct stream'
+          : isOptimizationEnabled
+            ? (item.hasCache ? 'Optimized (' + formatBytes(item.cacheSize) + ')' : 'Optimize on-demand')
+            : 'Raw only';
+
         return `
         <div class="img-card" style="${isLocked ? 'border-color: rgba(245,158,11,0.45);' : ''}">
           ${thumbHtml}
@@ -1475,12 +1527,13 @@
               <div class="img-name" title="${item.filename}">${item.filename}</div>
               <div class="img-meta">
                 <span>Raw ${formatBytes(item.size)}</span>
-                <span>${isImg ? (item.hasCache ? 'Cached (' + formatBytes(item.cacheSize) + ')' : 'On-demand') : 'Direct stream'}</span>
+                <span>${rightMetaHtml}</span>
               </div>
             </div>
             <div class="card-actions">
-              <button class="btn btn-primary" onclick="copyText('${mdText}', 'Obsidian Markdown')">📋 Obsidian MD</button>
-              <button class="btn btn-outline" onclick="copyText('${item.pubUrl}', 'Public URL')">🔗 Public URL</button>
+              <button class="btn btn-primary" onclick="copyText('${item.rawUrl}', 'Raw Original URL')" title="Copy original unmodified image URL">📎 复制原始链接</button>
+              ${optBtnHtml}
+              <button class="btn btn-outline" onclick="copyText('${mdText}', 'Markdown Link')" title="Copy Markdown syntax">📋 Markdown</button>
               ${lockBtnHtml}
               <button class="btn btn-danger" ${isLocked ? 'disabled style="opacity:0.45; cursor:not-allowed;" title="Asset is locked. Unlock before deleting."' : ''} onclick="deleteImage('${item.year}', '${item.month}', '${item.filename}', ${isLocked})">🗑️ Delete</button>
             </div>
@@ -1577,7 +1630,10 @@
       if (!currentModalItem) return;
       document.getElementById('modalTitle').textContent = filename;
       document.getElementById('previewModal').classList.remove('hidden');
-      setModalMode('pub');
+      const btnPub = document.getElementById('btnViewPub');
+      const canShowOpt = isOptimizationEnabled && currentModalItem.isProcessableImage;
+      if (btnPub) btnPub.style.display = canShowOpt ? '' : 'none';
+      setModalMode(canShowOpt ? 'pub' : 'raw');
     }
 
     function setModalMode(mode) {
