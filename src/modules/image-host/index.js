@@ -686,6 +686,68 @@ function registerImageHostModule(app) {
     message: 'Upload rate limit exceeded. Please wait before uploading more files.'
   });
 
+  // 1.1 Fast SHA-256 Probe Endpoint for Instant Upload (0-payload client deduplication)
+  const handleProbe = (req, res) => {
+    try {
+      const sha256 = String(req.query.sha256 || req.body?.sha256 || '').trim().toLowerCase();
+      if (!sha256 || sha256.length !== 64 || !/^[0-9a-f]{64}$/.test(sha256)) {
+        return res.status(400).json({ error: 'Valid 64-character sha256 is required' });
+      }
+
+      const match = findExistingBySha256(sha256);
+      if (!match) {
+        return res.json({ exists: false });
+      }
+
+      const cfg = getConfig();
+      const rawSecret = cfg.image_host.raw_secret_path;
+      const origExt = path.extname(match.filename).toLowerCase();
+      const isProcessableImage = PROCESSABLE_IMAGE_EXTS.has(origExt);
+      const category = getFileCategory(origExt);
+      const baseName = path.parse(match.filename).name;
+
+      const readableFile = formatReadableUrlSegment(match.filename);
+      const readableBase = formatReadableUrlSegment(baseName);
+      const optimizationEnabled = cfg.image_host?.enable_optimization !== false;
+      const rawUrl = `${cfg.base_url}/${rawSecret}/${match.year}/${match.month}/${readableFile}`;
+      const pubUrl = isProcessableImage
+        ? `${cfg.base_url}/pub/${match.year}/${match.month}/${readableBase}.webp`
+        : `${cfg.base_url}/pub/${match.year}/${match.month}/${readableFile}`;
+
+      const cleanTitle = path.basename(match.filename, origExt);
+      const markdown =
+        category === 'image' ? `![](${rawUrl})` : `[📎 ${cleanTitle}${origExt}](${rawUrl})`;
+      const locked = isItemLocked(match.year, match.month, match.filename);
+
+      return res.json({
+        exists: true,
+        success: true,
+        deduplicated: true,
+        locked,
+        inProtectedFolder: match.year === 'protected',
+        optimizationEnabled,
+        sha256,
+        category,
+        year: match.year,
+        month: match.month,
+        filename: match.filename,
+        originalName: match.filename,
+        url: rawUrl,
+        rawUrl,
+        pubUrl,
+        markdown
+      });
+    } catch (err) {
+      console.error('[FileMaster] Probe error:', err);
+      return res.status(500).json({ error: 'Probe check failed: ' + err.message });
+    }
+  };
+
+  app.get('/api/image/probe', requireApiOrAdmin, handleProbe);
+  app.post('/api/image/probe', requireApiOrAdmin, handleProbe);
+  app.get('/api/probe', requireApiOrAdmin, handleProbe);
+  app.post('/api/probe', requireApiOrAdmin, handleProbe);
+
   app.post('/api/image/upload', uploadRateLimiter, requireApiOrAdmin, upload.any(), handleUpload);
   app.post('/api/upload', uploadRateLimiter, requireApiOrAdmin, upload.any(), handleUpload);
 
