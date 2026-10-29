@@ -10,8 +10,6 @@ backups/*
 # Storage binaries & caches
 storage/raw/*
 !storage/raw/.gitkeep
-!storage/raw/protected
-!storage/raw/protected/**
 storage/cache/*
 !storage/cache/.gitkeep
 

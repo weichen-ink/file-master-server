@@ -87,10 +87,6 @@
             <p data-i18n="lblAssetManagerDesc">支持拖拽、粘贴或通过 Obsidian 插件直接上传；无损存储原始素材，并支持按需 WebP 水印转码。</p>
           </div>
           <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-            <label style="display:inline-flex; align-items:center; gap:6px; font-size:12px; color:#fbbf24; background:rgba(245,158,11,0.12); border:1px solid rgba(245,158,11,0.35); padding:6px 10px; border-radius:8px; cursor:pointer;" title="Files uploaded here are stored in storage/raw/protected/keep/ with permanent deletion protection and scan exemption">
-              <input type="checkbox" id="uploadToProtectedChk" style="accent-color:#f59e0b; cursor:pointer;" />
-              <span data-i18n="chkUploadProtected">🛡️ 上传至防删保护目录</span>
-            </label>
             <button id="btnRebuildCache" class="btn btn-outline" onclick="clearWatermarkCache()" data-i18n="btnClearWatermarkCache">🔄 重建水印缓存</button>
             <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()" data-i18n="btnUploadFiles">+ 上传文件</button>
             <input type="file" id="fileInput" multiple class="hidden" onchange="uploadFiles(this.files)" />

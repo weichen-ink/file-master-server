@@ -183,9 +183,14 @@ function getProtectedMap() {
 }
 
 function isItemLocked(year, month, filename, protectedMap = null) {
-  if (year === 'protected') return true;
   const map = protectedMap || getProtectedMap();
-  return Boolean(map[`${year}/${month}/${filename}`]);
+  const key = `${year}/${month}/${filename}`;
+  if (map[key] !== undefined) {
+    return Boolean(map[key]);
+  }
+  // Legacy compatibility: files in legacy protected/keep default to locked unless unlocked
+  if (year === 'protected') return true;
+  return false;
 }
 
 function setItemLockState(year, month, filename, locked) {
@@ -194,7 +199,11 @@ function setItemLockState(year, month, filename, locked) {
   if (locked) {
     map[key] = { lockedAt: Date.now() };
   } else {
-    delete map[key];
+    if (year === 'protected') {
+      map[key] = false;
+    } else {
+      delete map[key];
+    }
   }
   writeJsonData('protected_files', map);
   return Boolean(locked);
@@ -202,7 +211,6 @@ function setItemLockState(year, month, filename, locked) {
 
 function ensureDirs() {
   fs.mkdirSync(RAW_DIR, { recursive: true });
-  fs.mkdirSync(path.join(RAW_DIR, 'protected', 'keep'), { recursive: true });
   fs.mkdirSync(CACHE_DIR, { recursive: true });
   fs.mkdirSync(TRASH_DIR, { recursive: true });
   fs.mkdirSync(UPLOAD_TMP_DIR, { recursive: true });
@@ -564,14 +572,9 @@ function registerImageHostModule(app) {
       }
       const hash8 = fullSha256.slice(0, 8);
 
-      const useProtectedFolder =
-        req.headers['x-protected-folder'] === '1' ||
-        req.body?.protected === '1' ||
-        req.query?.protected === '1';
-
       const now = new Date();
-      let year = useProtectedFolder ? 'protected' : String(now.getFullYear());
-      let month = useProtectedFolder ? 'keep' : String(now.getMonth() + 1).padStart(2, '0');
+      let year = String(now.getFullYear());
+      let month = String(now.getMonth() + 1).padStart(2, '0');
       let targetDir = path.join(RAW_DIR, year, month);
       fs.mkdirSync(targetDir, { recursive: true });
 
@@ -896,10 +899,6 @@ function registerImageHostModule(app) {
     if (!isPathWithin(rawFilePath, RAW_DIR)) {
       return res.status(403).json({ error: 'Access denied: path traversal attempt detected' });
     }
-    if (year === 'protected' && !locked) {
-      return res.status(400).json({ error: 'Files in protected/keep/ are permanently protected by default' });
-    }
-
     const finalLocked = setItemLockState(year, month, filename, locked);
     invalidateScanCache();
     appendAuditLog({
@@ -934,7 +933,7 @@ function registerImageHostModule(app) {
 
     if (isItemLocked(year, month, filename)) {
       return res.status(403).json({
-        error: `File "${filename}" is locked against deletion (or resides in protected directory). Unlock before deleting.`
+        error: `File "${filename}" is locked against deletion. Unlock before deleting.`
       });
     }
 

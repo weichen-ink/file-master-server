@@ -575,9 +575,8 @@ function renderGallery() {
     const rawMdText = isImg ? `![](${item.rawUrl})` : `[📎 ${item.filename}](${item.rawUrl})`;
     const optMdText = isImg && item.pubUrl ? `![](${item.pubUrl})` : rawMdText;
     const isLocked = Boolean(item.locked);
-    const inProtFolder = Boolean(item.inProtectedFolder);
     const lockBadgeHtml = isLocked
-      ? `<span style="position:absolute; top:8px; left:8px; background:rgba(245,158,11,0.92); color:#fff; font-size:11px; font-weight:700; padding:2px 8px; border-radius:6px;">${inProtFolder ? t('protectedBtn') : t('lockBtn')}</span>`
+      ? `<span style="position:absolute; top:8px; left:8px; background:rgba(245,158,11,0.92); color:#fff; font-size:11px; font-weight:700; padding:2px 8px; border-radius:6px;">${t('lockBtn')}</span>`
       : '';
 
     const thumbHtml = isImg
@@ -593,9 +592,7 @@ function renderGallery() {
            <span class="img-tag">${item.year}/${item.month}</span>
          </div>`;
 
-    const lockBtnHtml = inProtFolder
-      ? `<button class="btn btn-outline" disabled title="${t('protectedFolderLockedHint')}" style="opacity:0.7; cursor:not-allowed;">${t('protectedBtn')}</button>`
-      : `<button class="btn btn-outline" onclick="toggleLockImage('${item.year}', '${item.month}', '${item.filename}', ${!isLocked})" style="${isLocked ? 'border-color:#f59e0b; color:#fbbf24;' : ''}">${isLocked ? t('unlockBtn') : t('lockBtn')}</button>`;
+    const lockBtnHtml = `<button class="btn btn-outline" onclick="toggleLockImage('${item.year}', '${item.month}', '${item.filename}', ${!isLocked})" style="${isLocked ? 'border-color:#f59e0b; color:#fbbf24;' : ''}">${isLocked ? t('unlockBtn') : t('lockBtn')}</button>`;
 
     const optRowHtml = (isOptimizationEnabled && item.isProcessableImage && item.pubUrl)
       ? `<div class="track-row">
@@ -647,13 +644,11 @@ function renderGallery() {
 
 async function uploadFiles(files) {
   if (!files || !files.length) return;
-  const toProt = document.getElementById('uploadToProtectedChk')?.checked;
-  showToast(`⏳ ${t('uploading', { count: files.length })}${toProt ? ' (protected)' : ''}`);
+  showToast(`⏳ ${t('uploading', { count: files.length })}`);
   for (const file of files) {
     const fd = new FormData();
     fd.append('file', file);
     const headers = { 'X-File-Name': encodeURIComponent(file.name) };
-    if (toProt) headers['X-Protected-Folder'] = '1';
     const res = await fetch('/api/image/upload', {
       method: 'POST',
       headers,
