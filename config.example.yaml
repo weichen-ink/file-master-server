@@ -13,12 +13,12 @@ upstream_branch: main
 
 # ----------------- 2. Unified Security & Authentication -----------------
 # Stealth admin entry point (any request to /, /admin, /login returns 404;
-# only /panel-9x7k2m loads the management console).
-admin_path: panel-9x7k2m
+# only /panel-<secret> loads the management console).
+admin_path: panel-change-me
 
 # Administrator credentials
 username: admin
-password: admin-password-123
+password: change-this-password
 
 # Brute-force protection: IP is banned for 24h after exceeding failed attempts
 max_login_attempts: 3
@@ -27,7 +27,7 @@ max_login_attempts: 3
 totp_secret: ""
 
 # Global API token for FileMaster plugin, PicList, scripts, and CLI tools
-api_token: filemaster-api-token-888
+api_token: ""
 
 # =====================================================================
 # Module Configuration
@@ -35,7 +35,7 @@ api_token: filemaster-api-token-888
 
 # ----------------- [Module 1: Image Host] -----------------
 image_host:
-  raw_secret_path: raw-8f9a2b # Obfuscated path prefix for accessing original lossless files
+  raw_secret_path: raw-change-me # Obfuscated path prefix for accessing original lossless files
   webp_quality: 82 # WebP compression quality for public files (/pub/*, 1-100)
   max_width: 1920 # Maximum width constraint for public images (0 for unlimited)
   watermark_enable: true # Enable dynamic watermarking: true | false

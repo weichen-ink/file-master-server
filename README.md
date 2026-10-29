@@ -134,7 +134,6 @@ image_host:
 | `GET` | `/api/modules/image-host/list` | Fetch all assets and storage metrics | API Token / Session |
 | `POST` | `/api/modules/image-host/lock` | Toggle single file deletion lock | API Token / Session |
 | `DELETE` | `/api/modules/image-host/item/:y/:m/:f`| Delete asset and associated cache | API Token / Session |
-| `POST` | `/api/modules/image-host/orphans` | Discover or batch-clean orphan files | API Token / Session |
 | `POST` | `/api/modules/image-host/cache/clear` | Purge all cached WebP derived images | API Token / Session |
 | `GET` | `/api/platform/update/status` | Check local & upstream Git commit status | Session |
 | `POST` | `/api/platform/update/pull` | Pull upstream repo, preserve `config.yaml`, & hot restart | Session |

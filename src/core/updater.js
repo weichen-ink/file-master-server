@@ -18,6 +18,24 @@ const WATERMARK_PATH = path.join(ROOT_DIR, 'watermark.png');
 
 let updateInProgress = false;
 
+function validateGitRemote(repo) {
+  if (typeof repo !== 'string') return false;
+  const trimmed = repo.trim();
+  if (!trimmed || trimmed.startsWith('-')) return false;
+  if (/[\r\n\0`$;|&]/.test(trimmed)) return false;
+  const remoteRegex = /^(https?:\/\/[\w.-]+(:\d+)?\/[\w.\-\/~]+(\.git)?|git@[\w.\-]+:[\w.\-\/~]+(\.git)?|ssh:\/\/[\w.\-@]+(:\d+)?\/[\w.\-\/~]+(\.git)?|\/[\w.\-\/]+)$/;
+  return remoteRegex.test(trimmed);
+}
+
+function validateGitBranch(branch) {
+  if (typeof branch !== 'string') return false;
+  const trimmed = branch.trim();
+  if (!trimmed || trimmed.startsWith('-')) return false;
+  if (/[\r\n\0`$;|&]/.test(trimmed)) return false;
+  if (/\.\.|\~|\^|\:|\?|\*|\[|\\|@\{|\.lock$|\/$/.test(trimmed)) return false;
+  return /^[a-zA-Z0-9_.\-\/]+$/.test(trimmed);
+}
+
 /**
  * Helper to execute a command inside ROOT_DIR with timeout and non-interactive git env.
  */
@@ -125,8 +143,14 @@ async function getUpdateStatus({ fetchRemote = false } = {}) {
   }
 
   if (fetchRemote && upstreamRepo) {
+    if (!validateGitRemote(upstreamRepo)) {
+      throw new Error(`Invalid upstream repository URL: "${upstreamRepo}"`);
+    }
+    if (!validateGitBranch(upstreamBranch)) {
+      throw new Error(`Invalid upstream branch name: "${upstreamBranch}"`);
+    }
     await ensureGitInitialized(upstreamRepo);
-    await runCmd('git', ['fetch', upstreamRepo, upstreamBranch], 30000);
+    await runCmd('git', ['fetch', '--prune', '--', upstreamRepo, upstreamBranch], 30000);
 
     const { stdout: remoteLog } = await runCmd(
       'git',
@@ -174,8 +198,11 @@ async function getUpdateStatus({ fetchRemote = false } = {}) {
 async function ensureGitInitialized(upstreamRepo) {
   const hasGitDir = fs.existsSync(path.join(ROOT_DIR, '.git'));
   if (!hasGitDir) {
+    if (!validateGitRemote(upstreamRepo)) {
+      throw new Error(`Invalid upstream repository URL: "${upstreamRepo}"`);
+    }
     await runCmd('git', ['init'], 10000);
-    await runCmd('git', ['remote', 'add', 'origin', upstreamRepo], 5000);
+    await runCmd('git', ['remote', 'add', 'origin', '--', upstreamRepo], 5000);
   }
 }
 
@@ -229,6 +256,12 @@ async function performHotUpdate() {
   if (!upstreamRepo) {
     throw new Error('Upstream repository URL (upstream_repo) is not configured in config.yaml.');
   }
+  if (!validateGitRemote(upstreamRepo)) {
+    throw new Error(`Invalid upstream repository URL format: "${upstreamRepo}"`);
+  }
+  if (!validateGitBranch(upstreamBranch)) {
+    throw new Error(`Invalid upstream branch name format: "${upstreamBranch}"`);
+  }
 
   updateInProgress = true;
   const logs = [];
@@ -253,7 +286,7 @@ async function performHotUpdate() {
 
     logStep(`Fetching latest commits from ${upstreamRepo} (branch: ${upstreamBranch})...`);
     await ensureGitInitialized(upstreamRepo);
-    await runCmd('git', ['fetch', upstreamRepo, upstreamBranch], 45000);
+    await runCmd('git', ['fetch', '--prune', '--', upstreamRepo, upstreamBranch], 45000);
 
     const { stdout: targetHashOut } = await runCmd('git', ['rev-parse', '--short', 'FETCH_HEAD'], 5000);
     const toCommit = targetHashOut || 'FETCH_HEAD';
@@ -273,9 +306,9 @@ async function performHotUpdate() {
     const newPkgHash = getFileSha256(PKG_PATH) + ':' + getFileSha256(PKG_LOCK_PATH);
     let depsUpdated = false;
     if (oldPkgHash !== newPkgHash) {
-      logStep(`Detected changes in package.json; running npm install --omit=dev...`);
+      logStep(`Detected changes in package.json; running npm install --omit=dev --ignore-scripts...`);
       const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-      await runCmd(npmCmd, ['install', '--omit=dev'], 120000);
+      await runCmd(npmCmd, ['install', '--omit=dev', '--ignore-scripts'], 120000);
       depsUpdated = true;
       logStep(`Dependencies installed successfully`);
     } else {

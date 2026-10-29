@@ -105,6 +105,43 @@ const ARCHIVE_EXTS = new Set([
 
 const IGNORED_SYSTEM_FILES = new Set(['.ds_store', 'thumbs.db', 'desktop.ini']);
 
+const INLINE_SAFE_EXTS = new Set([
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.webp',
+  '.gif',
+  '.avif',
+  '.bmp',
+  '.ico',
+  '.mp4',
+  '.webm',
+  '.mov',
+  '.mp3',
+  '.m4a',
+  '.wav',
+  '.ogg',
+  '.pdf'
+]);
+
+function setSecurityFileHeaders(res, filePath) {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  // Sandbox isolates served assets and disallows script execution within origin
+  res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
+
+  const ext = path.extname(filePath).toLowerCase();
+  if (!INLINE_SAFE_EXTS.has(ext)) {
+    const safeName = path.basename(filePath).replace(/["\r\n\0]/g, '_');
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(safeName)}"`);
+  }
+}
+
+function isPathWithin(targetPath, baseDir) {
+  const resolvedTarget = path.resolve(targetPath);
+  const resolvedBase = path.resolve(baseDir);
+  return resolvedTarget === resolvedBase || resolvedTarget.startsWith(resolvedBase + path.sep);
+}
+
 function isAllowedAttachmentFile(filename) {
   const base = path.basename(String(filename || '')).trim();
   if (!base || base.startsWith('.')) return false;
@@ -492,14 +529,16 @@ function registerImageHostModule(app) {
       const year = sanitizeSegment(req.params.year);
       const month = sanitizeSegment(req.params.month);
       const filename = sanitizeSegment(req.params.filename);
-      if (!isValidYearSeg(year) || !isValidMonthSeg(month) || !filename) {
+      if (!isValidYearSeg(year) || !isValidMonthSeg(month) || !filename || !isAllowedAttachmentFile(filename)) {
         return res.status(404).send('Not Found');
       }
 
       const rawFilePath = findRawFile(year, month, filename);
-      if (!rawFilePath) {
+      if (!rawFilePath || !isPathWithin(rawFilePath, RAW_DIR)) {
         return res.status(404).send('Not Found');
       }
+
+      setSecurityFileHeaders(res, rawFilePath);
 
       const rawExt = path.extname(rawFilePath).toLowerCase();
       if (!PROCESSABLE_IMAGE_EXTS.has(rawExt)) {
@@ -536,14 +575,16 @@ function registerImageHostModule(app) {
       const year = sanitizeSegment(req.params.year);
       const month = sanitizeSegment(req.params.month);
       const filename = sanitizeSegment(req.params.filename);
-      if (!isValidYearSeg(year) || !isValidMonthSeg(month) || !filename) {
+      if (!isValidYearSeg(year) || !isValidMonthSeg(month) || !filename || !isAllowedAttachmentFile(filename)) {
         return res.status(404).send('Not Found');
       }
 
       const rawFilePath = findRawFile(year, month, filename, true);
-      if (!rawFilePath) {
+      if (!rawFilePath || !isPathWithin(rawFilePath, RAW_DIR)) {
         return res.status(404).send('Not Found');
       }
+
+      setSecurityFileHeaders(res, rawFilePath);
 
       const ext = path.extname(rawFilePath).toLowerCase();
       if (NEEDS_TRANSCODE_EXTS.has(ext) && req.query.download !== '1' && req.query.raw !== '1') {
@@ -577,8 +618,12 @@ function registerImageHostModule(app) {
     const filename = sanitizeSegment(req.body?.filename);
     const locked = Boolean(req.body?.locked);
 
-    if (!isValidYearSeg(year) || !isValidMonthSeg(month) || !filename) {
+    if (!isValidYearSeg(year) || !isValidMonthSeg(month) || !filename || !isAllowedAttachmentFile(filename)) {
       return res.status(400).json({ error: 'Invalid file path parameters' });
+    }
+    const rawFilePath = path.join(RAW_DIR, year, month, filename);
+    if (!isPathWithin(rawFilePath, RAW_DIR)) {
+      return res.status(403).json({ error: 'Access denied: path traversal attempt detected' });
     }
     if (year === 'protected' && !locked) {
       return res.status(400).json({ error: 'Files in protected/keep/ are permanently protected by default' });
@@ -599,20 +644,28 @@ function registerImageHostModule(app) {
     const month = sanitizeSegment(req.params.month);
     const filename = sanitizeSegment(req.params.filename);
 
+    if (!isValidYearSeg(year) || !isValidMonthSeg(month) || !filename || !isAllowedAttachmentFile(filename)) {
+      return res.status(400).json({ error: 'Invalid file path parameters' });
+    }
+
+    const rawFilePath = path.join(RAW_DIR, year, month, filename);
+    if (!isPathWithin(rawFilePath, RAW_DIR)) {
+      return res.status(403).json({ error: 'Access denied: path traversal attempt detected' });
+    }
+
     if (isItemLocked(year, month, filename)) {
       return res.status(403).json({
         error: `File "${filename}" is locked against deletion (or resides in protected directory). Unlock before deleting.`
       });
     }
 
-    const rawFilePath = path.join(RAW_DIR, year, month, filename);
     const baseName = path.parse(filename).name;
     const cacheFilePath = path.join(CACHE_DIR, year, month, `${baseName}.webp`);
     const rawPreviewCachePath = path.join(CACHE_DIR, year, month, `${baseName}.raw_preview.jpg`);
 
     if (fs.existsSync(rawFilePath)) fs.unlinkSync(rawFilePath);
-    if (fs.existsSync(cacheFilePath)) fs.unlinkSync(cacheFilePath);
-    if (fs.existsSync(rawPreviewCachePath)) fs.unlinkSync(rawPreviewCachePath);
+    if (isPathWithin(cacheFilePath, CACHE_DIR) && fs.existsSync(cacheFilePath)) fs.unlinkSync(cacheFilePath);
+    if (isPathWithin(rawPreviewCachePath, CACHE_DIR) && fs.existsSync(rawPreviewCachePath)) fs.unlinkSync(rawPreviewCachePath);
 
     res.json({ success: true });
   });
@@ -620,47 +673,6 @@ function registerImageHostModule(app) {
   app.post('/api/modules/image-host/cache/clear', requireApiOrAdmin, (req, res) => {
     clearCacheDir();
     res.json({ success: true, message: 'Watermark and WebP cache cleared successfully. Regenerates on next request.' });
-  });
-
-  // 5. Orphan asset scanning and cleanup (skips locked and protected folder files)
-  app.post('/api/modules/image-host/orphans', requireApiOrAdmin, (req, res) => {
-    const { referencedNames = [], action = 'scan' } = req.body || {};
-    const refSet = new Set(referencedNames.map((n) => String(n).trim()));
-
-    const cfg = getConfig();
-    const { images } = scanAllImages(cfg);
-    const orphans = images.filter((item) => !item.locked && !refSet.has(item.filename));
-
-    let cleanedCount = 0;
-    let cleanedBytes = 0;
-
-    if (action === 'clean') {
-      for (const item of orphans) {
-        if (item.locked) continue;
-        const rawFilePath = path.join(RAW_DIR, item.year, item.month, item.filename);
-        const baseName = path.parse(item.filename).name;
-        const cacheFilePath = path.join(CACHE_DIR, item.year, item.month, `${baseName}.webp`);
-        const rawPreviewCachePath = path.join(CACHE_DIR, item.year, item.month, `${baseName}.raw_preview.jpg`);
-        if (fs.existsSync(rawFilePath)) {
-          fs.unlinkSync(rawFilePath);
-          cleanedCount++;
-          cleanedBytes += item.size || 0;
-        }
-        if (fs.existsSync(cacheFilePath)) fs.unlinkSync(cacheFilePath);
-        if (fs.existsSync(rawPreviewCachePath)) fs.unlinkSync(rawPreviewCachePath);
-      }
-    }
-
-    const totalOrphanBytes = orphans.reduce((s, i) => s + (i.size || 0), 0);
-    res.json({
-      success: true,
-      action,
-      orphanCount: orphans.length,
-      orphanBytes: totalOrphanBytes,
-      cleanedCount,
-      cleanedBytes,
-      orphans
-    });
   });
 }
 

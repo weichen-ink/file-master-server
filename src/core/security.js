@@ -224,8 +224,10 @@ function requireApiOrAdmin(req, res, next) {
   const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : authHeader.trim();
   const token = bearerToken || req.headers['x-api-token'] || req.query.token;
 
-  if (cfg.api_token && token && token === cfg.api_token) {
-    return next();
+  if (cfg.api_token && typeof token === 'string' && token.length === cfg.api_token.length) {
+    if (crypto.timingSafeEqual(Buffer.from(token), Buffer.from(cfg.api_token))) {
+      return next();
+    }
   }
 
   recordLoginFailure(ip);

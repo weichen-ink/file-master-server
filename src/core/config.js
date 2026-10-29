@@ -1,5 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const crypto = require('node:crypto');
 const YAML = require('yaml');
 
 const ROOT_DIR = path.resolve(__dirname, '../..');
@@ -10,11 +11,70 @@ const STORAGE_DIR = path.join(ROOT_DIR, 'storage');
 let cachedConfig = null;
 let lastMtimeMs = 0;
 
+function ensureConfigExists() {
+  if (fs.existsSync(CONFIG_PATH)) return;
+
+  const examplePath = path.join(ROOT_DIR, 'config.example.yaml');
+  let template = '';
+  if (fs.existsSync(examplePath)) {
+    template = fs.readFileSync(examplePath, 'utf8');
+  } else {
+    template = `site_name: FileMaster Server
+port: 3000
+base_url: http://localhost:3000
+upstream_repo: https://github.com/weichen-ink/file-master-server.git
+upstream_branch: main
+admin_path: panel-change-me
+username: admin
+password: change-this-password
+max_login_attempts: 3
+totp_secret: ""
+api_token: ""
+image_host:
+  raw_secret_path: raw-change-me
+  webp_quality: 82
+  max_width: 1920
+  watermark_enable: true
+  watermark_type: image
+  watermark_pos: bottom-right
+  watermark_opacity: 0.65
+  watermark_scale: 0.16
+  watermark_margin: 24
+  watermark_min_width: 320
+  watermark_image: ./watermark.png
+  watermark_text: "© FileMaster"
+  watermark_color: "#ffffff"
+`;
+  }
+
+  const randAdminPath = 'panel-' + crypto.randomBytes(4).toString('hex');
+  const randPassword = crypto.randomBytes(8).toString('hex');
+  const randToken = 'fm_' + crypto.randomBytes(16).toString('hex');
+  const randRawSecret = 'raw-' + crypto.randomBytes(4).toString('hex');
+
+  let generated = template
+    .replace(/admin_path:\s*['"]?[^\r\n]*['"]?/, `admin_path: ${randAdminPath}`)
+    .replace(/password:\s*['"]?[^\r\n]*['"]?/, `password: "${randPassword}"`)
+    .replace(/api_token:\s*['"]?[^\r\n]*['"]?/, `api_token: "${randToken}"`)
+    .replace(/raw_secret_path:\s*['"]?[^\r\n]*['"]?/, `raw_secret_path: ${randRawSecret}`);
+
+  fs.writeFileSync(CONFIG_PATH, generated, 'utf8');
+  console.log('---------------------------------------------------------');
+  console.log('⚡ [Security Setup] Generated config.yaml with fresh credentials:');
+  console.log(`   Admin Console: /${randAdminPath}`);
+  console.log(`   Username:      admin`);
+  console.log(`   Password:      ${randPassword}`);
+  console.log(`   API Token:     ${randToken}`);
+  console.log(`   Raw Secret:    /${randRawSecret}`);
+  console.log('---------------------------------------------------------');
+}
+
 /**
  * Dynamically loads and caches config.yaml from the root directory.
  * Reloads automatically when the file mtime changes to support hot updates.
  */
 function getConfig() {
+  ensureConfigExists();
   try {
     const stat = fs.statSync(CONFIG_PATH);
     if (!cachedConfig || stat.mtimeMs !== lastMtimeMs) {

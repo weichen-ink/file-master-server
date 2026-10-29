@@ -15,6 +15,10 @@ storage/raw/*
 storage/cache/*
 !storage/cache/.gitkeep
 
+# Configuration (keep example committed, ignore local secrets)
+config.yaml
+!config.example.yaml
+
 # System & OS files
 .DS_Store
 Thumbs.db

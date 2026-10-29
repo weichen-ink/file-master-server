@@ -40,15 +40,17 @@ app.get('/api/platform/status', (req, res) => {
     authenticated,
     username: authenticated ? cfg.username : null,
     totpEnabled: Boolean(cfg.totp_secret),
-    endpoints: {
-      port: cfg.port,
-      baseUrl: cfg.base_url,
-      uploadUrl: `${cfg.base_url}/api/image/upload`,
-      localUploadUrl: `http://127.0.0.1:${cfg.port}/api/image/upload`,
-      apiToken: cfg.api_token,
-      rawSecretPath: cfg.image_host.raw_secret_path,
-      adminPath: cfg.admin_path
-    }
+    endpoints: authenticated
+      ? {
+          port: cfg.port,
+          baseUrl: cfg.base_url,
+          uploadUrl: `${cfg.base_url}/api/image/upload`,
+          localUploadUrl: `http://127.0.0.1:${cfg.port}/api/image/upload`,
+          apiToken: cfg.api_token,
+          rawSecretPath: cfg.image_host.raw_secret_path,
+          adminPath: cfg.admin_path
+        }
+      : null
   });
 });
 
