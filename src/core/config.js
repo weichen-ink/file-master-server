@@ -38,6 +38,7 @@ totp_secret: ""
 api_token: ""
 image_host:
   raw_secret_path: raw
+  pub_secret_path: pub
   enable_optimization: true
   webp_quality: 82
   max_width: 1920
@@ -75,7 +76,8 @@ function normalizeParsedConfig(parsed, needsSetup = false) {
     totp_secret: String(parsed.totp_secret || '').trim(),
     api_token: String(parsed.api_token || ''),
     image_host: {
-      raw_secret_path: 'raw',
+      raw_secret_path: String(img.raw_secret_path || 'raw').trim().replace(/^\/+|\/+$/g, '') || 'raw',
+      pub_secret_path: String(img.pub_secret_path || 'pub').trim().replace(/^\/+|\/+$/g, '') || 'pub',
       enable_optimization: true,
       webp_quality: 82,
       max_width: 1920,
@@ -123,6 +125,8 @@ function initializeConfigFromSetup(setupData = {}) {
     String(setupData.api_token || '').trim() || 'fm_' + crypto.randomBytes(16).toString('hex');
   const rawPath =
     String(setupData.raw_secret_path || 'raw').trim().replace(/^\/+|\/+$/g, '') || 'raw';
+  const pubPath =
+    String(setupData.pub_secret_path || 'pub').trim().replace(/^\/+|\/+$/g, '') || 'pub';
   const enableOptimization = setupData.enable_optimization !== false && setupData.enable_optimization !== 'false';
   const webpQuality = Number(setupData.webp_quality) || 82;
   const maxWidth = setupData.max_width !== undefined ? Number(setupData.max_width) : 1920;
@@ -137,6 +141,7 @@ function initializeConfigFromSetup(setupData = {}) {
   doc.set('api_token', apiToken);
 
   doc.setIn(['image_host', 'raw_secret_path'], rawPath);
+  doc.setIn(['image_host', 'pub_secret_path'], pubPath);
   doc.setIn(['image_host', 'enable_optimization'], enableOptimization);
   doc.setIn(['image_host', 'webp_quality'], webpQuality);
   doc.setIn(['image_host', 'max_width'], maxWidth);
@@ -253,6 +258,7 @@ function updateConfigPreservingComments(patch) {
   if (patch.image_host && typeof patch.image_host === 'object') {
     const imgKeys = [
       'raw_secret_path',
+      'pub_secret_path',
       'enable_optimization',
       'webp_quality',
       'max_width',

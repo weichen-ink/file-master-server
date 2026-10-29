@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>FileMaster Server Console</title>
-  <link rel="stylesheet" href="/assets/console.css" />
+  <link rel="stylesheet" href="/assets/console.css?v=2.2" />
 </head>
 <body>
 
@@ -292,6 +292,10 @@
             <div class="form-group">
               <label data-i18n="lblRawSecretPath">原始文件访问路径前缀</label>
               <input type="text" id="f_raw_secret_path" class="form-input" placeholder="raw" />
+            </div>
+            <div class="form-group">
+              <label data-i18n="lblPubSecretPath">优化图片访问路径前缀 (WebP)</label>
+              <input type="text" id="f_pub_secret_path" class="form-input" placeholder="pub" />
             </div>
             <div style="margin-top: 20px; display:flex; justify-content:flex-end;">
               <button class="btn btn-primary" onclick="saveConfigForm()" data-i18n="btnSaveConfig">💾 保存配置</button>
@@ -584,7 +588,7 @@
 
   <div id="toast" class="toast hidden"></div>
 
-  <script src="/assets/i18n.js"></script>
-  <script src="/assets/console.js"></script>
+  <script src="/assets/i18n.js?v=2.2"></script>
+  <script src="/assets/console.js?v=2.2"></script>
 </body>
 </html>

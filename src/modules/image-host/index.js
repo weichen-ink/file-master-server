@@ -407,6 +407,7 @@ function scanAllImages(cfg, forceRefresh = false) {
           ? `${year}/${month}/${readableBaseUrlSeg}.webp`
           : relPath;
         const rawSecret = cfg.image_host.raw_secret_path;
+        const pubSecret = cfg.image_host.pub_secret_path || 'pub';
         const sha256 = getFileSha256(fullRawPath, stat);
         if (updateShaIndex(sha256, { year, month, filename: file }, false)) {
           shaIndexDirty = true;
@@ -430,9 +431,9 @@ function scanAllImages(cfg, forceRefresh = false) {
           hasCache,
           createdAt: stat.birthtimeMs || stat.mtimeMs,
           rawUrl: `${cfg.base_url}/${rawSecret}/${relPath}`,
-          pubUrl: `${cfg.base_url}/pub/${pubRelPath}`,
+          pubUrl: `${cfg.base_url}/${pubSecret}/${pubRelPath}`,
           rawPreviewPath: `/${rawSecret}/${relPath}`,
-          pubPreviewPath: `/pub/${pubRelPath}`
+          pubPreviewPath: `/${pubSecret}/${pubRelPath}`
         });
       }
     }
@@ -647,10 +648,11 @@ function registerImageHostModule(app) {
       const readableFile = formatReadableUrlSegment(filename);
       const readableBase = formatReadableUrlSegment(baseName);
       const optimizationEnabled = cfg.image_host?.enable_optimization !== false;
+      const pubSecret = cfg.image_host?.pub_secret_path || 'pub';
       const rawUrl = `${cfg.base_url}/${rawSecret}/${year}/${month}/${readableFile}`;
       const pubUrl = isProcessableImage
-        ? `${cfg.base_url}/pub/${year}/${month}/${readableBase}.webp`
-        : `${cfg.base_url}/pub/${year}/${month}/${readableFile}`;
+        ? `${cfg.base_url}/${pubSecret}/${year}/${month}/${readableBase}.webp`
+        : `${cfg.base_url}/${pubSecret}/${year}/${month}/${readableFile}`;
 
       const cleanTitle = path.basename(safeOrigName, origExt);
       const markdown =
@@ -709,10 +711,11 @@ function registerImageHostModule(app) {
       const readableFile = formatReadableUrlSegment(match.filename);
       const readableBase = formatReadableUrlSegment(baseName);
       const optimizationEnabled = cfg.image_host?.enable_optimization !== false;
+      const pubSecret = cfg.image_host?.pub_secret_path || 'pub';
       const rawUrl = `${cfg.base_url}/${rawSecret}/${match.year}/${match.month}/${readableFile}`;
       const pubUrl = isProcessableImage
-        ? `${cfg.base_url}/pub/${match.year}/${match.month}/${readableBase}.webp`
-        : `${cfg.base_url}/pub/${match.year}/${match.month}/${readableFile}`;
+        ? `${cfg.base_url}/${pubSecret}/${match.year}/${match.month}/${readableBase}.webp`
+        : `${cfg.base_url}/${pubSecret}/${match.year}/${match.month}/${readableFile}`;
 
       const cleanTitle = path.basename(match.filename, origExt);
       const markdown =
@@ -778,11 +781,16 @@ function registerImageHostModule(app) {
     }
   });
 
-  // 2. Public route: GET /pub/:year/:month/:filename
+  // 2. Public / Optimized route: GET /:pubSecretPath/:year/:month/:filename
   // (Images processed with sharp WebP compression + watermark; documents/media streamed directly)
-  app.get('/pub/:year/:month/:filename', async (req, res) => {
+  const handleOptimizedPublicRequest = async (req, res, next) => {
     try {
       const cfg = getConfig();
+      const pubSecret = cfg.image_host?.pub_secret_path || 'pub';
+      if (req.params.pubSecretPath && req.params.pubSecretPath !== pubSecret && req.params.pubSecretPath !== 'pub') {
+        if (typeof next === 'function') return next();
+        return res.status(404).send('Not Found');
+      }
       if (cfg.image_host?.enable_optimization === false) {
         return res.status(404).send('Image optimization is disabled');
       }
@@ -810,7 +818,6 @@ function registerImageHostModule(app) {
       const cacheFilePath = path.join(CACHE_DIR, year, month, `${baseName}.webp`);
 
       if (!fs.existsSync(cacheFilePath)) {
-        const cfg = getConfig();
         await processAndCacheImage(rawFilePath, cacheFilePath, cfg.image_host);
         invalidateScanCache();
       }
@@ -822,7 +829,10 @@ function registerImageHostModule(app) {
       console.error('[FileMaster] Failed to serve public file:', err);
       return res.status(500).send('File Processing Error');
     }
-  });
+  };
+
+  app.get('/pub/:year/:month/:filename', handleOptimizedPublicRequest);
+  app.get('/:pubSecretPath/:year/:month/:filename', handleOptimizedPublicRequest);
 
   // 3. Raw file access via secret path: GET /:rawSecretPath/:year/:month/:filename
   // (Auto-transcodes .heic/.heif/.tiff to JPEG for <img> preview unless ?download=1 is set)

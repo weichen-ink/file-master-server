@@ -115,6 +115,7 @@ app.get('/api/platform/status', (req, res) => {
           localUploadUrl: `http://127.0.0.1:${cfg.port}/api/image/upload`,
           apiToken: cfg.api_token,
           rawSecretPath: cfg.image_host.raw_secret_path,
+          pubSecretPath: cfg.image_host.pub_secret_path || 'pub',
           adminPath: cfg.admin_path
         }
       : null
@@ -136,6 +137,7 @@ app.get('/api/platform/setup-defaults', (req, res) => {
     suggested_password: crypto.randomBytes(6).toString('hex'),
     suggested_api_token: 'fm_' + crypto.randomBytes(16).toString('hex'),
     raw_secret_path: cfg.image_host?.raw_secret_path || 'raw',
+    pub_secret_path: cfg.image_host?.pub_secret_path || 'pub',
     enable_optimization: cfg.image_host?.enable_optimization !== false,
     webp_quality: cfg.image_host?.webp_quality ?? 82,
     max_width: cfg.image_host?.max_width ?? 1920,
@@ -487,7 +489,7 @@ function startServer(port, retriesLeft = 6) {
       console.log(`🔒 Admin Console: ${cfg.base_url}/${cfg.admin_path}`);
       console.log(`🖼️ Raw Original Route: ${cfg.base_url}/${cfg.image_host.raw_secret_path}/YYYY/MM/filename.ext`);
       if (cfg.image_host.enable_optimization !== false) {
-        console.log(`⚡ Optimized WebP Route: ${cfg.base_url}/pub/YYYY/MM/filename.webp`);
+        console.log(`⚡ Optimized WebP Route: ${cfg.base_url}/${cfg.image_host.pub_secret_path || 'pub'}/YYYY/MM/filename.webp`);
       }
     }
   });

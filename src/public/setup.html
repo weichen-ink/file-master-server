@@ -255,6 +255,11 @@
             <input type="text" id="s_raw_path" class="form-input" value="raw" required />
             <div class="hint">如 <code style="color:#93c5fd;">/raw/2026/10/a.png</code></div>
           </div>
+          <div class="form-group">
+            <label>优化图片路径前缀 (pub)</label>
+            <input type="text" id="s_pub_path" class="form-input" value="pub" required />
+            <div class="hint">如 <code style="color:#10b981;">/pub/2026/10/a.webp</code></div>
+          </div>
           <div class="form-group" id="grp_webp_quality">
             <label>优化图 WebP 质量 (1-100)</label>
             <input type="number" id="s_webp_quality" class="form-input" value="82" min="10" max="100" />
@@ -334,6 +339,7 @@
           if (d.suggested_password) document.getElementById('s_password').value = d.suggested_password;
           if (d.suggested_api_token) document.getElementById('s_api_token').value = d.suggested_api_token;
           if (d.raw_secret_path) document.getElementById('s_raw_path').value = d.raw_secret_path;
+          if (d.pub_secret_path) document.getElementById('s_pub_path').value = d.pub_secret_path;
           if (d.enable_optimization !== undefined) {
             document.getElementById('s_enable_optimization').checked = Boolean(d.enable_optimization);
             toggleOptFields();
@@ -367,6 +373,7 @@
         password,
         api_token: document.getElementById('s_api_token').value.trim(),
         raw_secret_path: document.getElementById('s_raw_path').value.trim(),
+        pub_secret_path: document.getElementById('s_pub_path').value.trim(),
         enable_optimization: document.getElementById('s_enable_optimization').checked,
         webp_quality: Number(document.getElementById('s_webp_quality').value) || 82,
         max_width: Number(document.getElementById('s_max_width').value) || 1920,

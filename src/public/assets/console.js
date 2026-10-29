@@ -270,6 +270,7 @@ function fillConfigForm(cfg, rawYaml) {
 
   const img = cfg.image_host || {};
   document.getElementById('f_raw_secret_path').value = img.raw_secret_path || 'raw';
+  document.getElementById('f_pub_secret_path').value = img.pub_secret_path || 'pub';
   document.getElementById('f_enable_optimization').value = String(img.enable_optimization !== false);
   document.getElementById('f_webp_quality').value = img.webp_quality ?? 82;
   document.getElementById('f_max_width').value = img.max_width ?? 1920;
@@ -301,6 +302,7 @@ async function saveConfigForm() {
     totp_secret: document.getElementById('f_totp_secret').value.trim(),
     image_host: {
       raw_secret_path: document.getElementById('f_raw_secret_path').value.trim().replace(/^\/+|\/+$/g, '') || 'raw',
+      pub_secret_path: document.getElementById('f_pub_secret_path').value.trim().replace(/^\/+|\/+$/g, '') || 'pub',
       enable_optimization: document.getElementById('f_enable_optimization').value === 'true',
       webp_quality: Number(document.getElementById('f_webp_quality').value) || 82,
       max_width: Number(document.getElementById('f_max_width').value) || 0,
