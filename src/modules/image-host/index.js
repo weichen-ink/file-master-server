@@ -230,6 +230,30 @@ function sanitizeUploadFilename(seg) {
 
 // In-memory SHA-256 cache to avoid recalculating hashes on repeated list requests
 const sha256Cache = new Map();
+let shaIndex = null;
+
+function getShaIndex() {
+  if (!shaIndex) {
+    shaIndex = readJsonData('sha_index', {});
+  }
+  return shaIndex;
+}
+
+function updateShaIndex(sha256, info) {
+  if (!sha256 || !info) return;
+  const idx = getShaIndex();
+  idx[sha256] = info;
+  writeJsonData('sha_index', idx);
+}
+
+function removeShaIndex(sha256) {
+  if (!sha256) return;
+  const idx = getShaIndex();
+  if (idx[sha256]) {
+    delete idx[sha256];
+    writeJsonData('sha_index', idx);
+  }
+}
 
 function getFileSha256(fullPath, stat) {
   const cacheKey = `${fullPath}:${stat.size}:${stat.mtimeMs}`;
@@ -243,27 +267,18 @@ function getFileSha256(fullPath, stat) {
 }
 
 /**
- * Checks whether an existing remote file matches the target SHA-256 hash.
+ * Checks whether an existing remote file matches the target SHA-256 hash using index cache.
  */
 function findExistingBySha256(targetSha256) {
-  ensureDirs();
-  const years = fs.readdirSync(RAW_DIR).filter((d) => isValidYearSeg(d));
-  for (const year of years) {
-    const yearPath = path.join(RAW_DIR, year);
-    if (!fs.statSync(yearPath).isDirectory()) continue;
-    const months = fs.readdirSync(yearPath).filter((m) => isValidMonthSeg(m));
-    for (const month of months) {
-      const monthPath = path.join(yearPath, month);
-      if (!fs.statSync(monthPath).isDirectory()) continue;
-      const files = fs.readdirSync(monthPath);
-      for (const file of files) {
-        if (!isAllowedAttachmentFile(file)) continue;
-        const fullPath = path.join(monthPath, file);
-        const stat = fs.statSync(fullPath);
-        if (getFileSha256(fullPath, stat) === targetSha256) {
-          return { year, month, filename: file };
-        }
-      }
+  const idx = getShaIndex();
+  const entry = idx[targetSha256];
+  if (entry && entry.year && entry.month && entry.filename) {
+    const fullPath = path.join(RAW_DIR, entry.year, entry.month, entry.filename);
+    if (fs.existsSync(fullPath)) {
+      return entry;
+    } else {
+      delete idx[targetSha256];
+      writeJsonData('sha_index', idx);
     }
   }
   return null;
@@ -355,6 +370,7 @@ function scanAllImages(cfg) {
           : relPath;
         const rawSecret = cfg.image_host.raw_secret_path;
         const sha256 = getFileSha256(fullRawPath, stat);
+        updateShaIndex(sha256, { year, month, filename: file });
         const locked = isItemLocked(year, month, file, protectedMap);
         const inProtectedFolder = year === 'protected';
 
@@ -448,9 +464,9 @@ function registerImageHostModule(app) {
         req.query?.protected === '1';
 
       const now = new Date();
-      const year = useProtectedFolder ? 'protected' : String(now.getFullYear());
-      const month = useProtectedFolder ? 'keep' : String(now.getMonth() + 1).padStart(2, '0');
-      const targetDir = path.join(RAW_DIR, year, month);
+      let year = useProtectedFolder ? 'protected' : String(now.getFullYear());
+      let month = useProtectedFolder ? 'keep' : String(now.getMonth() + 1).padStart(2, '0');
+      let targetDir = path.join(RAW_DIR, year, month);
       fs.mkdirSync(targetDir, { recursive: true });
 
       const desiredBase = path.basename(safeOrigName, origExt) || `${year}${month}`;
@@ -458,12 +474,21 @@ function registerImageHostModule(app) {
       let destPath = path.join(targetDir, filename);
       let deduplicated = false;
 
-      if (fs.existsSync(destPath)) {
+      // 1. Cross-month global deduplication by content SHA-256
+      const existingMatch = findExistingBySha256(fullSha256);
+      if (existingMatch) {
+        year = existingMatch.year;
+        month = existingMatch.month;
+        filename = existingMatch.filename;
+        destPath = path.join(RAW_DIR, year, month, filename);
+        deduplicated = true;
+      } else if (fs.existsSync(destPath)) {
         const existStat = fs.statSync(destPath);
         const existSha = getFileSha256(destPath, existStat);
         if (existSha === fullSha256) {
           // Identical name and content: reuse existing file
           deduplicated = true;
+          updateShaIndex(fullSha256, { year, month, filename });
         } else {
           // Same name but different content: append 8-char SHA to avoid overwriting
           filename = `${desiredBase}_${hash8}${origExt}`;
@@ -473,9 +498,11 @@ function registerImageHostModule(app) {
           } else {
             deduplicated = true;
           }
+          updateShaIndex(fullSha256, { year, month, filename });
         }
       } else {
         fs.writeFileSync(destPath, fileObj.buffer);
+        updateShaIndex(fullSha256, { year, month, filename });
       }
 
       const cfg = getConfig();
@@ -663,7 +690,14 @@ function registerImageHostModule(app) {
     const cacheFilePath = path.join(CACHE_DIR, year, month, `${baseName}.webp`);
     const rawPreviewCachePath = path.join(CACHE_DIR, year, month, `${baseName}.raw_preview.jpg`);
 
-    if (fs.existsSync(rawFilePath)) fs.unlinkSync(rawFilePath);
+    if (fs.existsSync(rawFilePath)) {
+      try {
+        const stat = fs.statSync(rawFilePath);
+        const sha = getFileSha256(rawFilePath, stat);
+        removeShaIndex(sha);
+      } catch {}
+      fs.unlinkSync(rawFilePath);
+    }
     if (isPathWithin(cacheFilePath, CACHE_DIR) && fs.existsSync(cacheFilePath)) fs.unlinkSync(cacheFilePath);
     if (isPathWithin(rawPreviewCachePath, CACHE_DIR) && fs.existsSync(rawPreviewCachePath)) fs.unlinkSync(rawPreviewCachePath);
 
