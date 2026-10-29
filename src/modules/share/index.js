@@ -190,3 +190,4 @@ module.exports = {
   createShareRecord,
   getSharesMap
 };
+

@@ -430,6 +430,8 @@ registerShareModule(app);
 // Additional modules (Countdowns, File Share, etc.) can be mounted here
 
 // ================= 3. Setup Wizard & Admin Console Routing =================
+app.use('/assets', express.static(path.join(__dirname, 'public/assets'), { maxAge: '1h' }));
+
 app.get('/setup', (req, res) => {
   if (!isConfigInitialized()) {
     return res.sendFile(path.join(__dirname, 'public/setup.html'));
