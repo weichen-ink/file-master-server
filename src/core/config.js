@@ -7,6 +7,8 @@ const ROOT_DIR = path.resolve(__dirname, '../..');
 const CONFIG_PATH = path.join(ROOT_DIR, 'config.yaml');
 const DATA_DIR = path.join(ROOT_DIR, 'data');
 const STORAGE_DIR = path.join(ROOT_DIR, 'storage');
+const TRASH_DIR = path.join(STORAGE_DIR, 'trash');
+const UPLOAD_TMP_DIR = path.join(STORAGE_DIR, 'tmp');
 
 let cachedConfig = null;
 let lastMtimeMs = 0;
@@ -234,6 +236,8 @@ module.exports = {
   CONFIG_PATH,
   DATA_DIR,
   STORAGE_DIR,
+  TRASH_DIR,
+  UPLOAD_TMP_DIR,
   getConfig,
   getRawConfigYaml,
   saveRawConfigYaml,

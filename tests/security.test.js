@@ -72,3 +72,4 @@ test('Config: GET /api/platform/config desensitizes password and credentials', a
   const cfg = getConfig();
   assert.ok(cfg.port > 0, 'Config port should be defined');
 });
+

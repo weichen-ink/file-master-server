@@ -2,8 +2,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const multer = require('multer');
-const { STORAGE_DIR, ROOT_DIR, getConfig, readJsonData, writeJsonData } = require('../../core/config');
-const { requireAdmin, requireApiOrAdmin } = require('../../core/security');
+const { STORAGE_DIR, ROOT_DIR, TRASH_DIR, UPLOAD_TMP_DIR, getConfig, readJsonData, writeJsonData } = require('../../core/config');
+const { requireAdmin, requireApiOrAdmin, getClientIp } = require('../../core/security');
+const { appendAuditLog } = require('../../core/audit');
 const {
   NEEDS_TRANSCODE_EXTS,
   ensureTranscodedPreviewJpeg,
@@ -203,11 +204,24 @@ function ensureDirs() {
   fs.mkdirSync(RAW_DIR, { recursive: true });
   fs.mkdirSync(path.join(RAW_DIR, 'protected', 'keep'), { recursive: true });
   fs.mkdirSync(CACHE_DIR, { recursive: true });
+  fs.mkdirSync(TRASH_DIR, { recursive: true });
+  fs.mkdirSync(UPLOAD_TMP_DIR, { recursive: true });
 }
 
-// Multer upload handler (up to 100MB per file for PDFs, videos, and high-res media)
+// Multer disk-backed streaming upload handler (avoids memory exhaustion on large files)
+const uploadStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    ensureDirs();
+    cb(null, UPLOAD_TMP_DIR);
+  },
+  filename: (req, file, cb) => {
+    const rand = crypto.randomBytes(12).toString('hex');
+    cb(null, `upload_${Date.now()}_${rand}.tmp`);
+  }
+});
+
 const upload = multer({
-  storage: multer.memoryStorage(),
+  storage: uploadStorage,
   limits: { fileSize: 100 * 1024 * 1024 }
 });
 
@@ -471,11 +485,13 @@ function registerImageHostModule(app) {
 
   // 1. Unified attachment upload endpoint (supports custom naming, SHA-256 calculation, and protected/keep storage)
   const handleUpload = (req, res) => {
+    let tmpPath = null;
     try {
       const fileObj = req.file || (req.files && req.files[0]);
-      if (!fileObj || !fileObj.buffer) {
+      if (!fileObj || (!fileObj.buffer && !fileObj.path)) {
         return res.status(400).json({ error: 'No file detected in upload (field name must be "file")' });
       }
+      tmpPath = fileObj.path || null;
 
       // Read filename from headers['x-file-name'] if provided; fix Multer latin1 encoding to utf8
       let rawOrigName = 'file.png';
@@ -496,10 +512,18 @@ function registerImageHostModule(app) {
       const safeOrigName = sanitizeUploadFilename(rawOrigName) || 'file.png';
       const origExt = path.extname(safeOrigName).toLowerCase() || '.png';
       if (!isAllowedAttachmentFile(safeOrigName)) {
+        if (tmpPath && fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
         return res.status(400).json({ error: `Invalid attachment filename: ${safeOrigName}` });
       }
 
-      const fullSha256 = crypto.createHash('sha256').update(fileObj.buffer).digest('hex');
+      // Compute SHA-256 using streaming from disk or buffer
+      let fullSha256;
+      if (fileObj.buffer) {
+        fullSha256 = crypto.createHash('sha256').update(fileObj.buffer).digest('hex');
+      } else {
+        const fileBytes = fs.readFileSync(fileObj.path);
+        fullSha256 = crypto.createHash('sha256').update(fileBytes).digest('hex');
+      }
       const hash8 = fullSha256.slice(0, 8);
 
       const useProtectedFolder =
@@ -517,6 +541,15 @@ function registerImageHostModule(app) {
       let filename = `${desiredBase}${origExt}`;
       let destPath = path.join(targetDir, filename);
       let deduplicated = false;
+
+      // Helper to persist file content from buffer or temp path
+      const persistUpload = (target) => {
+        if (fileObj.buffer) {
+          fs.writeFileSync(target, fileObj.buffer);
+        } else if (fileObj.path && fs.existsSync(fileObj.path)) {
+          fs.copyFileSync(fileObj.path, target);
+        }
+      };
 
       // 1. Cross-month global deduplication by content SHA-256
       const existingMatch = findExistingBySha256(fullSha256);
@@ -538,15 +571,20 @@ function registerImageHostModule(app) {
           filename = `${desiredBase}_${hash8}${origExt}`;
           destPath = path.join(targetDir, filename);
           if (!fs.existsSync(destPath)) {
-            fs.writeFileSync(destPath, fileObj.buffer);
+            persistUpload(destPath);
           } else {
             deduplicated = true;
           }
           updateShaIndex(fullSha256, { year, month, filename });
         }
       } else {
-        fs.writeFileSync(destPath, fileObj.buffer);
+        persistUpload(destPath);
         updateShaIndex(fullSha256, { year, month, filename });
+      }
+
+      // Clean up temporary upload file if disk storage was used
+      if (tmpPath && fs.existsSync(tmpPath)) {
+        try { fs.unlinkSync(tmpPath); } catch {}
       }
 
       const cfg = getConfig();
@@ -554,6 +592,17 @@ function registerImageHostModule(app) {
       const isProcessableImage = PROCESSABLE_IMAGE_EXTS.has(origExt);
       const category = getFileCategory(origExt);
       const baseName = path.parse(filename).name;
+
+      appendAuditLog({
+        action: 'upload',
+        ip: getClientIp(req),
+        year,
+        month,
+        filename,
+        size: fs.existsSync(destPath) ? fs.statSync(destPath).size : 0,
+        deduplicated,
+        sha256: fullSha256
+      });
 
       // Preserve Unicode and CJK filename characters in readable URL format
       const readableFile = formatReadableUrlSegment(filename);
@@ -701,6 +750,13 @@ function registerImageHostModule(app) {
     }
 
     const finalLocked = setItemLockState(year, month, filename, locked);
+    appendAuditLog({
+      action: locked ? 'lock' : 'unlock',
+      ip: getClientIp(req),
+      year,
+      month,
+      filename
+    });
     return res.json({
       success: true,
       year,
@@ -734,18 +790,41 @@ function registerImageHostModule(app) {
     const cacheFilePath = path.join(CACHE_DIR, year, month, `${baseName}.webp`);
     const rawPreviewCachePath = path.join(CACHE_DIR, year, month, `${baseName}.raw_preview.jpg`);
 
+    let deletedSize = 0;
+    let deletedSha = null;
+
     if (fs.existsSync(rawFilePath)) {
       try {
         const stat = fs.statSync(rawFilePath);
-        const sha = getFileSha256(rawFilePath, stat);
-        removeShaIndex(sha);
-      } catch {}
-      fs.unlinkSync(rawFilePath);
+        deletedSize = stat.size;
+        deletedSha = getFileSha256(rawFilePath, stat);
+        removeShaIndex(deletedSha);
+
+        // Move to storage/trash/ instead of permanent unrecoverable deletion
+        const trashDay = new Date().toISOString().slice(0, 10);
+        const trashTargetDir = path.join(TRASH_DIR, trashDay, year, month);
+        fs.mkdirSync(trashTargetDir, { recursive: true });
+        const trashTarget = path.join(trashTargetDir, filename);
+        fs.renameSync(rawFilePath, trashTarget);
+      } catch (err) {
+        // Fallback to unlinkSync if rename failed across filesystem boundaries
+        if (fs.existsSync(rawFilePath)) fs.unlinkSync(rawFilePath);
+      }
     }
     if (isPathWithin(cacheFilePath, CACHE_DIR) && fs.existsSync(cacheFilePath)) fs.unlinkSync(cacheFilePath);
     if (isPathWithin(rawPreviewCachePath, CACHE_DIR) && fs.existsSync(rawPreviewCachePath)) fs.unlinkSync(rawPreviewCachePath);
 
-    res.json({ success: true });
+    appendAuditLog({
+      action: 'delete_to_trash',
+      ip: getClientIp(req),
+      year,
+      month,
+      filename,
+      size: deletedSize,
+      sha256: deletedSha
+    });
+
+    res.json({ success: true, movedToTrash: true });
   });
 
   app.post('/api/modules/image-host/cache/clear', requireApiOrAdmin, (req, res) => {

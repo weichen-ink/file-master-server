@@ -27,6 +27,7 @@ const {
   performHotUpdate,
   restartServerProcess
 } = require('./core/updater');
+const { appendAuditLog } = require('./core/audit');
 const { registerImageHostModule } = require('./modules/image-host');
 
 let httpServer = null;
@@ -39,6 +40,33 @@ if (initCfg.trust_proxy !== false) {
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Global Security Response Headers
+app.use((req, res, next) => {
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  next();
+});
+
+// CSRF Defense for state-changing administrative requests
+app.use((req, res, next) => {
+  const method = req.method.toUpperCase();
+  if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
+    const origin = req.headers.origin;
+    const host = req.headers.host;
+    if (origin && host) {
+      try {
+        const originHost = new URL(origin).host;
+        if (originHost !== host) {
+          return res.status(403).json({ error: 'CSRF validation failed: Origin mismatch' });
+        }
+      } catch {}
+    }
+  }
+  next();
+});
 
 // ================= 1. Platform Authentication and Status APIs =================
 // Public version contract for client plugin compatibility checks
@@ -191,6 +219,13 @@ app.put('/api/platform/config', requireAdmin, (req, res) => {
       hasPassword: Boolean(updatedCfg.password),
       hasTotp: Boolean(updatedCfg.totp_secret)
     };
+
+    appendAuditLog({
+      action: 'config_update',
+      ip: getClientIp(req),
+      mode,
+      adminPathChanged: oldAdminPath !== updatedCfg.admin_path
+    });
 
     res.json({
       success: true,
