@@ -1,0 +1,58 @@
+# =====================================================================
+# FileMaster Server - Global and Module Configuration
+# =====================================================================
+
+# ----------------- 1. Core Settings -----------------
+site_name: FileMaster Server
+port: 3000
+base_url: http://localhost:3000
+
+# Reverse proxy trust setting (e.g. loopback, 127.0.0.1, or false if directly exposed)
+trust_proxy: loopback
+
+# Upstream Git repository for one-click hot updates & automatic restarts
+# Hot update capability: true | false (default: true)
+hot_update: true
+# Official upstream repository is locked to https://github.com/weichen-ink/file-master-server.git
+# Optional GitHub acceleration mirror prefix (e.g. "https://ghproxy.net/" or leave "" for direct GitHub connection)
+upstream_mirror: ""
+upstream_branch: main
+
+# ----------------- 2. Unified Security & Authentication -----------------
+# Admin console entry path (e.g. /admin)
+admin_path: admin
+
+# Administrator credentials (initialized via web setup wizard on first launch)
+username: admin
+password: ""
+
+# Brute-force protection: IP is banned for 24h after exceeding failed attempts
+max_login_attempts: 3
+
+# Optional TOTP 2FA secret (leave empty "" to disable 2FA)
+totp_secret: ""
+
+# Global API token for FileMaster plugin, PicList, scripts, and CLI tools
+api_token: ""
+
+# =====================================================================
+# Module Configuration
+# =====================================================================
+
+# ----------------- [Module 1: Image Host] -----------------
+image_host:
+  raw_secret_path: raw # Path prefix for accessing original lossless files (/raw/YYYY/MM/file.ext)
+  enable_optimization: true # Enable automatic image optimization (/pub/YYYY/MM/file.webp): true | false
+  webp_quality: 82 # WebP compression quality for optimized files (/pub/*, 1-100)
+  max_width: 1920 # Maximum width constraint for optimized images (0 for unlimited)
+  watermark_enable: true # Enable dynamic watermarking: true | false
+  watermark_type: image # Mode: image (PNG) | text (rendered text) | tile (repeating diagonal)
+  watermark_pos: bottom-right # Position: bottom-right | bottom-left | top-right | top-left | center
+  watermark_opacity: 0.65 # Watermark opacity (0.1 - 1.0)
+  watermark_scale: 0.16 # Watermark width relative to target image (0.16 = 16%)
+  watermark_margin: 24 # Margin padding in pixels
+  watermark_min_width: 320 # Skip watermarking if image width is smaller than this value
+  watermark_image: ./watermark.png
+  watermark_text: "© FileMaster"
+  watermark_color: "#ffffff"
+

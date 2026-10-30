@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+
+# Runtime data & backups
+data/*.json
+data/*.tmp
+!data/.gitkeep
+backups/*
+
+# Storage binaries & caches
+storage/raw/*
+!storage/raw/.gitkeep
+storage/cache/*
+!storage/cache/.gitkeep
+
+# Configuration (keep example committed, ignore local secrets)
+config.yaml
+!config.example.yaml
+
+# System & OS files
+.DS_Store
+Thumbs.db
+*.log

@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FileMaster Server</title>
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --panel: #111827;
+      --panel-alt: #1e293b;
+      --border: #334155;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --success: #10b981;
+      --danger: #ef4444;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: radial-gradient(circle at top, #1e293b 0%, #0b0f19 70%);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 32px 16px;
+    }
+    .setup-card {
+      width: 100%;
+      max-width: 680px;
+      background: rgba(17, 24, 39, 0.92);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 32px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 26px;
+    }
+    .badge {
+      display: inline-block;
+      background: rgba(59, 130, 246, 0.15);
+      color: #60a5fa;
+      border: 1px solid rgba(59, 130, 246, 0.35);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 12px;
+      border-radius: 999px;
+      margin-bottom: 10px;
+    }
+    .header h1 {
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .header p {
+      color: var(--muted);
+      font-size: 13.5px;
+    }
+    .section {
+      background: rgba(15, 23, 42, 0.65);
+      border: 1px solid rgba(51, 65, 85, 0.7);
+      border-radius: 12px;
+      padding: 18px 20px;
+      margin-bottom: 18px;
+    }
+    .section-title {
+      font-size: 14.5px;
+      font-weight: 600;
+      color: #93c5fd;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+    .grid-3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 12px;
+    }
+    .form-group {
+      margin-bottom: 14px;
+    }
+    .form-group:last-child {
+      margin-bottom: 0;
+    }
+    label {
+      display: block;
+      font-size: 12.5px;
+      font-weight: 500;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    .form-input {
+      width: 100%;
+      padding: 9px 12px;
+      background: #090d16;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 13.5px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .form-input:focus {
+      border-color: var(--primary);
+    }
+    .input-row {
+      display: flex;
+      gap: 8px;
+    }
+    .btn {
+      padding: 9px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+    .btn-outline {
+      background: var(--panel-alt);
+      color: var(--text);
+      border-color: var(--border);
+    }
+    .btn-outline:hover {
+      border-color: var(--primary);
+    }
+    .btn-primary {
+      background: var(--primary);
+      color: #fff;
+      width: 100%;
+      padding: 12px;
+      font-size: 15px;
+      margin-top: 6px;
+    }
+    .btn-primary:hover {
+      background: var(--primary-hover);
+    }
+    .btn-primary:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    .hint {
+      font-size: 11.5px;
+      color: var(--muted);
+      margin-top: 5px;
+      line-height: 1.4;
+    }
+    .opt-toggle-box {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 10px 12px;
+      background: rgba(59, 130, 246, 0.08);
+      border: 1px solid rgba(59, 130, 246, 0.25);
+      border-radius: 8px;
+      cursor: pointer;
+      margin-bottom: 14px;
+    }
+    .opt-toggle-box input {
+      margin-top: 3px;
+      accent-color: var(--primary);
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+    }
+    .error-msg {
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      color: #fca5a5;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      margin-bottom: 16px;
+      display: none;
+    }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="setup-card">
+    <div class="header">
+      <button type="button" class="btn btn-outline" id="languageToggle" onclick="toggleSetupLanguage()" style="float:right; padding:4px 8px;">English</button>
+      <span class="badge" data-i18n="badge">首次设置</span>
+      <h1 data-i18n="title">设置 FileMaster Server</h1>
+      <p data-i18n="intro">创建管理员账号并设置文件访问地址。</p>
+    </div>
+
+    <div id="errBox" class="error-msg"></div>
+
+    <form id="setupForm" onsubmit="submitSetup(event)">
+      <div class="form-group">
+        <label data-i18n="setupToken">初始化口令</label>
+        <input type="password" id="s_setup_token" class="form-input" autocomplete="off" required />
+        <div class="hint" data-i18n="setupTokenHint">在服务器启动日志中查看；Docker 部署可运行 docker compose logs file-master-server。</div>
+      </div>
+      <!-- 1. 管理员账号与凭证 -->
+      <div class="section">
+        <div class="section-title" data-i18n="accountTitle">1. 账号与令牌</div>
+        <div class="grid-2">
+          <div class="form-group">
+            <label data-i18n="username">管理员用户名</label>
+            <input type="text" id="s_username" class="form-input" value="admin" required />
+          </div>
+          <div class="form-group">
+            <label data-i18n="adminPath">管理页面路径</label>
+            <input type="text" id="s_admin_path" class="form-input" value="admin" required />
+            <div class="hint" data-i18n="adminPathHint">默认访问路径为 /admin</div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label data-i18n="password">管理员密码</label>
+          <div class="input-row">
+            <input type="text" id="s_password" class="form-input" data-i18n-placeholder="passwordPlaceholder" placeholder="输入管理员密码" required />
+            <button type="button" class="btn btn-outline" onclick="randomPass()" data-i18n="generate">生成密码</button>
+            <button type="button" class="btn btn-outline" onclick="document.getElementById('s_password').value=''; document.getElementById('s_password').focus();" data-i18n="clear">清空</button>
+          </div>
+          <div class="hint" data-i18n="passwordHint">密码只会以加密哈希形式保存。</div>
+        </div>
+
+        <div class="form-group">
+          <label data-i18n="apiToken">上传 API 令牌</label>
+          <div class="input-row">
+            <input type="text" id="s_api_token" class="form-input" required />
+            <button type="button" class="btn btn-outline" onclick="randomToken()" data-i18n="regenerate">重新生成</button>
+          </div>
+          <div class="hint" data-i18n="apiTokenHint">Obsidian 插件和其他上传工具需要使用此令牌。</div>
+        </div>
+      </div>
+
+      <!-- 2. 图床路径与图片自动优化 -->
+      <div class="section">
+        <div class="section-title" data-i18n="imageTitle">2. 图片与链接</div>
+
+        <label class="opt-toggle-box">
+          <input type="checkbox" id="s_enable_optimization" checked onchange="toggleOptFields()" />
+          <div>
+            <div style="font-size:13.5px; font-weight:600; color:var(--text);" data-i18n="optimize">生成 WebP 图片</div>
+            <div class="hint" style="margin-top:2px;" data-i18n="optimizeHint">保留原图，并提供体积更小的 WebP 链接。</div>
+          </div>
+        </label>
+
+        <div class="grid-3">
+          <div class="form-group">
+            <label data-i18n="rawPath">原文件链接前缀</label>
+            <input type="text" id="s_raw_path" class="form-input" value="raw" required />
+            <div class="hint" data-i18n="rawPathHint">例如 /raw/2026/10/a.png</div>
+          </div>
+          <div class="form-group">
+            <label data-i18n="pubPath">WebP 链接前缀</label>
+            <input type="text" id="s_pub_path" class="form-input" value="pub" required />
+            <div class="hint" data-i18n="pubPathHint">例如 /pub/2026/10/a.webp</div>
+          </div>
+          <div class="form-group" id="grp_webp_quality">
+            <label data-i18n="webpQuality">WebP 质量（10–100）</label>
+            <input type="number" id="s_webp_quality" class="form-input" value="82" min="10" max="100" />
+          </div>
+          <div class="form-group" id="grp_max_width">
+            <label data-i18n="maxWidth">图片最大宽度（像素）</label>
+            <input type="number" id="s_max_width" class="form-input" value="1920" min="0" />
+          </div>
+        </div>
+
+        <div class="form-group" id="grp_watermark" style="margin-top:10px;">
+          <label data-i18n="watermark">WebP 图片水印</label>
+          <select id="s_watermark_enable" class="form-input">
+            <option value="true" data-i18n="watermarkOn">开启（默认右下角）</option>
+            <option value="false" data-i18n="watermarkOff">关闭</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- 3. 站点与网络设置 -->
+      <div class="section">
+        <div class="section-title" data-i18n="serverTitle">3. 服务器地址</div>
+        <div class="grid-3">
+          <div class="form-group">
+            <label data-i18n="siteName">站点名称</label>
+            <input type="text" id="s_site_name" class="form-input" value="FileMaster Server" required />
+          </div>
+          <div class="form-group">
+            <label data-i18n="baseUrl">公开访问地址</label>
+            <input type="text" id="s_base_url" class="form-input" required />
+          </div>
+          <div class="form-group">
+            <label data-i18n="port">监听端口</label>
+            <input type="number" id="s_port" class="form-input" value="3000" required />
+          </div>
+        </div>
+      </div>
+
+      <button type="submit" id="submitBtn" class="btn btn-primary" data-i18n="submit">完成设置</button>
+    </form>
+  </div>
+
+  <script>
+    const setupCopy = {
+      zh: {
+        badge: '首次设置', title: '设置 FileMaster Server', intro: '创建管理员账号并设置文件访问地址。',
+        setupToken: '初始化口令', setupTokenHint: '在服务器启动日志中查看；Docker 部署可运行 docker compose logs file-master-server。',
+        accountTitle: '1. 账号与令牌', username: '管理员用户名', adminPath: '管理页面路径',
+        adminPathHint: '默认访问路径为 /admin', password: '管理员密码', passwordPlaceholder: '输入管理员密码',
+        generate: '生成密码', clear: '清空', passwordHint: '密码只会以加密哈希形式保存。',
+        apiToken: '上传 API 令牌', regenerate: '重新生成', apiTokenHint: 'Obsidian 插件和其他上传工具需要使用此令牌。',
+        imageTitle: '2. 图片与链接', optimize: '生成 WebP 图片', optimizeHint: '保留原图，并提供体积更小的 WebP 链接。',
+        rawPath: '原文件链接前缀', rawPathHint: '例如 /raw/2026/10/a.png',
+        pubPath: 'WebP 链接前缀', pubPathHint: '例如 /pub/2026/10/a.webp',
+        webpQuality: 'WebP 质量（10–100）', maxWidth: '图片最大宽度（像素）', watermark: 'WebP 图片水印',
+        watermarkOn: '开启（默认右下角）', watermarkOff: '关闭', serverTitle: '3. 服务器地址',
+        siteName: '站点名称', baseUrl: '公开访问地址', port: '监听端口', submit: '完成设置',
+        missingPassword: '请输入管理员密码，或点击“生成密码”。', saving: '正在保存设置...', setupFailed: '设置失败'
+      },
+      en: {
+        badge: 'First-time setup', title: 'Set up FileMaster Server', intro: 'Create an admin account and set the public file URL.',
+        setupToken: 'Setup token', setupTokenHint: 'Find it in the server startup log. For Docker, run docker compose logs file-master-server.',
+        accountTitle: '1. Account and token', username: 'Admin username', adminPath: 'Admin page path',
+        adminPathHint: 'Default path: /admin', password: 'Admin password', passwordPlaceholder: 'Enter an admin password',
+        generate: 'Generate password', clear: 'Clear', passwordHint: 'Your password is stored only as a salted hash.',
+        apiToken: 'Upload API token', regenerate: 'Regenerate', apiTokenHint: 'The Obsidian plugin and other upload apps use this token.',
+        imageTitle: '2. Images and links', optimize: 'Generate WebP images', optimizeHint: 'Keep originals and provide smaller WebP image URLs.',
+        rawPath: 'Original file URL prefix', rawPathHint: 'For example: /raw/2026/10/a.png',
+        pubPath: 'WebP URL prefix', pubPathHint: 'For example: /pub/2026/10/a.webp',
+        webpQuality: 'WebP quality (10–100)', maxWidth: 'Maximum image width (px)', watermark: 'WebP image watermark',
+        watermarkOn: 'On (bottom right by default)', watermarkOff: 'Off', serverTitle: '3. Server address',
+        siteName: 'Site name', baseUrl: 'Public URL', port: 'Listening port', submit: 'Finish setup',
+        missingPassword: 'Enter an admin password or click Generate password.', saving: 'Saving settings...', setupFailed: 'Setup failed'
+      }
+    };
+    let setupLocale = localStorage.getItem('filemaster_lang') === 'en' ? 'en' : 'zh';
+
+    function setupText(key) { return setupCopy[setupLocale][key]; }
+
+    function applySetupLanguage() {
+      document.documentElement.lang = setupLocale === 'zh' ? 'zh-CN' : 'en';
+      document.querySelectorAll('[data-i18n]').forEach((el) => {
+        el.textContent = setupText(el.dataset.i18n);
+      });
+      document.querySelectorAll('[data-i18n-placeholder]').forEach((el) => {
+        el.placeholder = setupText(el.dataset.i18nPlaceholder);
+      });
+      document.getElementById('languageToggle').textContent = setupLocale === 'zh' ? 'English' : '简体中文';
+    }
+
+    function toggleSetupLanguage() {
+      setupLocale = setupLocale === 'zh' ? 'en' : 'zh';
+      localStorage.setItem('filemaster_lang', setupLocale);
+      applySetupLanguage();
+    }
+
+    function genRandomHex(len) {
+      const arr = new Uint8Array(len);
+      window.crypto.getRandomValues(arr);
+      return Array.from(arr, b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    function randomPass() {
+      document.getElementById('s_password').value = genRandomHex(6);
+    }
+
+    function randomToken() {
+      document.getElementById('s_api_token').value = 'fm_' + genRandomHex(16);
+    }
+
+    function toggleOptFields() {
+      const enabled = document.getElementById('s_enable_optimization').checked;
+      document.getElementById('grp_webp_quality').style.opacity = enabled ? '1' : '0.4';
+      document.getElementById('grp_max_width').style.opacity = enabled ? '1' : '0.4';
+      document.getElementById('grp_watermark').style.opacity = enabled ? '1' : '0.4';
+    }
+
+    async function loadDefaults() {
+      document.getElementById('s_base_url').value = window.location.origin;
+      randomPass();
+      randomToken();
+      try {
+        const res = await fetch('/api/platform/setup-defaults');
+        if (res.ok) {
+          const d = await res.json();
+          if (d.site_name) document.getElementById('s_site_name').value = d.site_name;
+          if (d.port) document.getElementById('s_port').value = d.port;
+          if (d.admin_path) document.getElementById('s_admin_path').value = d.admin_path;
+          if (d.username) document.getElementById('s_username').value = d.username;
+          if (d.suggested_password) document.getElementById('s_password').value = d.suggested_password;
+          if (d.suggested_api_token) document.getElementById('s_api_token').value = d.suggested_api_token;
+          if (d.raw_secret_path) document.getElementById('s_raw_path').value = d.raw_secret_path;
+          if (d.pub_secret_path) document.getElementById('s_pub_path').value = d.pub_secret_path;
+          if (d.enable_optimization !== undefined) {
+            document.getElementById('s_enable_optimization').checked = Boolean(d.enable_optimization);
+            toggleOptFields();
+          }
+        }
+      } catch {}
+    }
+
+    async function submitSetup(e) {
+      e.preventDefault();
+      const errBox = document.getElementById('errBox');
+      errBox.style.display = 'none';
+
+      const password = document.getElementById('s_password').value.trim();
+      const setupToken = document.getElementById('s_setup_token').value.trim();
+      if (!password) {
+        errBox.textContent = setupText('missingPassword');
+        errBox.style.display = 'block';
+        return;
+      }
+
+      const btn = document.getElementById('submitBtn');
+      btn.disabled = true;
+      btn.textContent = setupText('saving');
+
+      const payload = {
+        site_name: document.getElementById('s_site_name').value.trim(),
+        base_url: document.getElementById('s_base_url').value.trim(),
+        port: Number(document.getElementById('s_port').value) || 3000,
+        admin_path: document.getElementById('s_admin_path').value.trim(),
+        username: document.getElementById('s_username').value.trim(),
+        password,
+        api_token: document.getElementById('s_api_token').value.trim(),
+        raw_secret_path: document.getElementById('s_raw_path').value.trim(),
+        pub_secret_path: document.getElementById('s_pub_path').value.trim(),
+        enable_optimization: document.getElementById('s_enable_optimization').checked,
+        webp_quality: Number(document.getElementById('s_webp_quality').value) || 82,
+        max_width: Number(document.getElementById('s_max_width').value) || 1920,
+        watermark_enable: document.getElementById('s_watermark_enable').value === 'true'
+      };
+
+      try {
+        const res = await fetch('/api/platform/setup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-FileMaster-Setup-Token': setupToken },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || setupText('setupFailed'));
+        }
+        window.location.href = data.redirectUrl || ('/' + payload.admin_path.replace(/^\/+/, ''));
+      } catch (err) {
+        errBox.textContent = err.message;
+        errBox.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = setupText('submit');
+      }
+    }
+
+    applySetupLanguage();
+    loadDefaults();
+  </script>
+</body>
+</html>
+
