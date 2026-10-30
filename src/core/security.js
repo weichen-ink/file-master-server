@@ -5,6 +5,28 @@ const { getConfig, readJsonData, writeJsonData } = require('./config');
 const ipFailures = new Map();
 const BAN_DURATION_MS = 24 * 60 * 60 * 1000; // 24-hour lockout
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30-day session retention
+const configuredSetupToken = process.env.FILEMASTER_SETUP_TOKEN;
+if (configuredSetupToken && Buffer.byteLength(configuredSetupToken) < 24) {
+  throw new Error('FILEMASTER_SETUP_TOKEN must contain at least 24 bytes');
+}
+const SETUP_TOKEN = configuredSetupToken || crypto.randomBytes(24).toString('hex');
+
+function requireSetupToken(req, res, next) {
+  const supplied = req.headers['x-filemaster-setup-token'];
+  if (typeof supplied !== 'string') {
+    return res.status(403).json({ error: 'Invalid setup token' });
+  }
+  const actual = Buffer.from(supplied);
+  const expected = Buffer.from(SETUP_TOKEN);
+  if (actual.length !== expected.length || !crypto.timingSafeEqual(actual, expected)) {
+    return res.status(403).json({ error: 'Invalid setup token' });
+  }
+  next();
+}
+
+function createSessionCookie(req, token, maxAge = '') {
+  return `filemaster_session=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax${req.secure ? '; Secure' : ''}${maxAge}`;
+}
 
 // Load persisted bans from data/ip_bans.json on server boot
 function loadPersistedBans() {
@@ -347,6 +369,9 @@ function createRateLimiter({ windowMs = 60 * 1000, max = 30, message = 'Too many
 }
 
 module.exports = {
+  SETUP_TOKEN,
+  requireSetupToken,
+  createSessionCookie,
   hashPassword,
   verifyPassword,
   getClientIp,

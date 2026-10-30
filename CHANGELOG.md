@@ -2,7 +2,14 @@
 
 See root `CHANGELOG.md` for full ecosystem release notes.
 
-## [0.2.0] - 2026-10-29
+## [0.1.5] - 2026-10-30
+- Require a startup setup token before first-time administrator initialization.
+- Set `Secure` on administrator cookies when requests arrive over HTTPS, and reject malformed CSRF origins.
+- Restrict multipart requests to a single file and stream file hashing to avoid loading large uploads into memory.
+- Preserve the original file if moving it to trash fails, including cross-filesystem moves.
+- Escape file and share data rendered in the web console to prevent script injection.
+
+## [0.1.4] - 2026-10-29
 - Added **First-Run Web Setup Wizard (`/setup`)** and **Dual-Link Image Optimization Toggle (`enable_optimization`)**.
 - Added **📁 Expiring File Share Links (`/s/:shareId`)** module and **☁️ Linux `.tar.gz` Backup & `rclone` Center**.
 - Added **Bilingual Web Console (`简体中文` / `English`)** and split console into modular static assets (`src/public/assets/`).

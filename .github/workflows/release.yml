@@ -22,26 +22,4 @@ jobs:
           tag_name: ${{ github.ref_name }}
           draft: false
           prerelease: false
-          body: |
-            ## 🚀 FileMaster Server v${{ github.ref_name }} — Initial Release
-
-            Lightweight, self-hosted backend service for FileMaster: smart image hosting, on-the-fly watermarking, and WebP optimization.
-
-            ### ✨ Key Features
-            - **⚡ High-Performance Image Pipeline**: On-the-fly Sharp processing for WebP conversion, auto-rotation, and configurable watermarking.
-            - **🔒 Three-Layer Security**:
-              - Dual Bearer token authentication (Admin Console & API token).
-              - HMAC-SHA256 signature verification for protected resources.
-              - Strict Referer whitelist protection preventing unauthorized hotlinking.
-            - **💾 Zero-Config Metadata Storage**: Embedded SQLite database (`better-sqlite3`) with automatic fallback to JSON flat-file storage.
-            - **📊 Modern Web Console**: Responsive dark-mode dashboard with real-time analytics, file browser, deletion locks, and live preview.
-            - **📦 Cross-Platform & Lightweight**: Minimal dependencies, runs anywhere on Node.js 18+.
-
-            ### 🚀 Quick Start
-            ```bash
-            git clone https://github.com/weichen-ink/file-master-server.git
-            cd file-master-server
-            npm install
-            npm start
-            ```
-            Default web console available at `http://localhost:3000/console`.
+          generate_release_notes: true

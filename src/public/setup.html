@@ -201,6 +201,11 @@
     <div id="errBox" class="error-msg"></div>
 
     <form id="setupForm" onsubmit="submitSetup(event)">
+      <div class="form-group">
+        <label data-i18n="setupToken">初始化口令</label>
+        <input type="password" id="s_setup_token" class="form-input" autocomplete="off" required />
+        <div class="hint" data-i18n="setupTokenHint">在服务器启动日志中查看；Docker 部署可运行 docker compose logs file-master-server。</div>
+      </div>
       <!-- 1. 管理员账号与凭证 -->
       <div class="section">
         <div class="section-title" data-i18n="accountTitle">1. 账号与令牌</div>
@@ -305,6 +310,7 @@
     const setupCopy = {
       zh: {
         badge: '首次设置', title: '设置 FileMaster Server', intro: '创建管理员账号并设置文件访问地址。',
+        setupToken: '初始化口令', setupTokenHint: '在服务器启动日志中查看；Docker 部署可运行 docker compose logs file-master-server。',
         accountTitle: '1. 账号与令牌', username: '管理员用户名', adminPath: '管理页面路径',
         adminPathHint: '默认访问路径为 /admin', password: '管理员密码', passwordPlaceholder: '输入管理员密码',
         generate: '生成密码', clear: '清空', passwordHint: '密码只会以加密哈希形式保存。',
@@ -319,6 +325,7 @@
       },
       en: {
         badge: 'First-time setup', title: 'Set up FileMaster Server', intro: 'Create an admin account and set the public file URL.',
+        setupToken: 'Setup token', setupTokenHint: 'Find it in the server startup log. For Docker, run docker compose logs file-master-server.',
         accountTitle: '1. Account and token', username: 'Admin username', adminPath: 'Admin page path',
         adminPathHint: 'Default path: /admin', password: 'Admin password', passwordPlaceholder: 'Enter an admin password',
         generate: 'Generate password', clear: 'Clear', passwordHint: 'Your password is stored only as a salted hash.',
@@ -404,6 +411,7 @@
       errBox.style.display = 'none';
 
       const password = document.getElementById('s_password').value.trim();
+      const setupToken = document.getElementById('s_setup_token').value.trim();
       if (!password) {
         errBox.textContent = setupText('missingPassword');
         errBox.style.display = 'block';
@@ -433,7 +441,7 @@
       try {
         const res = await fetch('/api/platform/setup', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'X-FileMaster-Setup-Token': setupToken },
           body: JSON.stringify(payload)
         });
         const data = await res.json();

@@ -58,7 +58,9 @@
    ```
 2. Open your browser and navigate to:  
    `http://localhost:3000/setup`
-3. Complete the interactive setup wizard to initialize your administrator credentials and API token.
+3. Find the setup token in the server log (`docker compose logs file-master-server`), then enter it in the setup wizard to initialize your administrator credentials and API token. The token changes on each server start unless `FILEMASTER_SETUP_TOKEN` is set to a secret of at least 24 bytes.
+
+Use HTTPS for access from other devices. Set `trust_proxy` to your trusted reverse proxy and restart the server so it can mark administrator cookies `Secure` (the default `loopback` only trusts a proxy on the same host). Plain HTTP is suitable only for a local, trusted setup connection; it does not protect the plugin API token or administrator password in transit.
 
 Persistent data (`./storage` and `./data`) are mounted to your host automatically.
 

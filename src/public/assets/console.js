@@ -20,6 +20,16 @@ function formatBytes(bytes) {
   return (bytes / Math.pow(k, i)).toFixed(i > 1 ? 2 : 1) + ' ' + sizes[i];
 }
 
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  })[char]);
+}
+
+function jsArg(value) {
+  return escapeHtml(JSON.stringify(String(value)));
+}
+
 async function copyText(text, label) {
   try {
     await navigator.clipboard.writeText(text);
@@ -651,25 +661,25 @@ function renderGallery() {
       : '';
 
     const thumbHtml = isImg
-      ? `<div class="img-thumb-wrap" onclick="openPreview('${item.year}', '${item.month}', '${item.filename}')">
-           <img src="${item.rawPreviewPath}" loading="lazy" alt="${item.filename}" />
+      ? `<div class="img-thumb-wrap" onclick="openPreview(${jsArg(item.year)}, ${jsArg(item.month)}, ${jsArg(item.filename)})">
+           <img src="${escapeHtml(item.rawPreviewPath)}" loading="lazy" alt="${escapeHtml(item.filename)}" />
            ${lockBadgeHtml}
            <span class="img-tag">${item.year}/${item.month}</span>
          </div>`
-      : `<div class="img-thumb-wrap" onclick="window.open('${item.rawPreviewPath}', '_blank')" style="flex-direction:column; gap:6px; cursor:pointer;">
+      : `<div class="img-thumb-wrap" onclick="window.open(${jsArg(item.rawPreviewPath)}, '_blank')" style="flex-direction:column; gap:6px; cursor:pointer;">
            ${lockBadgeHtml}
            <div style="font-size:28px;">${badgeLabel.split(' ')[0]}</div>
-           <div style="font-size:12px; color:var(--primary); font-weight:600;">${badgeLabel.split(' ')[1] || ''} (${(item.ext || '').toUpperCase()})</div>
+           <div style="font-size:12px; color:var(--primary); font-weight:600;">${escapeHtml(badgeLabel.split(' ')[1] || '')} (${escapeHtml((item.ext || '').toUpperCase())})</div>
            <span class="img-tag">${item.year}/${item.month}</span>
          </div>`;
 
-    const lockBtnHtml = `<button class="btn btn-outline" onclick="toggleLockImage('${item.year}', '${item.month}', '${item.filename}', ${!isLocked})" style="${isLocked ? 'border-color:#d99b46; color:#855000;' : ''}">${isLocked ? t('unlockBtn') : t('lockBtn')}</button>`;
+    const lockBtnHtml = `<button class="btn btn-outline" onclick="toggleLockImage(${jsArg(item.year)}, ${jsArg(item.month)}, ${jsArg(item.filename)}, ${!isLocked})" style="${isLocked ? 'border-color:#d99b46; color:#855000;' : ''}">${isLocked ? t('unlockBtn') : t('lockBtn')}</button>`;
 
     const optRowHtml = (isOptimizationEnabled && item.isProcessableImage && item.pubUrl)
       ? `<div class="track-row">
            <span class="track-tag track-webp">${t('trackWebp')}</span>
-           <button class="btn btn-outline" onclick="copyText('${optMdText}', 'Optimized Markdown')">${t('btnMarkdown')}</button>
-           <button class="btn btn-outline" style="border-color:#a6d1be; color:#167a5c;" onclick="copyText('${item.pubUrl}', 'Optimized WebP URL')">${t('btnDirectUrl')}</button>
+           <button class="btn btn-outline" onclick="copyText(${jsArg(optMdText)}, 'Optimized Markdown')">${t('btnMarkdown')}</button>
+           <button class="btn btn-outline" style="border-color:#a6d1be; color:#167a5c;" onclick="copyText(${jsArg(item.pubUrl)}, 'Optimized WebP URL')">${t('btnDirectUrl')}</button>
          </div>`
       : '';
 
@@ -684,30 +694,30 @@ function renderGallery() {
       ${thumbHtml}
       <div class="img-body">
         <div>
-          <div class="img-name" title="${item.filename}">${item.filename}</div>
+          <div class="img-name" title="${escapeHtml(item.filename)}">${escapeHtml(item.filename)}</div>
           <div class="img-meta">
             <span>Raw ${formatBytes(item.size)}</span>
             <span>${rightMetaHtml}</span>
           </div>
         </div>
         <div class="card-actions">
-          <button class="btn btn-primary btn-block" onclick="copyText('${item.rawUrl}', t('copyFileLink'))">${t('copyFileLink')}</button>
+          <button class="btn btn-primary btn-block" onclick="copyText(${jsArg(item.rawUrl)}, t('copyFileLink'))">${t('copyFileLink')}</button>
           <details class="card-more">
             <summary>${t('moreFileActions')}</summary>
             <div class="card-more-panel">
               <div class="link-tracks">
                 <div class="track-row">
                   <span class="track-tag track-raw">${t('trackRaw')}</span>
-                  <button class="btn btn-outline" onclick="copyText('${rawMdText}', 'Raw Markdown')">${t('btnMarkdown')}</button>
-                  <button class="btn btn-outline" onclick="copyText('${item.rawUrl}', 'Raw URL')">${t('btnDirectUrl')}</button>
+                  <button class="btn btn-outline" onclick="copyText(${jsArg(rawMdText)}, 'Raw Markdown')">${t('btnMarkdown')}</button>
+                  <button class="btn btn-outline" onclick="copyText(${jsArg(item.rawUrl)}, 'Raw URL')">${t('btnDirectUrl')}</button>
                 </div>
                 ${optRowHtml}
               </div>
               <div class="card-footer-actions">
-                <button class="btn btn-outline" onclick="createShareLink('${item.year}', '${item.month}', '${item.filename}')" title="${t('shareTooltip')}">${t('shareBtn')}</button>
+                <button class="btn btn-outline" onclick="createShareLink(${jsArg(item.year)}, ${jsArg(item.month)}, ${jsArg(item.filename)})" title="${t('shareTooltip')}">${t('shareBtn')}</button>
                 <div class="card-footer-right">
                   ${lockBtnHtml}
-                  <button class="btn btn-danger" ${isLocked ? `disabled style="opacity:0.45; cursor:not-allowed;" title="${t('delLockedTooltip')}"` : ''} onclick="deleteImage('${item.year}', '${item.month}', '${item.filename}', ${isLocked})">${t('deleteBtn')}</button>
+                  <button class="btn btn-danger" ${isLocked ? `disabled style="opacity:0.45; cursor:not-allowed;" title="${t('delLockedTooltip')}"` : ''} onclick="deleteImage(${jsArg(item.year)}, ${jsArg(item.month)}, ${jsArg(item.filename)}, ${isLocked})">${t('deleteBtn')}</button>
                 </div>
               </div>
             </div>
@@ -862,14 +872,14 @@ async function loadShares() {
                 : `<span class="share-status active">${t('shareStatusActive')}</span>`;
               return `
                 <tr>
-                  <td data-label="${t('shareColAsset')}">${s.year}/${s.month}/${s.filename}</td>
-                  <td data-label="${t('shareColLink')}"><code class="inline-code share-url" title="${s.shareUrl}">${s.shareUrl}</code></td>
+                  <td data-label="${t('shareColAsset')}">${escapeHtml(s.year)}/${escapeHtml(s.month)}/${escapeHtml(s.filename)}</td>
+                  <td data-label="${t('shareColLink')}"><code class="inline-code share-url" title="${escapeHtml(s.shareUrl)}">${escapeHtml(s.shareUrl)}</code></td>
                   <td data-label="${t('shareColDownloads')}">${dlText}</td>
                   <td data-label="${t('shareColExpires')}">${expText}</td>
                   <td data-label="${t('shareColStatus')}">${statusBadge}</td>
                   <td class="share-actions" data-label="${t('shareColActions')}">
-                    <button class="btn btn-primary" style="padding:4px 10px; font-size:12px;" onclick="copyText('${s.shareUrl}', t('shareColLink'))">${t('shareBtnCopy')}</button>
-                    <button class="btn btn-danger" style="padding:4px 10px; font-size:12px;" onclick="revokeShare('${s.id}')">${t('shareBtnRevoke')}</button>
+                    <button class="btn btn-primary" style="padding:4px 10px; font-size:12px;" onclick="copyText(${jsArg(s.shareUrl)}, t('shareColLink'))">${t('shareBtnCopy')}</button>
+                    <button class="btn btn-danger" style="padding:4px 10px; font-size:12px;" onclick="revokeShare(${jsArg(s.id)})">${t('shareBtnRevoke')}</button>
                   </td>
                 </tr>
               `;

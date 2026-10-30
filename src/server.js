@@ -23,6 +23,9 @@ const {
   generateTotpSecret,
   verifyTotp,
   createSessionToken,
+  SETUP_TOKEN,
+  requireSetupToken,
+  createSessionCookie,
   revokeSessionToken,
   isAdminAuthenticated,
   requireAdmin,
@@ -72,7 +75,9 @@ app.use((req, res, next) => {
         if (originHost !== host) {
           return res.status(403).json({ error: 'CSRF validation failed: Origin mismatch' });
         }
-      } catch {}
+      } catch {
+        return res.status(403).json({ error: 'CSRF validation failed: invalid Origin' });
+      }
     }
   }
   next();
@@ -145,7 +150,7 @@ app.get('/api/platform/setup-defaults', (req, res) => {
   });
 });
 
-app.post('/api/platform/setup', (req, res) => {
+app.post('/api/platform/setup', requireSetupToken, (req, res) => {
   if (isConfigInitialized()) {
     return res.status(403).json({ error: 'Server is already initialized' });
   }
@@ -154,7 +159,7 @@ app.post('/api/platform/setup', (req, res) => {
     const token = createSessionToken(newCfg);
     res.setHeader(
       'Set-Cookie',
-      `filemaster_session=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${30 * 24 * 60 * 60}`
+      createSessionCookie(req, token, `; Max-Age=${30 * 24 * 60 * 60}`)
     );
     appendAuditLog({
       action: 'initial_setup',
@@ -211,7 +216,7 @@ app.post('/api/platform/login', loginRateLimiter, (req, res) => {
   const maxAgeAttr = rememberMe ? `; Max-Age=${30 * 24 * 60 * 60}` : '';
   res.setHeader(
     'Set-Cookie',
-    `filemaster_session=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax${maxAgeAttr}`
+    createSessionCookie(req, token, maxAgeAttr)
   );
   res.json({ success: true });
 });
@@ -280,7 +285,7 @@ app.put('/api/platform/config', requireAdmin, (req, res) => {
     const newToken = createSessionToken(updatedCfg);
     res.setHeader(
       'Set-Cookie',
-      `filemaster_session=${encodeURIComponent(newToken)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${30 * 24 * 60 * 60}`
+      createSessionCookie(req, newToken, `; Max-Age=${30 * 24 * 60 * 60}`)
     );
 
     const safeConfig = {
@@ -483,6 +488,9 @@ function startServer(port, retriesLeft = 6) {
     if (!isConfigInitialized()) {
       console.log('---------------------------------------------------------');
       console.log(`✨ [Setup Wizard] No config.yaml found! Visit http://localhost:${port}/setup to initialize.`);
+      console.log(process.env.FILEMASTER_SETUP_TOKEN
+        ? '[Setup Wizard] Use FILEMASTER_SETUP_TOKEN from the server environment to initialize.'
+        : `[Setup Wizard] Initialization token for this server start: ${SETUP_TOKEN}`);
       console.log('---------------------------------------------------------');
     } else {
       console.log(`🚀 ${cfg.site_name} is running!`);

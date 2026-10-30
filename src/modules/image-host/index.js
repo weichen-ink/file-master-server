@@ -230,8 +230,18 @@ const uploadStorage = multer.diskStorage({
 
 const upload = multer({
   storage: uploadStorage,
-  limits: { fileSize: 100 * 1024 * 1024 }
+  limits: { fileSize: 100 * 1024 * 1024, files: 1, fields: 10, parts: 11 }
 });
+
+const acceptSingleUpload = (req, res, next) => {
+  upload.single('file')(req, res, (err) => {
+    if (!err) return next();
+    if (err instanceof multer.MulterError) {
+      return res.status(err.code === 'LIMIT_FILE_SIZE' ? 413 : 400).json({ error: err.message });
+    }
+    return next(err);
+  });
+};
 
 function sanitizeSegment(seg) {
   let decoded = String(seg || '');
@@ -303,6 +313,36 @@ function getFileSha256(fullPath, stat) {
   const hash = crypto.createHash('sha256').update(buf).digest('hex');
   sha256Cache.set(cacheKey, hash);
   return hash;
+}
+
+function hashFileSha256(fullPath) {
+  return new Promise((resolve, reject) => {
+    const hash = crypto.createHash('sha256');
+    const stream = fs.createReadStream(fullPath);
+    stream.on('data', (chunk) => hash.update(chunk));
+    stream.on('error', reject);
+    stream.on('end', () => resolve(hash.digest('hex')));
+  });
+}
+
+async function moveFileToTrash(source, target, expectedSha256) {
+  try {
+    fs.renameSync(source, target);
+  } catch (err) {
+    if (err.code !== 'EXDEV') throw err;
+    try {
+      fs.copyFileSync(source, target, fs.constants.COPYFILE_EXCL);
+      if (await hashFileSha256(target) !== expectedSha256) {
+        throw new Error('Trash copy failed integrity check');
+      }
+      fs.unlinkSync(source);
+    } catch (copyErr) {
+      if (fs.existsSync(source) && fs.existsSync(target)) {
+        try { fs.unlinkSync(target); } catch {}
+      }
+      throw copyErr;
+    }
+  }
 }
 
 /**
@@ -530,10 +570,10 @@ function registerImageHostModule(app) {
   ensureDefaultWatermark(wmPath, initCfg.image_host.watermark_text).catch(() => {});
 
   // 1. Unified attachment upload endpoint (supports custom naming, SHA-256 calculation, and protected/keep storage)
-  const handleUpload = (req, res) => {
+  const handleUpload = async (req, res) => {
     let tmpPath = null;
     try {
-      const fileObj = req.file || (req.files && req.files[0]);
+      const fileObj = req.file;
       if (!fileObj || (!fileObj.buffer && !fileObj.path)) {
         return res.status(400).json({ error: 'No file detected in upload (field name must be "file")' });
       }
@@ -558,18 +598,12 @@ function registerImageHostModule(app) {
       const safeOrigName = sanitizeUploadFilename(rawOrigName) || 'file.png';
       const origExt = path.extname(safeOrigName).toLowerCase() || '.png';
       if (!isAllowedAttachmentFile(safeOrigName)) {
-        if (tmpPath && fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
         return res.status(400).json({ error: `Invalid attachment filename: ${safeOrigName}` });
       }
 
-      // Compute SHA-256 using streaming from disk or buffer
-      let fullSha256;
-      if (fileObj.buffer) {
-        fullSha256 = crypto.createHash('sha256').update(fileObj.buffer).digest('hex');
-      } else {
-        const fileBytes = fs.readFileSync(fileObj.path);
-        fullSha256 = crypto.createHash('sha256').update(fileBytes).digest('hex');
-      }
+      const fullSha256 = fileObj.buffer
+        ? crypto.createHash('sha256').update(fileObj.buffer).digest('hex')
+        : await hashFileSha256(fileObj.path);
       const hash8 = fullSha256.slice(0, 8);
 
       const now = new Date();
@@ -601,8 +635,7 @@ function registerImageHostModule(app) {
         destPath = path.join(RAW_DIR, year, month, filename);
         deduplicated = true;
       } else if (fs.existsSync(destPath)) {
-        const existStat = fs.statSync(destPath);
-        const existSha = getFileSha256(destPath, existStat);
+        const existSha = await hashFileSha256(destPath);
         if (existSha === fullSha256) {
           // Identical name and content: reuse existing file
           deduplicated = true;
@@ -621,11 +654,6 @@ function registerImageHostModule(app) {
       } else {
         persistUpload(destPath);
         updateShaIndex(fullSha256, { year, month, filename });
-      }
-
-      // Clean up temporary upload file if disk storage was used
-      if (tmpPath && fs.existsSync(tmpPath)) {
-        try { fs.unlinkSync(tmpPath); } catch {}
       }
 
       invalidateScanCache();
@@ -682,6 +710,10 @@ function registerImageHostModule(app) {
     } catch (err) {
       console.error('[FileMaster] Upload error:', err);
       return res.status(500).json({ error: 'Failed to save file: ' + err.message });
+    } finally {
+      if (tmpPath && fs.existsSync(tmpPath)) {
+        try { fs.unlinkSync(tmpPath); } catch {}
+      }
     }
   };
 
@@ -754,15 +786,15 @@ function registerImageHostModule(app) {
   app.get('/api/probe', requireApiOrAdmin, handleProbe);
   app.post('/api/probe', requireApiOrAdmin, handleProbe);
 
-  app.post('/api/image/upload', uploadRateLimiter, requireApiOrAdmin, upload.any(), handleUpload);
-  app.post('/api/upload', uploadRateLimiter, requireApiOrAdmin, upload.any(), handleUpload);
+  app.post('/api/image/upload', uploadRateLimiter, requireApiOrAdmin, acceptSingleUpload, handleUpload);
+  app.post('/api/upload', uploadRateLimiter, requireApiOrAdmin, acceptSingleUpload, handleUpload);
 
   // 1.5 Server-side preview transcode endpoint (for Obsidian client local HEIC/HEIF/TIFF previewing via Linux server)
-  app.post('/api/image/preview-transcode', uploadRateLimiter, requireApiOrAdmin, upload.any(), async (req, res) => {
+  app.post('/api/image/preview-transcode', uploadRateLimiter, requireApiOrAdmin, acceptSingleUpload, async (req, res) => {
     let tmpInput = null;
     let tmpOutput = null;
     try {
-      const fileObj = req.file || (req.files && req.files[0]);
+      const fileObj = req.file;
       if (!fileObj || !fileObj.path) {
         return res.status(400).json({ error: 'No image file provided' });
       }
@@ -917,7 +949,7 @@ function registerImageHostModule(app) {
     });
   });
 
-  app.delete('/api/modules/image-host/item/:year/:month/:filename', requireApiOrAdmin, (req, res) => {
+  app.delete('/api/modules/image-host/item/:year/:month/:filename', requireApiOrAdmin, async (req, res) => {
     const year = sanitizeSegment(req.params.year);
     const month = sanitizeSegment(req.params.month);
     const filename = sanitizeSegment(req.params.filename);
@@ -948,18 +980,21 @@ function registerImageHostModule(app) {
       try {
         const stat = fs.statSync(rawFilePath);
         deletedSize = stat.size;
-        deletedSha = getFileSha256(rawFilePath, stat);
-        removeShaIndex(deletedSha);
-
-        // Move to storage/trash/ instead of permanent unrecoverable deletion
+        deletedSha = await hashFileSha256(rawFilePath);
+        // Use a unique trash name so repeated deletions cannot overwrite older copies.
         const trashDay = new Date().toISOString().slice(0, 10);
         const trashTargetDir = path.join(TRASH_DIR, trashDay, year, month);
         fs.mkdirSync(trashTargetDir, { recursive: true });
-        const trashTarget = path.join(trashTargetDir, filename);
-        fs.renameSync(rawFilePath, trashTarget);
+        const parsed = path.parse(filename);
+        const trashName = `${parsed.name}_${Date.now()}_${crypto.randomBytes(4).toString('hex')}${parsed.ext}`;
+        const trashTarget = path.join(trashTargetDir, trashName);
+        await moveFileToTrash(rawFilePath, trashTarget, deletedSha);
       } catch (err) {
-        // Fallback to unlinkSync if rename failed across filesystem boundaries
-        if (fs.existsSync(rawFilePath)) fs.unlinkSync(rawFilePath);
+        console.error('[FileMaster] Failed to move file to trash:', err);
+        return res.status(500).json({ error: 'Failed to move file to trash; original file was preserved' });
+      }
+      try { removeShaIndex(deletedSha); } catch (err) {
+        console.warn('[FileMaster] Failed to update SHA index after deletion:', err);
       }
     }
     if (isPathWithin(cacheFilePath, CACHE_DIR) && fs.existsSync(cacheFilePath)) fs.unlinkSync(cacheFilePath);
@@ -987,6 +1022,8 @@ function registerImageHostModule(app) {
 }
 
 module.exports = {
+  acceptSingleUpload,
+  moveFileToTrash,
   registerImageHostModule,
   scanAllImages,
   invalidateScanCache

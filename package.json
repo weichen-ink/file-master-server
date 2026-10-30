@@ -1,6 +1,6 @@
 {
   "name": "file-master-server",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Self-hosted backend server for FileMaster: smart image hosting, on-the-fly watermarking, WebP conversion, and asset management.",
   "main": "src/server.js",
   "scripts": {
