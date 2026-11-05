@@ -1,5 +1,7 @@
 const crypto = require('node:crypto');
-const { getConfig, readJsonData, writeJsonData } = require('./config');
+const fs = require('node:fs');
+const path = require('node:path');
+const { DATA_DIR, getConfig, readJsonData, writeJsonData } = require('./config');
 
 // In-memory IP brute-force protection map: ip -> { count, bannedUntil, lastAttempt }
 const ipFailures = new Map();
@@ -28,11 +30,31 @@ function createSessionCookie(req, token, maxAge = '') {
   return `filemaster_session=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax${req.secure ? '; Secure' : ''}${maxAge}`;
 }
 
-// Load persisted bans from data/ip_bans.json on server boot
+// Load persisted bans from data/ip_bans.json on server boot and hot-reload when modified on disk
+const IP_BANS_PATH = path.join(DATA_DIR, 'ip_bans.json');
+let lastBansMtimeMs = -1;
+
 function loadPersistedBans() {
   try {
+    if (!fs.existsSync(IP_BANS_PATH)) {
+      if (lastBansMtimeMs !== 0) {
+        ipFailures.clear();
+        lastBansMtimeMs = 0;
+      }
+      return;
+    }
+    const stat = fs.statSync(IP_BANS_PATH);
+    if (stat.mtimeMs === lastBansMtimeMs) return;
+    lastBansMtimeMs = stat.mtimeMs;
+
     const data = readJsonData('ip_bans', {});
     const now = Date.now();
+    // Remove bans that were deleted from disk while preserving non-banned in-memory attempt counters
+    for (const [ip, item] of ipFailures.entries()) {
+      if (item && item.bannedUntil && !data[ip]) {
+        ipFailures.delete(ip);
+      }
+    }
     for (const [ip, item] of Object.entries(data)) {
       if (item && item.bannedUntil && item.bannedUntil > now) {
         ipFailures.set(ip, item);
@@ -51,6 +73,9 @@ function syncPersistedBans() {
       }
     }
     writeJsonData('ip_bans', data);
+    if (fs.existsSync(IP_BANS_PATH)) {
+      lastBansMtimeMs = fs.statSync(IP_BANS_PATH).mtimeMs;
+    }
   } catch {}
 }
 
@@ -118,6 +143,7 @@ function getClientIp(req) {
  * Checks whether an IP address is currently banned.
  */
 function checkIpBan(ip) {
+  loadPersistedBans();
   const record = ipFailures.get(ip);
   if (!record) return { banned: false, remainingAttempts: getConfig().max_login_attempts };
 
