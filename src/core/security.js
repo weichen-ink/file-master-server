@@ -84,16 +84,17 @@ loadPersistedBans();
 // Persist instance salt in data/security_meta.json so hot updates & restarts keep active sessions alive,
 // while changing username, password, or admin_path still immediately invalidates older cookies.
 function loadOrCreateInstanceSalt() {
+  const fallbackRandomSalt = crypto.randomBytes(32).toString('hex');
   try {
     const meta = readJsonData('security_meta', null);
     if (meta && typeof meta.instanceSalt === 'string' && meta.instanceSalt.length >= 16) {
       return meta.instanceSalt;
     }
-    const newSalt = crypto.randomBytes(16).toString('hex');
-    writeJsonData('security_meta', { instanceSalt: newSalt, createdAt: Date.now() });
-    return newSalt;
-  } catch {
-    return 'filemaster-default-instance-salt';
+    writeJsonData('security_meta', { instanceSalt: fallbackRandomSalt, createdAt: Date.now() });
+    return fallbackRandomSalt;
+  } catch (err) {
+    console.warn('[Security] Could not persist security_meta.json, using ephemeral random salt:', err.message);
+    return fallbackRandomSalt;
   }
 }
 
@@ -131,12 +132,10 @@ function getSigningSecret(cfg) {
 }
 
 function getClientIp(req) {
-  if (req.ip) return req.ip;
-  const xff = req.headers['x-forwarded-for'];
-  if (xff) return String(xff).split(',')[0].trim();
-  const realIp = req.headers['x-real-ip'];
-  if (realIp) return String(realIp).trim();
-  return req.socket?.remoteAddress || 'unknown';
+  if (req && typeof req.ip === 'string' && req.ip.trim()) {
+    return req.ip.trim();
+  }
+  return req?.socket?.remoteAddress || 'unknown';
 }
 
 /**

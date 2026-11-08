@@ -29,29 +29,60 @@ const OFFICIAL_UPSTREAM_REPO = 'https://github.com/weichen-ink/file-master-serve
  *   - mirrorPrefix: "https://ghproxy.net/" -> "https://ghproxy.net/https://github.com/weichen-ink/file-master-server.git"
  *   - mirrorPrefix: "https://gitclone.com/github.com/weichen-ink/file-master-server.git" -> as-is
  */
-function getEffectiveUpstreamRepo(mirrorPrefix = '') {
-  const m = String(mirrorPrefix || '').trim();
-  if (!m) return OFFICIAL_UPSTREAM_REPO;
-  if (m.includes('weichen-ink/file-master-server')) {
-    return m;
-  }
-  return m.replace(/\/+$/, '') + '/' + OFFICIAL_UPSTREAM_REPO;
-}
-
 function validateGitMirror(mirror) {
   if (!mirror) return true;
   const trimmed = String(mirror).trim();
-  if (trimmed.startsWith('-') || /[\r\n\0`$;|&]/.test(trimmed)) return false;
-  return /^https?:\/\/[\w.-]+(:\d+)?(\/[\w.\-\/~]+)?\/?$/i.test(trimmed);
+  if (!trimmed) return true;
+  if (trimmed.startsWith('-') || /[\r\n\0`$;|&<>\\'"]/.test(trimmed)) return false;
+  if (trimmed === OFFICIAL_UPSTREAM_REPO) return true;
+  const checkTarget = trimmed.endsWith('/' + OFFICIAL_UPSTREAM_REPO)
+    ? trimmed.slice(0, -(OFFICIAL_UPSTREAM_REPO.length + 1))
+    : trimmed;
+  if (!checkTarget || /\.git(\/|$)/i.test(checkTarget) || checkTarget.includes('weichen-ink')) {
+    return false;
+  }
+  if (!/^https?:\/\/[\w.-]+(:\d+)?(\/[\w.\-\/~]+)?\/?$/i.test(checkTarget)) {
+    return false;
+  }
+  try {
+    const parsed = new URL(checkTarget);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
+    if (parsed.username || parsed.password || parsed.search || parsed.hash) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function getEffectiveUpstreamRepo(mirrorPrefix = '') {
+  const m = String(mirrorPrefix || '').trim();
+  if (!m) return OFFICIAL_UPSTREAM_REPO;
+  if (m === OFFICIAL_UPSTREAM_REPO || m === 'https://github.com/weichen-ink/file-master-server') {
+    return OFFICIAL_UPSTREAM_REPO;
+  }
+  if (m.endsWith('/' + OFFICIAL_UPSTREAM_REPO)) {
+    const prefix = m.slice(0, -(OFFICIAL_UPSTREAM_REPO.length + 1));
+    return validateGitMirror(prefix)
+      ? prefix.replace(/\/+$/, '') + '/' + OFFICIAL_UPSTREAM_REPO
+      : OFFICIAL_UPSTREAM_REPO;
+  }
+  if (!validateGitMirror(m)) {
+    return OFFICIAL_UPSTREAM_REPO;
+  }
+  return m.replace(/\/+$/, '') + '/' + OFFICIAL_UPSTREAM_REPO;
 }
 
 function validateGitRemote(repo) {
   if (typeof repo !== 'string') return false;
   const trimmed = repo.trim();
   if (!trimmed || trimmed.startsWith('-')) return false;
-  if (/[\r\n\0`$;|&]/.test(trimmed)) return false;
-  const remoteRegex = /^(https?:\/\/[\w.-]+(:\d+)?\/[\w.\-\/~]+(\.git)?|git@[\w.\-]+:[\w.\-\/~]+(\.git)?|ssh:\/\/[\w.\-@]+(:\d+)?\/[\w.\-\/~]+(\.git)?|\/[\w.\-\/]+)$/;
-  return remoteRegex.test(trimmed);
+  if (/[\r\n\0`$;|&<>\\'"]/.test(trimmed)) return false;
+  if (trimmed === OFFICIAL_UPSTREAM_REPO) return true;
+  if (trimmed.endsWith('/' + OFFICIAL_UPSTREAM_REPO)) {
+    const prefix = trimmed.slice(0, -(OFFICIAL_UPSTREAM_REPO.length + 1));
+    return Boolean(prefix) && validateGitMirror(prefix);
+  }
+  return false;
 }
 
 function validateGitBranch(branch) {

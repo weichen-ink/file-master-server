@@ -2,180 +2,37 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const multer = require('multer');
-const { STORAGE_DIR, ROOT_DIR, TRASH_DIR, UPLOAD_TMP_DIR, getConfig, readJsonData, writeJsonData } = require('../../core/config');
-const { requireAdmin, requireApiOrAdmin, getClientIp, createRateLimiter } = require('../../core/security');
+const {
+  ROOT_DIR,
+  STORAGE_DIR,
+  TRASH_DIR,
+  UPLOAD_TMP_DIR,
+  getConfig,
+  readJsonData,
+  writeJsonData
+} = require('../../core/config');
+const { requireApiOrAdmin, createRateLimiter, getClientIp } = require('../../core/security');
 const { appendAuditLog } = require('../../core/audit');
 const {
+  PROCESSABLE_IMAGE_EXTS,
   NEEDS_TRANSCODE_EXTS,
+  isAllowedAttachmentFile,
+  isPathWithin,
+  setSecurityFileHeaders,
+  sanitizeSegment,
+  sanitizeUploadFilename,
+  isValidYearSeg,
+  isValidMonthSeg,
+  buildAssetUrlsAndMeta
+} = require('../../core/file-security');
+const {
+  ensureDefaultWatermark,
   ensureTranscodedPreviewJpeg,
-  processAndCacheImage,
-  ensureDefaultWatermark
+  processAndCacheImage
 } = require('./processor');
 
 const RAW_DIR = path.join(STORAGE_DIR, 'raw');
 const CACHE_DIR = path.join(STORAGE_DIR, 'cache');
-
-// Processable bitmap image extensions for Sharp WebP transcoding and watermarking
-const PROCESSABLE_IMAGE_EXTS = new Set([
-  '.png',
-  '.jpg',
-  '.jpeg',
-  '.webp',
-  '.gif',
-  '.avif',
-  '.heic',
-  '.heif',
-  '.tif',
-  '.tiff',
-  '.bmp',
-  '.jfif',
-  '.pjpeg',
-  '.pjp'
-]);
-
-const IMAGE_EXTS = new Set([
-  ...PROCESSABLE_IMAGE_EXTS,
-  '.svg',
-  '.ico',
-  '.apng',
-  '.raw',
-  '.cr2',
-  '.nef',
-  '.arw',
-  '.dng',
-  '.orf',
-  '.rw2'
-]);
-
-const VIDEO_EXTS = new Set([
-  '.mp4',
-  '.webm',
-  '.mov',
-  '.mkv',
-  '.avi',
-  '.flv',
-  '.wmv',
-  '.m4v',
-  '.3gp',
-  '.mpeg',
-  '.mpg',
-  '.ts',
-  '.mts',
-  '.m2ts',
-  '.ogv',
-  '.rm',
-  '.rmvb'
-]);
-
-const AUDIO_EXTS = new Set([
-  '.mp3',
-  '.m4a',
-  '.wav',
-  '.ogg',
-  '.oga',
-  '.flac',
-  '.aac',
-  '.wma',
-  '.opus',
-  '.amr',
-  '.mid',
-  '.midi',
-  '.aiff',
-  '.aif',
-  '.ape',
-  '.alac',
-  '.m4b',
-  '.caf'
-]);
-
-const ARCHIVE_EXTS = new Set([
-  '.zip',
-  '.tar',
-  '.gz',
-  '.tgz',
-  '.7z',
-  '.rar',
-  '.bz2',
-  '.xz',
-  '.zst',
-  '.lz4',
-  '.dmg',
-  '.iso',
-  '.pkg'
-]);
-
-const IGNORED_SYSTEM_FILES = new Set(['.ds_store', 'thumbs.db', 'desktop.ini']);
-
-const INLINE_SAFE_EXTS = new Set([
-  '.png',
-  '.jpg',
-  '.jpeg',
-  '.webp',
-  '.gif',
-  '.avif',
-  '.bmp',
-  '.ico',
-  '.mp4',
-  '.webm',
-  '.mov',
-  '.mp3',
-  '.m4a',
-  '.wav',
-  '.ogg',
-  '.pdf'
-]);
-
-function setSecurityFileHeaders(res, filePath) {
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  // Sandbox isolates served assets and disallows script execution within origin
-  res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
-
-  const ext = path.extname(filePath).toLowerCase();
-  if (!INLINE_SAFE_EXTS.has(ext)) {
-    const safeName = path.basename(filePath).replace(/["\r\n\0]/g, '_');
-    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(safeName)}"`);
-  }
-}
-
-function isPathWithin(targetPath, baseDir) {
-  const resolvedTarget = path.resolve(targetPath);
-  const resolvedBase = path.resolve(baseDir);
-  return resolvedTarget === resolvedBase || resolvedTarget.startsWith(resolvedBase + path.sep);
-}
-
-function isAllowedAttachmentFile(filename) {
-  const base = path.basename(String(filename || '')).trim();
-  if (!base || base.startsWith('.')) return false;
-  if (IGNORED_SYSTEM_FILES.has(base.toLowerCase())) return false;
-  const ext = path.extname(base).toLowerCase();
-  return ext.length > 1;
-}
-
-function getFileCategory(ext) {
-  const e = String(ext || '').toLowerCase();
-  if (IMAGE_EXTS.has(e)) return 'image';
-  if (e === '.pdf') return 'pdf';
-  if (VIDEO_EXTS.has(e)) return 'video';
-  if (AUDIO_EXTS.has(e)) return 'audio';
-  if (ARCHIVE_EXTS.has(e)) return 'archive';
-  return 'document';
-}
-
-/**
- * Formats a readable URL file segment while preserving Unicode/CJK characters.
- * Only encodes whitespace and parenthesis characters that interfere with Markdown syntax.
- */
-function formatReadableUrlSegment(str) {
-  return String(str || '').replace(/[ ()[\]<>#?%]/g, (ch) => encodeURIComponent(ch));
-}
-
-function isValidYearSeg(y) {
-  return /^\d{4}$/.test(y) || y === 'protected';
-}
-
-function isValidMonthSeg(m) {
-  return /^\d{2}$/.test(m) || m === 'keep';
-}
 
 function getProtectedMap() {
   const data = readJsonData('protected_files', {});
@@ -188,7 +45,6 @@ function isItemLocked(year, month, filename, protectedMap = null) {
   if (map[key] !== undefined) {
     return Boolean(map[key]);
   }
-  // Legacy compatibility: files in legacy protected/keep default to locked unless unlocked
   if (year === 'protected') return true;
   return false;
 }
@@ -243,30 +99,41 @@ const acceptSingleUpload = (req, res, next) => {
   });
 };
 
-function sanitizeSegment(seg) {
-  let decoded = String(seg || '');
-  try {
-    decoded = decodeURIComponent(decoded);
-  } catch {}
-  return path.basename(decoded).replace(/[\/\\?%*:|"<>#\0]/g, '_').trim();
-}
-
-/**
- * Sanitizes uploaded filenames: preserves CJK characters while replacing spaces
- * and brackets with underscores for clean Markdown readability.
- */
-function sanitizeUploadFilename(seg) {
-  const base = sanitizeSegment(seg);
-  return base.replace(/[\s()[\]]+/g, '_').replace(/_+/g, '_');
-}
-
-// In-memory SHA-256 cache to avoid recalculating hashes on repeated list requests
+// Bounded LRU in-memory SHA-256 cache to avoid unbounded memory growth
+const MAX_SHA_CACHE_ENTRIES = 2000;
 const sha256Cache = new Map();
 let shaIndex = null;
+const pathToShaMap = new Map();
+
+function setBoundedShaCache(key, hash) {
+  if (sha256Cache.has(key)) {
+    sha256Cache.delete(key);
+  } else if (sha256Cache.size >= MAX_SHA_CACHE_ENTRIES) {
+    const oldestKey = sha256Cache.keys().next().value;
+    if (oldestKey !== undefined) {
+      sha256Cache.delete(oldestKey);
+    }
+  }
+  sha256Cache.set(key, hash);
+}
+
+function rebuildPathToShaMap(idx) {
+  pathToShaMap.clear();
+  for (const [sha, info] of Object.entries(idx || {})) {
+    if (info && info.year && info.month && info.filename) {
+      pathToShaMap.set(`${info.year}/${info.month}/${info.filename}`, {
+        sha256: sha,
+        size: info.size,
+        mtimeMs: info.mtimeMs
+      });
+    }
+  }
+}
 
 function getShaIndex() {
   if (!shaIndex) {
     shaIndex = readJsonData('sha_index', {});
+    rebuildPathToShaMap(shaIndex);
   }
   return shaIndex;
 }
@@ -275,10 +142,22 @@ function updateShaIndex(sha256, info, flush = true) {
   if (!sha256 || !info) return false;
   const idx = getShaIndex();
   const prev = idx[sha256];
-  if (prev && prev.year === info.year && prev.month === info.month && prev.filename === info.filename) {
+  const sameEntry =
+    prev &&
+    prev.year === info.year &&
+    prev.month === info.month &&
+    prev.filename === info.filename &&
+    prev.size === info.size &&
+    prev.mtimeMs === info.mtimeMs;
+  if (sameEntry) {
     return false;
   }
   idx[sha256] = info;
+  pathToShaMap.set(`${info.year}/${info.month}/${info.filename}`, {
+    sha256,
+    size: info.size,
+    mtimeMs: info.mtimeMs
+  });
   if (flush) {
     writeJsonData('sha_index', idx);
   }
@@ -295,24 +174,67 @@ function invalidateScanCache() {
   cachedScanTime = 0;
 }
 
-function removeShaIndex(sha256) {
-  if (!sha256) return;
+function removeShaIndex(sha256, relKey = null) {
   const idx = getShaIndex();
-  if (idx[sha256]) {
+  if (sha256 && idx[sha256]) {
+    const entry = idx[sha256];
+    if (entry && entry.year && entry.month && entry.filename) {
+      pathToShaMap.delete(`${entry.year}/${entry.month}/${entry.filename}`);
+    }
     delete idx[sha256];
     writeJsonData('sha_index', idx);
   }
+  if (relKey) {
+    pathToShaMap.delete(relKey);
+  }
 }
 
-function getFileSha256(fullPath, stat) {
+/**
+ * Computes SHA-256 using a fixed 64KB chunk buffer rather than loading the entire file into RAM,
+ * and consults the bounded LRU cache and persistent sha_index first.
+ */
+const SYNC_HASH_CHUNK_SIZE = 64 * 1024;
+const sharedChunkBuf = Buffer.allocUnsafe(SYNC_HASH_CHUNK_SIZE);
+
+function getFileSha256(fullPath, stat, relKey = null) {
   const cacheKey = `${fullPath}:${stat.size}:${stat.mtimeMs}`;
   if (sha256Cache.has(cacheKey)) {
-    return sha256Cache.get(cacheKey);
+    const hit = sha256Cache.get(cacheKey);
+    setBoundedShaCache(cacheKey, hit);
+    return hit;
   }
-  const buf = fs.readFileSync(fullPath);
-  const hash = crypto.createHash('sha256').update(buf).digest('hex');
-  sha256Cache.set(cacheKey, hash);
-  return hash;
+
+  if (relKey) {
+    getShaIndex();
+    const indexed = pathToShaMap.get(relKey);
+    if (indexed && indexed.sha256) {
+      if (
+        (indexed.size === undefined || indexed.size === stat.size) &&
+        (indexed.mtimeMs === undefined || indexed.mtimeMs === stat.mtimeMs)
+      ) {
+        setBoundedShaCache(cacheKey, indexed.sha256);
+        return indexed.sha256;
+      }
+    }
+  }
+
+  const hash = crypto.createHash('sha256');
+  const fd = fs.openSync(fullPath, 'r');
+  try {
+    let bytesRead = 0;
+    do {
+      bytesRead = fs.readSync(fd, sharedChunkBuf, 0, SYNC_HASH_CHUNK_SIZE, null);
+      if (bytesRead > 0) {
+        hash.update(sharedChunkBuf.subarray(0, bytesRead));
+      }
+    } while (bytesRead > 0);
+  } finally {
+    fs.closeSync(fd);
+  }
+
+  const digest = hash.digest('hex');
+  setBoundedShaCache(cacheKey, digest);
+  return digest;
 }
 
 function hashFileSha256(fullPath) {
@@ -332,13 +254,15 @@ async function moveFileToTrash(source, target, expectedSha256) {
     if (err.code !== 'EXDEV') throw err;
     try {
       fs.copyFileSync(source, target, fs.constants.COPYFILE_EXCL);
-      if (await hashFileSha256(target) !== expectedSha256) {
+      if ((await hashFileSha256(target)) !== expectedSha256) {
         throw new Error('Trash copy failed integrity check');
       }
       fs.unlinkSync(source);
     } catch (copyErr) {
       if (fs.existsSync(source) && fs.existsSync(target)) {
-        try { fs.unlinkSync(target); } catch {}
+        try {
+          fs.unlinkSync(target);
+        } catch {}
       }
       throw copyErr;
     }
@@ -356,6 +280,7 @@ function findExistingBySha256(targetSha256) {
     if (fs.existsSync(fullPath)) {
       return entry;
     } else {
+      pathToShaMap.delete(`${entry.year}/${entry.month}/${entry.filename}`);
       delete idx[targetSha256];
       writeJsonData('sha_index', idx);
     }
@@ -364,7 +289,43 @@ function findExistingBySha256(targetSha256) {
 }
 
 /**
- * Resolves raw file path from requested filename (with original ext or .webp).
+ * Resolves cache file paths keyed by full raw filename (e.g., photo.jpg.webp vs photo.png.webp)
+ * so same-basename files with different extensions never collide in the cache.
+ */
+function getWebpCacheFilePath(year, month, rawFilename) {
+  return path.join(CACHE_DIR, year, month, `${rawFilename}.webp`);
+}
+
+function getLegacyWebpCacheFilePath(year, month, rawFilename) {
+  const baseName = path.parse(rawFilename).name;
+  return path.join(CACHE_DIR, year, month, `${baseName}.webp`);
+}
+
+function getRawPreviewCacheFilePath(year, month, rawFilename) {
+  return path.join(CACHE_DIR, year, month, `${rawFilename}.raw_preview.jpg`);
+}
+
+/**
+ * Checks whether multiple allowed files in the given month directory share the same basename.
+ */
+function hasSiblingWithSameBasename(year, month, filename, filesList = null) {
+  const monthDir = path.join(RAW_DIR, year, month);
+  const files = filesList || (fs.existsSync(monthDir) ? fs.readdirSync(monthDir) : []);
+  const targetBase = path.parse(filename).name.replace(/[\s_]+/g, '_');
+  let count = 0;
+  for (const f of files) {
+    if (!isAllowedAttachmentFile(f)) continue;
+    const fBase = path.parse(f).name.replace(/[\s_]+/g, '_');
+    if (fBase === targetBase) {
+      count += 1;
+      if (count > 1 || f !== filename) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Resolves raw file path from requested filename (supports exact name, <rawFilename>.webp, or <baseName>.webp).
  */
 function findRawFile(year, month, requestedFilename, requireSameExt = false) {
   const monthDir = path.join(RAW_DIR, year, month);
@@ -373,10 +334,27 @@ function findRawFile(year, month, requestedFilename, requireSameExt = false) {
   const exactPath = path.join(monthDir, requestedFilename);
   if (fs.existsSync(exactPath)) return exactPath;
 
+  const files = fs.readdirSync(monthDir);
+
+  // If requesting "<rawFilename>.webp" (e.g. "photo.png.webp"), check exact stripped name first
+  if (!requireSameExt && requestedFilename.toLowerCase().endsWith('.webp')) {
+    const strippedRawName = requestedFilename.slice(0, -5);
+    const strippedExactPath = path.join(monthDir, strippedRawName);
+    if (fs.existsSync(strippedExactPath) && isAllowedAttachmentFile(strippedRawName)) {
+      return strippedExactPath;
+    }
+    const normStripped = strippedRawName.replace(/[\s_]+/g, '_');
+    for (const f of files) {
+      if (!isAllowedAttachmentFile(f)) continue;
+      if (f.replace(/[\s_]+/g, '_') === normStripped) {
+        return path.join(monthDir, f);
+      }
+    }
+  }
+
   const parsed = path.parse(requestedFilename);
   const normReqBase = parsed.name.replace(/[\s_]+/g, '_');
   const reqExt = parsed.ext.toLowerCase();
-  const files = fs.readdirSync(monthDir);
 
   for (const f of files) {
     if (!isAllowedAttachmentFile(f)) continue;
@@ -393,7 +371,7 @@ function findRawFile(year, month, requestedFilename, requireSameExt = false) {
  * Scans all raw assets and compiles summary metrics.
  */
 function scanAllImages(cfg, forceRefresh = false) {
-  const cfgKey = `${cfg.base_url}|${cfg.image_host?.raw_secret_path}|${cfg.image_host?.enable_optimization}`;
+  const cfgKey = `${cfg.base_url}|${cfg.image_host?.raw_secret_path}|${cfg.image_host?.pub_secret_path}|${cfg.image_host?.enable_optimization}`;
   const now = Date.now();
   if (!forceRefresh && cachedScanData && cfgKey === cachedScanCfgKey && now - cachedScanTime < SCAN_CACHE_TTL_MS) {
     return cachedScanData;
@@ -431,33 +409,45 @@ function scanAllImages(cfg, forceRefresh = false) {
       const files = fs.readdirSync(monthPath);
       for (const file of files) {
         if (!isAllowedAttachmentFile(file)) continue;
-        const ext = path.extname(file).toLowerCase();
 
         const fullRawPath = path.join(monthPath, file);
         const stat = fs.statSync(fullRawPath);
         totalRawBytes += stat.size;
 
-        const isProcessableImage = PROCESSABLE_IMAGE_EXTS.has(ext);
-        const category = getFileCategory(ext);
-        const baseName = path.parse(file).name;
-        const cacheFile = path.join(CACHE_DIR, year, month, `${baseName}.webp`);
-        const hasCache = isProcessableImage && fs.existsSync(cacheFile);
+        const hasCollision = hasSiblingWithSameBasename(year, month, file, files);
+        const assetMeta = buildAssetUrlsAndMeta(cfg, {
+          year,
+          month,
+          filename: file,
+          hasBasenameCollision: hasCollision
+        });
+
+        const primaryCacheFile = getWebpCacheFilePath(year, month, file);
+        const legacyCacheFile = getLegacyWebpCacheFilePath(year, month, file);
+        let activeCacheFile = null;
+        if (assetMeta.isProcessableImage) {
+          if (fs.existsSync(primaryCacheFile)) {
+            activeCacheFile = primaryCacheFile;
+          } else if (!hasCollision && fs.existsSync(legacyCacheFile)) {
+            activeCacheFile = legacyCacheFile;
+          }
+        }
+        const hasCache = Boolean(activeCacheFile);
         let cacheSize = 0;
         if (hasCache) {
-          cacheSize = fs.statSync(cacheFile).size;
+          cacheSize = fs.statSync(activeCacheFile).size;
           totalCacheBytes += cacheSize;
         }
 
-        const readableFileUrlSeg = formatReadableUrlSegment(file);
-        const readableBaseUrlSeg = formatReadableUrlSegment(baseName);
-        const relPath = `${year}/${month}/${readableFileUrlSeg}`;
-        const pubRelPath = isProcessableImage
-          ? `${year}/${month}/${readableBaseUrlSeg}.webp`
-          : relPath;
-        const rawSecret = cfg.image_host.raw_secret_path;
-        const pubSecret = cfg.image_host.pub_secret_path || 'pub';
-        const sha256 = getFileSha256(fullRawPath, stat);
-        if (updateShaIndex(sha256, { year, month, filename: file }, false)) {
+        const relKey = `${year}/${month}/${file}`;
+        const sha256 = getFileSha256(fullRawPath, stat, relKey);
+        if (
+          updateShaIndex(
+            sha256,
+            { year, month, filename: file, size: stat.size, mtimeMs: stat.mtimeMs },
+            false
+          )
+        ) {
           shaIndexDirty = true;
         }
         const locked = isItemLocked(year, month, file, protectedMap);
@@ -466,10 +456,10 @@ function scanAllImages(cfg, forceRefresh = false) {
         list.push({
           filename: file,
           sha256,
-          ext,
-          category,
-          isImage: category === 'image',
-          isProcessableImage,
+          ext: assetMeta.ext,
+          category: assetMeta.category,
+          isImage: assetMeta.isImage,
+          isProcessableImage: assetMeta.isProcessableImage,
           year,
           month,
           locked,
@@ -478,10 +468,10 @@ function scanAllImages(cfg, forceRefresh = false) {
           cacheSize,
           hasCache,
           createdAt: stat.birthtimeMs || stat.mtimeMs,
-          rawUrl: `${cfg.base_url}/${rawSecret}/${relPath}`,
-          pubUrl: `${cfg.base_url}/${pubSecret}/${pubRelPath}`,
-          rawPreviewPath: `/${rawSecret}/${relPath}`,
-          pubPreviewPath: `/${pubSecret}/${pubRelPath}`
+          rawUrl: assetMeta.rawUrl,
+          pubUrl: assetMeta.pubUrl,
+          rawPreviewPath: assetMeta.rawPreviewPath,
+          pubPreviewPath: assetMeta.pubPreviewPath
         });
       }
     }
@@ -524,7 +514,7 @@ let isIndexWarming = false;
 function warmShaIndexAsync() {
   if (isIndexWarming) return;
   isIndexWarming = true;
-  setTimeout(() => {
+  const timer = setTimeout(async () => {
     try {
       ensureDirs();
       const idx = getShaIndex();
@@ -540,36 +530,59 @@ function warmShaIndexAsync() {
           const files = fs.readdirSync(monthPath);
           for (const file of files) {
             if (!isAllowedAttachmentFile(file)) continue;
+            const relKey = `${year}/${month}/${file}`;
             const fullPath = path.join(monthPath, file);
             const stat = fs.statSync(fullPath);
-            const sha = getFileSha256(fullPath, stat);
-            if (!idx[sha]) {
-              idx[sha] = { year, month, filename: file };
+            const existing = pathToShaMap.get(relKey);
+            if (
+              existing &&
+              existing.sha256 &&
+              existing.size === stat.size &&
+              existing.mtimeMs === stat.mtimeMs
+            ) {
+              continue;
+            }
+            const sha = await hashFileSha256(fullPath);
+            setBoundedShaCache(`${fullPath}:${stat.size}:${stat.mtimeMs}`, sha);
+            if (
+              updateShaIndex(
+                sha,
+                { year, month, filename: file, size: stat.size, mtimeMs: stat.mtimeMs },
+                false
+              )
+            ) {
               added++;
             }
+            await new Promise((r) => setImmediate(r));
           }
         }
       }
       if (added > 0) {
         writeJsonData('sha_index', idx);
-        console.log(`[ImageHost] Warm startup: indexed ${added} missing asset(s) into sha_index.json`);
+        console.log(`[ImageHost] Warm startup: indexed ${added} asset(s) into sha_index.json`);
       }
     } catch (err) {
       console.warn('[ImageHost] Warm index background error:', err.message);
     } finally {
       isIndexWarming = false;
     }
-  }, 200).unref();
+  }, 200);
+  if (typeof timer.unref === 'function') {
+    timer.unref();
+  }
 }
 
 function registerImageHostModule(app) {
   ensureDirs();
   warmShaIndexAsync();
   const initCfg = getConfig();
-  const wmPath = path.resolve(ROOT_DIR, initCfg.image_host.watermark_image || './watermark.png');
+  const requestedWmPath = path.resolve(ROOT_DIR, initCfg.image_host.watermark_image || './watermark.png');
+  const wmPath = isPathWithin(requestedWmPath, ROOT_DIR)
+    ? requestedWmPath
+    : path.resolve(ROOT_DIR, './watermark.png');
   ensureDefaultWatermark(wmPath, initCfg.image_host.watermark_text).catch(() => {});
 
-  // 1. Unified attachment upload endpoint (supports custom naming, SHA-256 calculation, and protected/keep storage)
+  // 1. Unified attachment upload endpoint
   const handleUpload = async (req, res) => {
     let tmpPath = null;
     try {
@@ -579,7 +592,6 @@ function registerImageHostModule(app) {
       }
       tmpPath = fileObj.path || null;
 
-      // Read filename from headers['x-file-name'] if provided; fix Multer latin1 encoding to utf8
       let rawOrigName = 'file.png';
       if (req.headers['x-file-name']) {
         try {
@@ -609,7 +621,7 @@ function registerImageHostModule(app) {
       const now = new Date();
       let year = String(now.getFullYear());
       let month = String(now.getMonth() + 1).padStart(2, '0');
-      let targetDir = path.join(RAW_DIR, year, month);
+      const targetDir = path.join(RAW_DIR, year, month);
       fs.mkdirSync(targetDir, { recursive: true });
 
       const desiredBase = path.basename(safeOrigName, origExt) || `${year}${month}`;
@@ -617,7 +629,6 @@ function registerImageHostModule(app) {
       let destPath = path.join(targetDir, filename);
       let deduplicated = false;
 
-      // Helper to persist file content from buffer or temp path
       const persistUpload = (target) => {
         if (fileObj.buffer) {
           fs.writeFileSync(target, fileObj.buffer);
@@ -637,11 +648,8 @@ function registerImageHostModule(app) {
       } else if (fs.existsSync(destPath)) {
         const existSha = await hashFileSha256(destPath);
         if (existSha === fullSha256) {
-          // Identical name and content: reuse existing file
           deduplicated = true;
-          updateShaIndex(fullSha256, { year, month, filename });
         } else {
-          // Same name but different content: append 8-char SHA to avoid overwriting
           filename = `${desiredBase}_${hash8}${origExt}`;
           destPath = path.join(targetDir, filename);
           if (!fs.existsSync(destPath)) {
@@ -649,20 +657,28 @@ function registerImageHostModule(app) {
           } else {
             deduplicated = true;
           }
-          updateShaIndex(fullSha256, { year, month, filename });
         }
+        const stat = fs.statSync(destPath);
+        updateShaIndex(fullSha256, { year, month, filename, size: stat.size, mtimeMs: stat.mtimeMs });
       } else {
-        persistUpload(destPath);
-        updateShaIndex(fullSha256, { year, month, filename });
+        // Also disambiguate if another file in the same month folder shares the basename with a different extension
+        if (hasSiblingWithSameBasename(year, month, filename)) {
+          filename = `${desiredBase}_${hash8}${origExt}`;
+          destPath = path.join(targetDir, filename);
+        }
+        if (!fs.existsSync(destPath)) {
+          persistUpload(destPath);
+        } else {
+          deduplicated = true;
+        }
+        const stat = fs.statSync(destPath);
+        updateShaIndex(fullSha256, { year, month, filename, size: stat.size, mtimeMs: stat.mtimeMs });
       }
 
       invalidateScanCache();
 
       const cfg = getConfig();
-      const rawSecret = cfg.image_host.raw_secret_path;
-      const isProcessableImage = PROCESSABLE_IMAGE_EXTS.has(origExt);
-      const category = getFileCategory(origExt);
-      const baseName = path.parse(filename).name;
+      const stat = fs.existsSync(destPath) ? fs.statSync(destPath) : { size: 0 };
 
       appendAuditLog({
         action: 'upload',
@@ -670,24 +686,19 @@ function registerImageHostModule(app) {
         year,
         month,
         filename,
-        size: fs.existsSync(destPath) ? fs.statSync(destPath).size : 0,
+        size: stat.size,
         deduplicated,
         sha256: fullSha256
       });
 
-      // Preserve Unicode and CJK filename characters in readable URL format
-      const readableFile = formatReadableUrlSegment(filename);
-      const readableBase = formatReadableUrlSegment(baseName);
-      const optimizationEnabled = cfg.image_host?.enable_optimization !== false;
-      const pubSecret = cfg.image_host?.pub_secret_path || 'pub';
-      const rawUrl = `${cfg.base_url}/${rawSecret}/${year}/${month}/${readableFile}`;
-      const pubUrl = isProcessableImage
-        ? `${cfg.base_url}/${pubSecret}/${year}/${month}/${readableBase}.webp`
-        : `${cfg.base_url}/${pubSecret}/${year}/${month}/${readableFile}`;
-
-      const cleanTitle = path.basename(safeOrigName, origExt);
-      const markdown =
-        category === 'image' ? `![](${rawUrl})` : `[📎 ${cleanTitle}${origExt}](${rawUrl})`;
+      const hasCollision = hasSiblingWithSameBasename(year, month, filename);
+      const assetMeta = buildAssetUrlsAndMeta(cfg, {
+        year,
+        month,
+        filename,
+        originalName: safeOrigName,
+        hasBasenameCollision: hasCollision
+      });
       const locked = isItemLocked(year, month, filename);
 
       return res.json({
@@ -695,24 +706,26 @@ function registerImageHostModule(app) {
         deduplicated,
         locked,
         inProtectedFolder: year === 'protected',
-        optimizationEnabled,
+        optimizationEnabled: assetMeta.optimizationEnabled,
         sha256: fullSha256,
-        category,
+        category: assetMeta.category,
         year,
         month,
         filename,
         originalName: safeOrigName,
-        url: rawUrl,
-        rawUrl,
-        pubUrl,
-        markdown
+        url: assetMeta.rawUrl,
+        rawUrl: assetMeta.rawUrl,
+        pubUrl: assetMeta.pubUrl,
+        markdown: assetMeta.markdown
       });
     } catch (err) {
       console.error('[FileMaster] Upload error:', err);
       return res.status(500).json({ error: 'Failed to save file: ' + err.message });
     } finally {
       if (tmpPath && fs.existsSync(tmpPath)) {
-        try { fs.unlinkSync(tmpPath); } catch {}
+        try {
+          fs.unlinkSync(tmpPath);
+        } catch {}
       }
     }
   };
@@ -726,7 +739,9 @@ function registerImageHostModule(app) {
   // 1.1 Fast SHA-256 Probe Endpoint for Instant Upload (0-payload client deduplication)
   const handleProbe = (req, res) => {
     try {
-      const sha256 = String(req.query.sha256 || req.body?.sha256 || '').trim().toLowerCase();
+      const sha256 = String(req.query.sha256 || req.body?.sha256 || '')
+        .trim()
+        .toLowerCase();
       if (!sha256 || sha256.length !== 64 || !/^[0-9a-f]{64}$/.test(sha256)) {
         return res.status(400).json({ error: 'Valid 64-character sha256 is required' });
       }
@@ -737,24 +752,14 @@ function registerImageHostModule(app) {
       }
 
       const cfg = getConfig();
-      const rawSecret = cfg.image_host.raw_secret_path;
-      const origExt = path.extname(match.filename).toLowerCase();
-      const isProcessableImage = PROCESSABLE_IMAGE_EXTS.has(origExt);
-      const category = getFileCategory(origExt);
-      const baseName = path.parse(match.filename).name;
-
-      const readableFile = formatReadableUrlSegment(match.filename);
-      const readableBase = formatReadableUrlSegment(baseName);
-      const optimizationEnabled = cfg.image_host?.enable_optimization !== false;
-      const pubSecret = cfg.image_host?.pub_secret_path || 'pub';
-      const rawUrl = `${cfg.base_url}/${rawSecret}/${match.year}/${match.month}/${readableFile}`;
-      const pubUrl = isProcessableImage
-        ? `${cfg.base_url}/${pubSecret}/${match.year}/${match.month}/${readableBase}.webp`
-        : `${cfg.base_url}/${pubSecret}/${match.year}/${match.month}/${readableFile}`;
-
-      const cleanTitle = path.basename(match.filename, origExt);
-      const markdown =
-        category === 'image' ? `![](${rawUrl})` : `[📎 ${cleanTitle}${origExt}](${rawUrl})`;
+      const hasCollision = hasSiblingWithSameBasename(match.year, match.month, match.filename);
+      const assetMeta = buildAssetUrlsAndMeta(cfg, {
+        year: match.year,
+        month: match.month,
+        filename: match.filename,
+        originalName: match.filename,
+        hasBasenameCollision: hasCollision
+      });
       const locked = isItemLocked(match.year, match.month, match.filename);
 
       return res.json({
@@ -763,17 +768,17 @@ function registerImageHostModule(app) {
         deduplicated: true,
         locked,
         inProtectedFolder: match.year === 'protected',
-        optimizationEnabled,
+        optimizationEnabled: assetMeta.optimizationEnabled,
         sha256,
-        category,
+        category: assetMeta.category,
         year: match.year,
         month: match.month,
         filename: match.filename,
         originalName: match.filename,
-        url: rawUrl,
-        rawUrl,
-        pubUrl,
-        markdown
+        url: assetMeta.rawUrl,
+        rawUrl: assetMeta.rawUrl,
+        pubUrl: assetMeta.pubUrl,
+        markdown: assetMeta.markdown
       });
     } catch (err) {
       console.error('[FileMaster] Probe error:', err);
@@ -783,20 +788,24 @@ function registerImageHostModule(app) {
 
   app.get('/api/image/probe', requireApiOrAdmin, handleProbe);
   app.post('/api/image/probe', requireApiOrAdmin, handleProbe);
-  app.get('/api/probe', requireApiOrAdmin, handleProbe);
-  app.post('/api/probe', requireApiOrAdmin, handleProbe);
 
   app.post('/api/image/upload', uploadRateLimiter, requireApiOrAdmin, acceptSingleUpload, handleUpload);
-  app.post('/api/upload', uploadRateLimiter, requireApiOrAdmin, acceptSingleUpload, handleUpload);
+  app.post(
+    '/api/modules/image-host/upload',
+    uploadRateLimiter,
+    requireApiOrAdmin,
+    acceptSingleUpload,
+    handleUpload
+  );
 
-  // 1.5 Server-side preview transcode endpoint (for Obsidian client local HEIC/HEIF/TIFF previewing via Linux server)
+  // 1.5 Local Pre-Upload Preview Transcode Endpoint (for .heic/.heif/.tiff in Obsidian Modal)
   app.post('/api/image/preview-transcode', uploadRateLimiter, requireApiOrAdmin, acceptSingleUpload, async (req, res) => {
     let tmpInput = null;
     let tmpOutput = null;
     try {
       const fileObj = req.file;
       if (!fileObj || !fileObj.path) {
-        return res.status(400).json({ error: 'No image file provided' });
+        return res.status(400).json({ error: 'No file provided for preview transcoding' });
       }
       tmpInput = fileObj.path;
       tmpOutput = `${tmpInput}.preview.jpg`;
@@ -808,16 +817,19 @@ function registerImageHostModule(app) {
       return res.status(500).json({ error: 'Preview transcode failed: ' + err.message });
     } finally {
       if (tmpInput && fs.existsSync(tmpInput)) {
-        try { fs.unlinkSync(tmpInput); } catch {}
+        try {
+          fs.unlinkSync(tmpInput);
+        } catch {}
       }
       if (tmpOutput && fs.existsSync(tmpOutput)) {
-        try { fs.unlinkSync(tmpOutput); } catch {}
+        try {
+          fs.unlinkSync(tmpOutput);
+        } catch {}
       }
     }
   });
 
   // 2. Public / Optimized route: GET /:pubSecretPath/:year/:month/:filename
-  // (Images processed with sharp WebP compression + watermark; documents/media streamed directly)
   const handleOptimizedPublicRequest = async (req, res, next) => {
     try {
       const cfg = getConfig();
@@ -849,8 +861,8 @@ function registerImageHostModule(app) {
         return res.sendFile(rawFilePath);
       }
 
-      const baseName = path.parse(rawFilePath).name;
-      const cacheFilePath = path.join(CACHE_DIR, year, month, `${baseName}.webp`);
+      const rawBasenameWithExt = path.basename(rawFilePath);
+      const cacheFilePath = getWebpCacheFilePath(year, month, rawBasenameWithExt);
 
       if (!fs.existsSync(cacheFilePath)) {
         await processAndCacheImage(rawFilePath, cacheFilePath, cfg.image_host);
@@ -870,7 +882,6 @@ function registerImageHostModule(app) {
   app.get('/:pubSecretPath/:year/:month/:filename', handleOptimizedPublicRequest);
 
   // 3. Raw file access via secret path: GET /:rawSecretPath/:year/:month/:filename
-  // (Auto-transcodes .heic/.heif/.tiff to JPEG for <img> preview unless ?download=1 is set)
   app.get('/:rawSecretPath/:year/:month/:filename', async (req, res, next) => {
     try {
       const cfg = getConfig();
@@ -894,8 +905,8 @@ function registerImageHostModule(app) {
 
       const ext = path.extname(rawFilePath).toLowerCase();
       if (NEEDS_TRANSCODE_EXTS.has(ext) && req.query.download !== '1' && req.query.raw !== '1') {
-        const baseName = path.parse(rawFilePath).name;
-        const previewCachePath = path.join(CACHE_DIR, year, month, `${baseName}.raw_preview.jpg`);
+        const rawBasenameWithExt = path.basename(rawFilePath);
+        const previewCachePath = getRawPreviewCacheFilePath(year, month, rawBasenameWithExt);
         await ensureTranscodedPreviewJpeg(rawFilePath, previewCachePath);
         res.setHeader('Content-Type', 'image/jpeg');
         res.setHeader('Cache-Control', 'private, max-age=2592000');
@@ -969,9 +980,10 @@ function registerImageHostModule(app) {
       });
     }
 
-    const baseName = path.parse(filename).name;
-    const cacheFilePath = path.join(CACHE_DIR, year, month, `${baseName}.webp`);
-    const rawPreviewCachePath = path.join(CACHE_DIR, year, month, `${baseName}.raw_preview.jpg`);
+    const cacheFilePath = getWebpCacheFilePath(year, month, filename);
+    const legacyCacheFilePath = getLegacyWebpCacheFilePath(year, month, filename);
+    const rawPreviewCachePath = getRawPreviewCacheFilePath(year, month, filename);
+    const legacyPreviewCachePath = path.join(CACHE_DIR, year, month, `${path.parse(filename).name}.raw_preview.jpg`);
 
     let deletedSize = 0;
     let deletedSha = null;
@@ -981,7 +993,6 @@ function registerImageHostModule(app) {
         const stat = fs.statSync(rawFilePath);
         deletedSize = stat.size;
         deletedSha = await hashFileSha256(rawFilePath);
-        // Use a unique trash name so repeated deletions cannot overwrite older copies.
         const trashDay = new Date().toISOString().slice(0, 10);
         const trashTargetDir = path.join(TRASH_DIR, trashDay, year, month);
         fs.mkdirSync(trashTargetDir, { recursive: true });
@@ -993,12 +1004,28 @@ function registerImageHostModule(app) {
         console.error('[FileMaster] Failed to move file to trash:', err);
         return res.status(500).json({ error: 'Failed to move file to trash; original file was preserved' });
       }
-      try { removeShaIndex(deletedSha); } catch (err) {
+      try {
+        removeShaIndex(deletedSha, `${year}/${month}/${filename}`);
+      } catch (err) {
         console.warn('[FileMaster] Failed to update SHA index after deletion:', err);
       }
     }
-    if (isPathWithin(cacheFilePath, CACHE_DIR) && fs.existsSync(cacheFilePath)) fs.unlinkSync(cacheFilePath);
-    if (isPathWithin(rawPreviewCachePath, CACHE_DIR) && fs.existsSync(rawPreviewCachePath)) fs.unlinkSync(rawPreviewCachePath);
+
+    // Safely clean up associated cache files without failing the delete response if unlink throws
+    const hasRemainingSibling = hasSiblingWithSameBasename(year, month, filename);
+    const cacheTargets = [cacheFilePath, rawPreviewCachePath];
+    if (!hasRemainingSibling) {
+      cacheTargets.push(legacyCacheFilePath, legacyPreviewCachePath);
+    }
+    for (const target of cacheTargets) {
+      try {
+        if (isPathWithin(target, CACHE_DIR) && fs.existsSync(target)) {
+          fs.unlinkSync(target);
+        }
+      } catch (err) {
+        console.warn('[FileMaster] Failed to remove cache file after deletion:', target, err.message);
+      }
+    }
 
     invalidateScanCache();
 
@@ -1012,12 +1039,15 @@ function registerImageHostModule(app) {
       sha256: deletedSha
     });
 
-    res.json({ success: true, movedToTrash: true });
+    return res.json({ success: true, movedToTrash: true });
   });
 
   app.post('/api/modules/image-host/cache/clear', requireApiOrAdmin, (req, res) => {
     clearCacheDir();
-    res.json({ success: true, message: 'Watermark and WebP cache cleared successfully. Regenerates on next request.' });
+    res.json({
+      success: true,
+      message: 'Watermark and WebP cache cleared successfully. Regenerates on next request.'
+    });
   });
 }
 
@@ -1026,5 +1056,7 @@ module.exports = {
   moveFileToTrash,
   registerImageHostModule,
   scanAllImages,
-  invalidateScanCache
+  invalidateScanCache,
+  getWebpCacheFilePath,
+  findRawFile
 };

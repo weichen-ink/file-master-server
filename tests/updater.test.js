@@ -35,11 +35,16 @@ test('Updater: validates git mirror URLs for safety', () => {
   assert.equal(validateGitMirror('https://gh-proxy.com/'), true);
   assert.equal(validateGitMirror('http://mirror.internal.lan:8080'), true);
 
-  // Invalid protocols or suspicious characters
+  // Invalid protocols, deceptive repo mirrors, or suspicious characters
   assert.equal(validateGitMirror('file:///etc/passwd'), false);
   assert.equal(validateGitMirror('javascript:alert(1)'), false);
   assert.equal(validateGitMirror('ssh://git@github.com'), false);
   assert.equal(validateGitMirror('https://ghproxy.net; rm -rf /'), false);
   assert.equal(validateGitMirror('https://ghproxy.net && whoami'), false);
   assert.equal(validateGitMirror('not-a-valid-url'), false);
+  assert.equal(validateGitMirror('https://evil.example.com/weichen-ink/file-master-server.git'), false);
+  assert.equal(
+    getEffectiveUpstreamRepo('https://evil.example.com/weichen-ink/file-master-server.git'),
+    OFFICIAL_UPSTREAM_REPO
+  );
 });

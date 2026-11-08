@@ -1,53 +1,82 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const { STORAGE_DIR, getConfig, readJsonData, writeJsonData } = require('../../core/config');
-const { requireApiOrAdmin, getClientIp } = require('../../core/security');
+const { DATA_DIR, STORAGE_DIR, getConfig, readJsonData, writeJsonData } = require('../../core/config');
+const { requireApiOrAdmin, getClientIp, createRateLimiter } = require('../../core/security');
 const { appendAuditLog } = require('../../core/audit');
+const {
+  isPathWithin,
+  setSecurityFileHeaders,
+  sanitizeSegment,
+  isValidYearSeg,
+  isValidMonthSeg,
+  isAllowedAttachmentFile
+} = require('../../core/file-security');
 
 const RAW_DIR = path.join(STORAGE_DIR, 'raw');
+const SHARES_FILE_PATH = path.join(DATA_DIR, 'shares.json');
 
-const INLINE_SAFE_EXTS = new Set([
-  '.png',
-  '.jpg',
-  '.jpeg',
-  '.webp',
-  '.gif',
-  '.avif',
-  '.bmp',
-  '.ico',
-  '.mp4',
-  '.webm',
-  '.mov',
-  '.mp3',
-  '.m4a',
-  '.wav',
-  '.ogg',
-  '.pdf'
-]);
-
-function isPathWithin(targetPath, baseDir) {
-  const resolvedTarget = path.resolve(targetPath);
-  const resolvedBase = path.resolve(baseDir);
-  return resolvedTarget === resolvedBase || resolvedTarget.startsWith(resolvedBase + path.sep);
-}
+let cachedSharesMap = null;
+let cachedSharesMtimeMs = 0;
+let flushTimer = null;
 
 function getSharesMap() {
-  const data = readJsonData('shares', {});
-  return data && typeof data === 'object' && !Array.isArray(data) ? data : {};
+  try {
+    if (fs.existsSync(SHARES_FILE_PATH)) {
+      const mtimeMs = fs.statSync(SHARES_FILE_PATH).mtimeMs;
+      if (!cachedSharesMap || mtimeMs !== cachedSharesMtimeMs) {
+        const data = readJsonData('shares', {});
+        cachedSharesMap = data && typeof data === 'object' && !Array.isArray(data) ? data : {};
+        cachedSharesMtimeMs = mtimeMs;
+      }
+      return cachedSharesMap;
+    }
+  } catch {}
+  if (!cachedSharesMap) {
+    const data = readJsonData('shares', {});
+    cachedSharesMap = data && typeof data === 'object' && !Array.isArray(data) ? data : {};
+  }
+  return cachedSharesMap;
 }
 
 function saveSharesMap(map) {
+  if (flushTimer) {
+    clearTimeout(flushTimer);
+    flushTimer = null;
+  }
+  cachedSharesMap = map;
   writeJsonData('shares', map);
+  try {
+    if (fs.existsSync(SHARES_FILE_PATH)) {
+      cachedSharesMtimeMs = fs.statSync(SHARES_FILE_PATH).mtimeMs;
+    }
+  } catch {}
+}
+
+function scheduleSharesFlush() {
+  if (flushTimer) return;
+  flushTimer = setTimeout(() => {
+    flushTimer = null;
+    if (cachedSharesMap) {
+      try {
+        saveSharesMap(cachedSharesMap);
+      } catch (err) {
+        console.warn('[Share] Failed to flush shares.json:', err.message);
+      }
+    }
+  }, 1500);
+  if (typeof flushTimer.unref === 'function') {
+    flushTimer.unref();
+  }
 }
 
 function createShareRecord({ year, month, filename, expiresInHours = 24, maxDownloads = 0 }) {
-  const y = path.basename(String(year || '')).trim();
-  const m = path.basename(String(month || '')).trim();
-  const f = path.basename(String(filename || '')).trim();
+  const y = sanitizeSegment(year);
+  const m = sanitizeSegment(month);
+  const f = sanitizeSegment(filename);
 
-  if (!y || !m || !f) {
-    throw new Error('Missing year, month, or filename');
+  if (!y || !m || !f || !isValidYearSeg(y) || !isValidMonthSeg(m) || !isAllowedAttachmentFile(f)) {
+    throw new Error('Missing or invalid year, month, or filename');
   }
   const fullPath = path.join(RAW_DIR, y, m, f);
   if (!isPathWithin(fullPath, RAW_DIR) || !fs.existsSync(fullPath)) {
@@ -79,6 +108,12 @@ function createShareRecord({ year, month, filename, expiresInHours = 24, maxDown
 }
 
 function registerShareModule(app) {
+  const shareDownloadLimiter = createRateLimiter({
+    windowMs: 60 * 1000,
+    max: 120,
+    message: 'Too many share download requests from this IP. Please try again later.'
+  });
+
   // 1. Create a new expiring share link
   app.post('/api/modules/share/create', requireApiOrAdmin, (req, res) => {
     try {
@@ -147,7 +182,7 @@ function registerShareModule(app) {
   });
 
   // 4. Public access route: GET /s/:shareId
-  app.get('/s/:shareId', (req, res) => {
+  app.get('/s/:shareId', shareDownloadLimiter, (req, res) => {
     const shareId = String(req.params.shareId || '').trim();
     const map = getSharesMap();
     const item = map[shareId];
@@ -170,16 +205,14 @@ function registerShareModule(app) {
 
     item.downloads = (item.downloads || 0) + 1;
     map[shareId] = item;
-    saveSharesMap(map);
-
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
-    const ext = path.extname(fullPath).toLowerCase();
-    const forceDownload = req.query.download === '1' || !INLINE_SAFE_EXTS.has(ext);
-    if (forceDownload) {
-      const safeName = path.basename(fullPath).replace(/["\r\n\0]/g, '_');
-      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(safeName)}"`);
+    if (item.maxDownloads > 0 && item.downloads >= item.maxDownloads) {
+      saveSharesMap(map);
+    } else {
+      scheduleSharesFlush();
     }
+
+    const forceDownloadName = req.query.download === '1' ? path.basename(fullPath) : null;
+    setSecurityFileHeaders(res, fullPath, forceDownloadName);
 
     return res.sendFile(fullPath);
   });
@@ -190,4 +223,3 @@ module.exports = {
   createShareRecord,
   getSharesMap
 };
-

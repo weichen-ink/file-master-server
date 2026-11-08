@@ -39,18 +39,39 @@ async function copyText(text, label) {
   }
 }
 
-function toggleSecretField(id, button) {
+async function toggleSecretField(id, button) {
   const input = document.getElementById(id);
   const showing = input.type === 'password';
+  if (showing && !input.value) {
+    try {
+      const res = await fetch('/api/platform/config?reveal=1');
+      if (res.ok) {
+        const { config } = await res.json();
+        if (id === 'f_api_token' && config.api_token) input.value = config.api_token;
+        if (id === 'f_totp_secret' && config.totp_secret) input.value = config.totp_secret;
+      }
+    } catch {}
+  }
   input.type = showing ? 'text' : 'password';
   button.dataset.i18n = showing ? 'btnHideSecret' : 'btnShowSecret';
   button.textContent = t(button.dataset.i18n);
 }
 
-function toggleHeadersVisibility() {
+async function toggleHeadersVisibility() {
   const value = document.getElementById('epHeadersJson');
   const button = document.getElementById('btnRevealHeaders');
   const showing = value.dataset.revealed !== 'true';
+  if (showing && !value.dataset.value) {
+    try {
+      const res = await fetch('/api/platform/metrics?reveal=1');
+      if (res.ok) {
+        const m = await res.json();
+        if (m?.site?.endpoints?.piclistHeaders) {
+          value.dataset.value = m.site.endpoints.piclistHeaders;
+        }
+      }
+    } catch {}
+  }
   value.dataset.revealed = String(showing);
   value.textContent = showing ? (value.dataset.value || '-') : '••••••••';
   button.dataset.i18n = showing ? 'btnHideSecret' : 'btnShowSecret';

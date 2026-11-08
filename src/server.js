@@ -10,6 +10,7 @@ const {
   initializeConfigFromSetup,
   getConfig,
   getRawConfigYaml,
+  redactConfigForClient,
   saveRawConfigYaml,
   updateConfigPreservingComments
 } = require('./core/config');
@@ -68,7 +69,14 @@ app.use((req, res, next) => {
   const method = req.method.toUpperCase();
   if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
     const origin = req.headers.origin;
+    const referer = req.headers.referer;
+    const secFetchSite = req.headers['sec-fetch-site'];
     const host = req.headers.host;
+
+    if (secFetchSite && secFetchSite !== 'same-origin' && secFetchSite !== 'none') {
+      return res.status(403).json({ error: 'CSRF validation failed: cross-site request blocked' });
+    }
+
     if (origin && host) {
       try {
         const originHost = new URL(origin).host;
@@ -78,6 +86,24 @@ app.use((req, res, next) => {
       } catch {
         return res.status(403).json({ error: 'CSRF validation failed: invalid Origin' });
       }
+    } else if (referer && host) {
+      try {
+        const refererHost = new URL(referer).host;
+        if (refererHost !== host) {
+          return res.status(403).json({ error: 'CSRF validation failed: Referer mismatch' });
+        }
+      } catch {
+        return res.status(403).json({ error: 'CSRF validation failed: invalid Referer' });
+      }
+    } else if (
+      req.headers.cookie &&
+      req.headers.cookie.includes('filemaster_session=') &&
+      !req.headers.authorization &&
+      !req.headers['x-api-token']
+    ) {
+      return res.status(403).json({
+        error: 'CSRF validation failed: Origin or Referer header is required for cookie-authenticated requests'
+      });
     }
   }
   next();
@@ -243,22 +269,14 @@ app.post('/api/platform/totp-generate', requireAdmin, (req, res) => {
 });
 
 app.get('/api/platform/metrics', requireAdmin, (req, res) => {
-  res.json(collectRuntimeMetrics());
+  const revealSecrets = req.query.reveal === '1' || req.query.reveal === 'true';
+  res.json(collectRuntimeMetrics(revealSecrets));
 });
 
 app.get('/api/platform/config', requireAdmin, (req, res) => {
   const cfg = getConfig();
-  // Sanitize sensitive credentials to prevent credential exposure in browser DevTools
-  const safeConfig = {
-    ...cfg,
-    password: '',
-    hasPassword: Boolean(cfg.password),
-    hasTotp: Boolean(cfg.totp_secret)
-  };
-  res.json({
-    config: safeConfig,
-    rawYaml: getRawConfigYaml()
-  });
+  const revealSecrets = req.query.reveal === '1' || req.query.reveal === 'true';
+  res.json(redactConfigForClient(cfg, getRawConfigYaml(), revealSecrets));
 });
 
 app.put('/api/platform/config', requireAdmin, (req, res) => {
@@ -288,12 +306,7 @@ app.put('/api/platform/config', requireAdmin, (req, res) => {
       createSessionCookie(req, newToken, `; Max-Age=${30 * 24 * 60 * 60}`)
     );
 
-    const safeConfig = {
-      ...updatedCfg,
-      password: '',
-      hasPassword: Boolean(updatedCfg.password),
-      hasTotp: Boolean(updatedCfg.totp_secret)
-    };
+    const redacted = redactConfigForClient(updatedCfg, getRawConfigYaml(), false);
 
     appendAuditLog({
       action: 'config_update',
@@ -304,8 +317,8 @@ app.put('/api/platform/config', requireAdmin, (req, res) => {
 
     res.json({
       success: true,
-      config: safeConfig,
-      rawYaml: getRawConfigYaml(),
+      config: redacted.config,
+      rawYaml: redacted.rawYaml,
       adminPathChanged: oldAdminPath !== updatedCfg.admin_path,
       newAdminPath: updatedCfg.admin_path
     });

@@ -14,6 +14,7 @@ trust_proxy: loopback
 # Hot update capability: true | false (default: true)
 hot_update: true
 # Official upstream repository is locked to https://github.com/weichen-ink/file-master-server.git
+upstream_repo: https://github.com/weichen-ink/file-master-server.git
 # Optional GitHub acceleration mirror prefix (e.g. "https://ghproxy.net/" or leave "" for direct GitHub connection)
 upstream_mirror: ""
 upstream_branch: main
@@ -42,6 +43,7 @@ api_token: ""
 # ----------------- [Module 1: Image Host] -----------------
 image_host:
   raw_secret_path: raw # Path prefix for accessing original lossless files (/raw/YYYY/MM/file.ext)
+  pub_secret_path: pub # Path prefix for accessing optimized WebP files (/pub/YYYY/MM/file.webp)
   enable_optimization: true # Enable automatic image optimization (/pub/YYYY/MM/file.webp): true | false
   webp_quality: 82 # WebP compression quality for optimized files (/pub/*, 1-100)
   max_width: 1920 # Maximum width constraint for optimized images (0 for unlimited)

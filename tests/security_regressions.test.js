@@ -139,3 +139,79 @@ test('First-time setup requires its server-side token; HTTPS cookies are Secure'
   assert.match(createSessionCookie({ secure: true }, 'token'), /; Secure(?:;|$)/);
   assert.doesNotMatch(createSessionCookie({ secure: false }, 'token'), /; Secure(?:;|$)/);
 });
+
+test('Config exports EXAMPLE_CONFIG_PATH, redacts credentials by default, and blocks watermark path traversal', () => {
+  const {
+    EXAMPLE_CONFIG_PATH,
+    redactConfigForClient,
+    validateWatermarkImagePath
+  } = require('../src/core/config');
+  assert.ok(EXAMPLE_CONFIG_PATH && EXAMPLE_CONFIG_PATH.endsWith('config.example.yaml'));
+
+  const sampleCfg = {
+    site_name: 'Test',
+    password: 'scrypt:1234:abcd',
+    api_token: 'fm_secret_token_999',
+    totp_secret: 'JBSWY3DPEHPK3PXP'
+  };
+  const sampleYaml = [
+    'site_name: Test',
+    'password: "scrypt:1234:abcd"',
+    'api_token: "fm_secret_token_999"',
+    'totp_secret: "JBSWY3DPEHPK3PXP"'
+  ].join('\n');
+
+  const redacted = redactConfigForClient(sampleCfg, sampleYaml, false);
+  assert.equal(redacted.config.password, '');
+  assert.equal(redacted.config.api_token, '');
+  assert.equal(redacted.config.totp_secret, '');
+  assert.equal(redacted.config.hasPassword, true);
+  assert.equal(redacted.config.hasApiToken, true);
+  assert.equal(redacted.config.hasTotp, true);
+  assert.ok(!redacted.rawYaml.includes('scrypt:1234:abcd'));
+  assert.ok(!redacted.rawYaml.includes('fm_secret_token_999'));
+  assert.ok(!redacted.rawYaml.includes('JBSWY3DPEHPK3PXP'));
+
+  const revealed = redactConfigForClient(sampleCfg, sampleYaml, true);
+  assert.equal(revealed.config.password, '');
+  assert.equal(revealed.config.api_token, 'fm_secret_token_999');
+  assert.equal(revealed.config.totp_secret, 'JBSWY3DPEHPK3PXP');
+  assert.ok(!revealed.rawYaml.includes('scrypt:1234:abcd'));
+
+  assert.equal(validateWatermarkImagePath('./watermark.png'), './watermark.png');
+  assert.throws(() => validateWatermarkImagePath('../../etc/passwd'), /Invalid watermark_image path/);
+});
+
+test('Same-basename images with different extensions get isolated WebP cache paths and disambiguated lookup', () => {
+  const { STORAGE_DIR } = require('../src/core/config');
+  const { getWebpCacheFilePath, findRawFile } = require('../src/modules/image-host');
+
+  const cacheJpg = getWebpCacheFilePath('2026', '10', 'photo.jpg');
+  const cachePng = getWebpCacheFilePath('2026', '10', 'photo.png');
+  assert.notEqual(cacheJpg, cachePng, 'photo.jpg and photo.png must not share the same WebP cache path');
+  assert.ok(cacheJpg.endsWith('photo.jpg.webp'));
+  assert.ok(cachePng.endsWith('photo.png.webp'));
+
+  const monthDir = path.join(STORAGE_DIR, 'raw', '2026', '10');
+  fs.mkdirSync(monthDir, { recursive: true });
+  const fJpg = path.join(monthDir, 'collision_test.jpg');
+  const fPng = path.join(monthDir, 'collision_test.png');
+  fs.writeFileSync(fJpg, 'jpg-bytes');
+  fs.writeFileSync(fPng, 'png-bytes');
+  try {
+    assert.equal(findRawFile('2026', '10', 'collision_test.jpg.webp'), fJpg);
+    assert.equal(findRawFile('2026', '10', 'collision_test.png.webp'), fPng);
+  } finally {
+    if (fs.existsSync(fJpg)) fs.unlinkSync(fJpg);
+    if (fs.existsSync(fPng)) fs.unlinkSync(fPng);
+  }
+});
+
+test('getClientIp does not trust spoofed X-Forwarded-For when req.ip is absent', () => {
+  const { getClientIp } = require('../src/core/security');
+  const spoofedReq = {
+    headers: { 'x-forwarded-for': '1.2.3.4', 'x-real-ip': '5.6.7.8' },
+    socket: { remoteAddress: '127.0.0.1' }
+  };
+  assert.equal(getClientIp(spoofedReq), '127.0.0.1');
+});

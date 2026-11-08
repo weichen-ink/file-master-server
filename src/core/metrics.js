@@ -44,7 +44,7 @@ function getDirSize(dirPath) {
 /**
  * Collects runtime host metrics, process memory, and site storage stats.
  */
-function collectRuntimeMetrics() {
+function collectRuntimeMetrics(revealSecrets = false) {
   const cfg = getConfig();
   const cpus = os.cpus() || [];
   const cpuCount = cpus.length || 1;
@@ -123,8 +123,10 @@ function collectRuntimeMetrics() {
         baseUrl: cfg.base_url,
         uploadUrl: `${cfg.base_url}/api/image/upload`,
         localUploadUrl: `http://127.0.0.1:${cfg.port}/api/image/upload`,
-        apiToken: cfg.api_token,
-        piclistHeaders: JSON.stringify({ Authorization: `Bearer ${cfg.api_token}` }),
+        apiToken: revealSecrets ? cfg.api_token : '',
+        piclistHeaders: revealSecrets
+          ? JSON.stringify({ Authorization: `Bearer ${cfg.api_token}` })
+          : '',
         rawUrlPattern: `${cfg.base_url}/${cfg.image_host.raw_secret_path}/YYYY/MM/filename.ext`,
         pubUrlPattern: `${cfg.base_url}/pub/YYYY/MM/filename.webp`
       }

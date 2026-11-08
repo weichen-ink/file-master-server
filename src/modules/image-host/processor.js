@@ -5,11 +5,9 @@ const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
 const sharp = require('sharp');
 const { ROOT_DIR } = require('../../core/config');
+const { NEEDS_TRANSCODE_EXTS, isPathWithin } = require('../../core/file-security');
 
 const execFileAsync = promisify(execFile);
-
-// Formats that standard browsers and prebuilt sharp binaries may not decode out of the box
-const NEEDS_TRANSCODE_EXTS = new Set(['.heic', '.heif', '.tif', '.tiff']);
 
 /**
  * Transcodes HEIC/HEIF/TIFF originals into high-quality JPEG previews for browser rendering and sharp watermarking.
@@ -170,7 +168,10 @@ async function buildWatermarkOverlay(imgCfg, targetWidth, targetHeight) {
 
   // Mode 1: PNG image watermark
   if (type === 'image') {
-    const wmPath = path.resolve(ROOT_DIR, imgCfg.watermark_image || './watermark.png');
+    const requestedWmPath = path.resolve(ROOT_DIR, imgCfg.watermark_image || './watermark.png');
+    const wmPath = isPathWithin(requestedWmPath, ROOT_DIR)
+      ? requestedWmPath
+      : path.resolve(ROOT_DIR, './watermark.png');
     await ensureDefaultWatermark(wmPath, imgCfg.watermark_text || '© FileMaster');
 
     const wmTargetWidth = Math.max(60, Math.round(targetWidth * scale));
