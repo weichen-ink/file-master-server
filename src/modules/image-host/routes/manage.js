@@ -32,7 +32,7 @@ let integrityController = null;
 
 /** Console / plugin management API: listing, integrity check, lock, delete, cache clear. */
 function registerManageRoutes(app) {
-  // 4. Console & FileMaster Plugin Management API
+  // 4. Console & File Master Plugin Management API
   app.get('/api/modules/image-host/list', requireApiOrAdmin, async (req, res) => {
     try {
       res.json(await scanAllImages(getConfig()));
@@ -137,7 +137,7 @@ function registerManageRoutes(app) {
         const trashTarget = path.join(trashTargetDir, trashName);
         await moveFileToTrash(rawFilePath, trashTarget, deletedSha);
       } catch (err) {
-        console.error('[FileMaster] Failed to move file to trash:', err);
+        console.error('[File Master] Failed to move file to trash:', err);
         return res.status(500).json({ error: 'Failed to move file to trash; original file was preserved' });
       }
     }
@@ -149,7 +149,7 @@ function registerManageRoutes(app) {
     const indexedSha = pathToShaMap.get(relKey)?.sha256;
     if (indexedSha) {
       try { removeShaIndex(indexedSha, relKey); }
-      catch (err) { console.warn('[FileMaster] Failed to update SHA index after deletion:', err); }
+      catch (err) { console.warn('[File Master] Failed to update SHA index after deletion:', err); }
     }
 
     // Safely clean up associated cache files without failing the delete response if unlink throws
@@ -176,7 +176,7 @@ function registerManageRoutes(app) {
           fs.unlinkSync(target);
         }
       } catch (err) {
-        console.warn('[FileMaster] Failed to remove cache file after deletion:', target, err.message);
+        console.warn('[File Master] Failed to remove cache file after deletion:', target, err.message);
       }
     }
 

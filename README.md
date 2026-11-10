@@ -84,14 +84,17 @@ See [batch processing and scale](docs/SCALABILITY.md) for recovery and verificat
 # 1. Install dependencies
 npm install
 
-# 2. Production startup via PM2 ecosystem
+# 2. Production startup via PM2 ecosystem (named 'fms')
 npm install -g pm2
 pm2 start ecosystem.config.js
 # Or run via npm script
 npm run pm2
 
 # 3. View startup output and runtime logs
-pm2 logs file-master-server
+pm2 logs fms
+# Useful PM2 commands:
+pm2 restart fms
+pm2 stop fms
 ```
 
 ---
@@ -149,7 +152,7 @@ image_host:
   watermark_image: ./watermark.png
   watermark_image_dark: ./watermark-dark.png
   watermark_auto_contrast: true # Adaptive light/dark switching by image luminance
-  watermark_text: "© FileMaster"
+  watermark_text: "© File Master"
   watermark_color: "#ffffff"
   watermark_color_dark: "#111827"
   watermark_font: system        # system | pingfang | arial | impact | georgia | courier

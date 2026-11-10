@@ -69,7 +69,7 @@ backup:
   retention: 7 # Number of backups to retain
   schedule: "03:00" # Daily execution time in 24h format (HH:MM)
   local_dir: "./data/backups" # Local backup directory (absolute path or relative to server root)
-  rclone_target: "" # Optional Rclone/OneDrive target (e.g. "onedrive:FileMaster备份")
+  rclone_target: "" # Optional Rclone/OneDrive target (e.g. "onedrive:应用/File Master 备份")
   bark_url: "" # Optional Bark notification URL (e.g. "https://api.day.app/YOUR_KEY")
 
 

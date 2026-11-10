@@ -1,7 +1,7 @@
 module.exports = {
   apps: [
     {
-      name: 'file-master-server',
+      name: 'fms',
       script: 'src/server.js',
       instances: 1,
       autorestart: true,

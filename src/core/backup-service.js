@@ -50,7 +50,7 @@ async function sendBarkNotification({ barkUrl, title, body, isError = false }) {
   const payload = {
     title: title || 'File Master 通知',
     body: body || '',
-    group: 'FileMaster',
+    group: 'File Master',
     badge: isError ? 1 : undefined,
     level: isError ? 'timeSensitive' : 'active'
   };
@@ -64,7 +64,7 @@ async function sendBarkNotification({ barkUrl, title, body, isError = false }) {
 
     if (!res.ok) {
       // Fallback for servers that only accept GET: https://api.day.app/KEY/title/body
-      const getUrl = `${cleanUrl}/${encodeURIComponent(payload.title)}/${encodeURIComponent(payload.body)}?group=FileMaster`;
+      const getUrl = `${cleanUrl}/${encodeURIComponent(payload.title)}/${encodeURIComponent(payload.body)}?group=${encodeURIComponent('File Master')}`;
       const getRes = await fetch(getUrl);
       if (!getRes.ok) {
         throw new Error(`Bark HTTP ${getRes.status}: ${getRes.statusText}`);
@@ -104,7 +104,7 @@ async function testBarkNotification(barkUrl) {
 
 async function testRcloneTarget(target) {
   if (!target || !target.trim()) {
-    throw new Error('请提供有效的 Rclone / OneDrive 目标路径（如 onedrive:FileMaster备份）');
+    throw new Error('请提供有效的 Rclone / OneDrive 目标路径（如 onedrive:应用/File Master 备份）');
   }
   const cleanTarget = target.trim();
   const installed = await checkRcloneInstalled();

@@ -98,7 +98,7 @@ function registerPublicRoutes(app) {
       if (req.method !== 'HEAD') recordHit(year, month, rawBasenameWithExt);
       return res.sendFile(cacheFilePath);
     } catch (err) {
-      console.error('[FileMaster] Failed to serve public file:', err);
+      console.error('[File Master] Failed to serve public file:', err);
       if (err.status === 503) res.setHeader('Retry-After', '2');
       return res.status(err.status || 500).send('File Processing Error');
     }
@@ -160,7 +160,7 @@ function registerPublicRoutes(app) {
       if (req.method !== 'HEAD') recordHit(year, month, path.basename(rawFilePath));
       return res.sendFile(rawFilePath);
     } catch (err) {
-      console.error('[FileMaster] Failed to read raw preview:', err);
+      console.error('[File Master] Failed to read raw preview:', err);
       if (err.status === 503) res.setHeader('Retry-After', '2');
       return res.status(err.status || 500).send('Preview Error');
     }

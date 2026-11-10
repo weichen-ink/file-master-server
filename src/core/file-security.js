@@ -46,7 +46,7 @@ const PASSTHROUGH_IMAGE_EXTS = new Set(['.svg', '.bmp', '.ico']);
 // Extensions that browsers (Chrome/Edge/Firefox) cannot render natively in <img> tags
 const NEEDS_TRANSCODE_EXTS = new Set(['.heic', '.heif', '.tif', '.tiff']);
 
-// Non-image document & media extensions supported by FileMaster unified attachment storage
+// Non-image document & media extensions supported by File Master unified attachment storage
 const DOCUMENT_AND_MEDIA_EXTS = new Set([
   '.pdf',
   '.mp4',

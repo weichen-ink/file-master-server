@@ -1963,7 +1963,7 @@ async function testBarkPush() {
 async function testRcloneConnectivity() {
   const rclone_target = document.getElementById('f_backup_rclone_target')?.value.trim();
   if (!rclone_target) {
-    alert('请先输入 Rclone / OneDrive 目标路径（例如 onedrive:FileMaster备份）');
+    alert('请先输入 Rclone / OneDrive 目标路径（例如 onedrive:应用/File Master 备份）');
     return;
   }
   showToast('☁️ 正在测试远端连通性，请稍候...');

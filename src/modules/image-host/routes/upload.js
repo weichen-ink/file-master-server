@@ -116,7 +116,7 @@ function registerUploadRoutes(app) {
         markdown: assetMeta.markdown
       });
     } catch (err) {
-      console.error('[FileMaster] Upload error:', err);
+      console.error('[File Master] Upload error:', err);
       return res.status(err.status || 500).json({ error: 'Failed to save file: ' + err.message });
     } finally {
       if (tmpPath && fs.existsSync(tmpPath)) {
@@ -184,7 +184,7 @@ function registerUploadRoutes(app) {
         markdown: assetMeta.markdown
       });
     } catch (err) {
-      console.error('[FileMaster] Probe error:', err);
+      console.error('[File Master] Probe error:', err);
       return res.status(500).json({ error: 'Probe check failed: ' + err.message });
     }
   };
