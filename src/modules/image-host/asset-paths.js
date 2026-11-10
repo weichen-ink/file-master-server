@@ -1,6 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
-const { STORAGE_DIR } = require('../../core/config');
+const { STORAGE_DIR, TRASH_DIR, UPLOAD_TMP_DIR } = require('../../core/config');
 const { isAllowedAttachmentFile } = require('../../core/file-security');
 
 const RAW_DIR = path.join(STORAGE_DIR, 'raw');
@@ -91,8 +91,16 @@ function findRawFile(year, month, requestedFilename, requireSameExt = false) {
   return null;
 }
 
+function ensureDirs() {
+  fs.mkdirSync(RAW_DIR, { recursive: true });
+  fs.mkdirSync(CACHE_DIR, { recursive: true });
+  fs.mkdirSync(TRASH_DIR, { recursive: true });
+  fs.mkdirSync(UPLOAD_TMP_DIR, { recursive: true });
+}
+
 module.exports = {
   RAW_DIR,
+  ensureDirs,
   CACHE_DIR,
   getWebpCacheFilePath,
   getLegacyWebpCacheFilePath,
