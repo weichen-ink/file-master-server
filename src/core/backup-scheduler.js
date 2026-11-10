@@ -2,7 +2,94 @@ const { getConfig } = require('./config');
 const { performBackup, isBackupInProgress } = require('./backup-service');
 
 let timer = null;
-let lastExecutedDateKey = '';
+let lastExecutionKey = '';
+
+function matchCronField(value, fieldStr) {
+  if (!fieldStr || fieldStr === '*') return true;
+  for (const part of fieldStr.split(',')) {
+    if (part.includes('/')) {
+      const [range, stepStr] = part.split('/');
+      const step = parseInt(stepStr, 10);
+      let start = 0;
+      if (range !== '*') start = parseInt(range, 10);
+      if (step > 0 && (value - start) >= 0 && (value - start) % step === 0) return true;
+    } else if (part.includes('-')) {
+      const [start, end] = part.split('-').map(Number);
+      if (value >= start && value <= end) return true;
+    } else {
+      if (parseInt(part, 10) === value) return true;
+    }
+  }
+  return false;
+}
+
+function shouldTriggerBackup(backupCfg, now, currentLastKey = '') {
+  if (!backupCfg || backupCfg.enabled === false) {
+    return { shouldTrigger: false, key: '' };
+  }
+
+  const frequency = backupCfg.frequency || 'daily';
+  const schedule = String(backupCfg.schedule || '03:00').trim();
+  const [schedH, schedM] = schedule.split(':').map((s) => parseInt(s, 10));
+  const validH = isNaN(schedH) ? 3 : schedH;
+  const validM = isNaN(schedM) ? 0 : schedM;
+
+  const curH = now.getHours();
+  const curM = now.getMinutes();
+  const curD = now.getDate();
+  const curDay = now.getDay(); // 0 is Sunday
+  const curMon = now.getMonth() + 1;
+  const todayKey = `${now.getFullYear()}-${String(curMon).padStart(2, '0')}-${String(curD).padStart(2, '0')}`;
+
+  if (frequency === 'hourly') {
+    const key = `${todayKey}-H${curH}`;
+    if (curM === validM && currentLastKey !== key) {
+      return { shouldTrigger: true, key };
+    }
+  } else if (frequency === 'every_6h') {
+    const key = `${todayKey}-H${curH}`;
+    if ((curH % 6 === validH % 6) && curM === validM && currentLastKey !== key) {
+      return { shouldTrigger: true, key };
+    }
+  } else if (frequency === 'every_12h') {
+    const key = `${todayKey}-H${curH}`;
+    if ((curH % 12 === validH % 12) && curM === validM && currentLastKey !== key) {
+      return { shouldTrigger: true, key };
+    }
+  } else if (frequency === 'weekly') {
+    const targetWeekday = parseInt(backupCfg.weekday ?? 0, 10); // 0 = Sunday
+    const key = `${todayKey}`;
+    if (curDay === targetWeekday && curH === validH && curM === validM && currentLastKey !== key) {
+      return { shouldTrigger: true, key };
+    }
+  } else if (frequency === 'cron') {
+    const cronExpr = String(backupCfg.cron_expression || '').trim();
+    const parts = cronExpr.split(/\s+/);
+    if (parts.length === 5) {
+      const [mField, hField, domField, monField, dowField] = parts;
+      if (
+        matchCronField(curM, mField) &&
+        matchCronField(curH, hField) &&
+        matchCronField(curD, domField) &&
+        matchCronField(curMon, monField) &&
+        matchCronField(curDay, dowField)
+      ) {
+        const key = `${todayKey}-${curH}:${curM}`;
+        if (currentLastKey !== key) {
+          return { shouldTrigger: true, key };
+        }
+      }
+    }
+  } else {
+    // Default: daily
+    const key = `${todayKey}`;
+    if (curH === validH && curM === validM && currentLastKey !== key) {
+      return { shouldTrigger: true, key };
+    }
+  }
+
+  return { shouldTrigger: false, key: '' };
+}
 
 function startBackupScheduler() {
   if (timer) return;
@@ -15,19 +102,12 @@ function startBackupScheduler() {
       if (backupCfg.enabled === false) return;
       if (isBackupInProgress()) return;
 
-      const schedule = String(backupCfg.schedule || '03:00').trim();
-      const [schedH, schedM] = schedule.split(':').map((s) => parseInt(s, 10));
-      if (isNaN(schedH) || isNaN(schedM)) return;
-
       const now = new Date();
-      const curH = now.getHours();
-      const curM = now.getMinutes();
+      const check = shouldTriggerBackup(backupCfg, now, lastExecutionKey);
 
-      const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-
-      if (curH === schedH && curM === schedM && lastExecutedDateKey !== todayKey) {
-        lastExecutedDateKey = todayKey;
-        console.log(`[BackupScheduler] Triggering scheduled backup at ${schedule}...`);
+      if (check.shouldTrigger) {
+        lastExecutionKey = check.key;
+        console.log(`[BackupScheduler] Triggering scheduled backup (frequency: ${backupCfg.frequency || 'daily'})...`);
         await performBackup({ manual: false });
       }
     } catch (err) {
@@ -47,6 +127,8 @@ function stopBackupScheduler() {
 
 module.exports = {
   startBackupScheduler,
-  stopBackupScheduler
+  stopBackupScheduler,
+  shouldTriggerBackup,
+  matchCronField
 };
 

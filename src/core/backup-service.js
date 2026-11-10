@@ -7,7 +7,7 @@ const { appendAuditLog } = require('./audit');
 
 const execFileAsync = promisify(execFile);
 
-let backupInProgress = false;
+let activeBackupJob = null;
 
 function resolveBackupDir(configuredDir) {
   if (!configuredDir || typeof configuredDir !== 'string' || !configuredDir.trim()) {
@@ -167,11 +167,63 @@ function rotateLocalBackups(backupDir, retentionLimit) {
   return { kept: Math.min(files.length, retentionLimit), deleted };
 }
 
+function executeRcloneWithProgress(args, logStep, timeoutMs = 20 * 60 * 1000) {
+  return new Promise((resolve, reject) => {
+    const child = spawn('rclone', args);
+    let stdout = '';
+    let stderr = '';
+    let timer = null;
+
+    if (timeoutMs > 0) {
+      timer = setTimeout(() => {
+        try { child.kill('SIGTERM'); } catch {}
+        reject(new Error(`rclone operation timed out after ${Math.round(timeoutMs / 1000)}s`));
+      }, timeoutMs);
+    }
+
+    child.stdout.on('data', (chunk) => {
+      stdout += chunk.toString();
+    });
+
+    child.stderr.on('data', (chunk) => {
+      const text = chunk.toString();
+      stderr += text;
+      const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+      for (const line of lines) {
+        if (line.includes('Transferred:') || line.includes('ETA') || line.includes('%')) {
+          logStep(`[Rclone] ${line}`);
+        }
+      }
+    });
+
+    child.on('error', (err) => {
+      if (timer) clearTimeout(timer);
+      reject(err);
+    });
+
+    child.on('close', (code) => {
+      if (timer) clearTimeout(timer);
+      if (code === 0) {
+        resolve({ stdout, stderr });
+      } else {
+        const errMsg = stderr.trim() || `rclone process exited with code ${code}`;
+        reject(new Error(errMsg));
+      }
+    });
+  });
+}
+
 async function syncAndRotateRclone(archivePath, rcloneTarget, retentionLimit, logStep) {
   const cleanTarget = rcloneTarget.trim();
   logStep(`[Rclone] Uploading ${path.basename(archivePath)} to ${cleanTarget}...`);
 
-  await execFileAsync('rclone', ['copy', archivePath, cleanTarget], { timeout: 20 * 60 * 1000 });
+  await executeRcloneWithProgress([
+    'copy',
+    archivePath,
+    cleanTarget,
+    '--stats=5s',
+    '--stats-one-line'
+  ], logStep, 20 * 60 * 1000);
   logStep(`[Rclone] Upload completed successfully.`);
 
   // Rotate remote backups if retention limit is specified
@@ -206,7 +258,7 @@ async function syncAndRotateRclone(archivePath, rcloneTarget, retentionLimit, lo
 }
 
 async function performBackup({ manual = false } = {}) {
-  if (backupInProgress) {
+  if (activeBackupJob) {
     throw new Error('备份任务正在进行中，请稍候...');
   }
 
@@ -217,13 +269,22 @@ async function performBackup({ manual = false } = {}) {
   const rcloneTarget = (backupCfg.rclone_target || '').trim();
   const barkUrl = (backupCfg.bark_url || '').trim();
 
-  backupInProgress = true;
   const startedAt = Date.now();
   const logs = [];
   const logStep = (msg) => {
     const entry = `[${new Date().toLocaleTimeString('en-US', { hour12: false })}] ${msg}`;
     logs.push(entry);
+    if (activeBackupJob) {
+      activeBackupJob.currentStep = msg;
+    }
     console.log(`[Backup] ${msg}`);
+  };
+
+  activeBackupJob = {
+    startedAt,
+    manual,
+    currentStep: `Starting ${manual ? 'manual' : 'scheduled'} full backup...`,
+    logs
   };
 
   try {
@@ -381,7 +442,7 @@ async function performBackup({ manual = false } = {}) {
 
     throw err;
   } finally {
-    backupInProgress = false;
+    activeBackupJob = null;
   }
 }
 
@@ -392,20 +453,26 @@ function getBackupStatus() {
   const status = readJsonData('backup_status', null);
   const localBackups = getLocalBackupFiles(localDir);
 
+  const isBackingUp = activeBackupJob !== null;
   return {
     config: {
       enabled: backupCfg.enabled !== false,
-      retention: Math.max(1, Number(backupCfg.retention) || 7),
+      frequency: backupCfg.frequency || 'daily',
       schedule: String(backupCfg.schedule || '03:00'),
+      weekday: Number(backupCfg.weekday ?? 0),
+      cron_expression: backupCfg.cron_expression || '',
+      retention: Math.max(1, Number(backupCfg.retention) || 7),
       local_dir: backupCfg.local_dir || './data/backups',
       resolved_dir: localDir,
       rclone_target: backupCfg.rclone_target || '',
-      bark_url: backupCfg.bark_url ? '******' : ''
+      bark_url: backupCfg.bark_url || ''
     },
     lastBackup: status,
     localBackupsCount: localBackups.length,
     recentBackups: localBackups.slice(0, 5),
-    isBackingUp: backupInProgress
+    isBackingUp,
+    currentStep: activeBackupJob ? activeBackupJob.currentStep : '',
+    liveLogs: activeBackupJob ? activeBackupJob.logs : (status?.logs || [])
   };
 }
 
@@ -417,6 +484,6 @@ module.exports = {
   checkRcloneInstalled,
   getBackupStatus,
   resolveBackupDir,
-  isBackupInProgress: () => backupInProgress
+  isBackupInProgress: () => activeBackupJob !== null
 };
 

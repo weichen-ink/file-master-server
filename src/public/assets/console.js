@@ -1679,6 +1679,48 @@ async function triggerServerRestartOnly() {
 }
 
 // ================= Automated Backup & Disaster Recovery Functions =================
+let backupPollingTimer = null;
+
+function onBackupFrequencyChange() {
+  const freq = document.getElementById('f_backup_frequency')?.value || 'daily';
+  const groupTime = document.getElementById('group_backup_time');
+  const groupWeekday = document.getElementById('group_backup_weekday');
+  const groupCron = document.getElementById('group_backup_cron');
+  const lblTime = document.getElementById('lbl_backup_time');
+
+  if (groupTime) groupTime.classList.remove('hidden');
+  if (groupWeekday) groupWeekday.classList.add('hidden');
+  if (groupCron) groupCron.classList.add('hidden');
+
+  if (freq === 'cron') {
+    if (groupTime) groupTime.classList.add('hidden');
+    if (groupCron) groupCron.classList.remove('hidden');
+  } else if (freq === 'weekly') {
+    if (groupWeekday) groupWeekday.classList.remove('hidden');
+    if (lblTime) lblTime.textContent = t('lblBackupTimeOfDay') || '执行时间';
+  } else if (freq === 'hourly') {
+    if (lblTime) lblTime.textContent = t('lblBackupMinuteOfHour') || '整点执行时间 (:分)';
+  } else if (freq === 'every_6h' || freq === 'every_12h') {
+    if (lblTime) lblTime.textContent = t('lblBackupBaseTime') || '基准执行时间';
+  } else {
+    if (lblTime) lblTime.textContent = t('lblBackupSchedule') || '每日备份时间';
+  }
+}
+
+function startBackupPolling() {
+  if (backupPollingTimer) return;
+  backupPollingTimer = setInterval(() => {
+    loadBackupStatus();
+  }, 1500);
+}
+
+function stopBackupPolling() {
+  if (backupPollingTimer) {
+    clearInterval(backupPollingTimer);
+    backupPollingTimer = null;
+  }
+}
+
 async function loadBackupStatus() {
   try {
     const res = await fetch('/api/platform/backup/status');
@@ -1690,8 +1732,19 @@ async function loadBackupStatus() {
     const elEnabled = document.getElementById('f_backup_enabled');
     if (elEnabled) elEnabled.value = cfg.enabled ? 'true' : 'false';
 
+    const elFreq = document.getElementById('f_backup_frequency');
+    if (elFreq) elFreq.value = cfg.frequency || 'daily';
+
     const elSched = document.getElementById('f_backup_schedule');
     if (elSched) elSched.value = cfg.schedule || '03:00';
+
+    const elWeekday = document.getElementById('f_backup_weekday');
+    if (elWeekday) elWeekday.value = String(cfg.weekday ?? 0);
+
+    const elCron = document.getElementById('f_backup_cron');
+    if (elCron) elCron.value = cfg.cron_expression || '';
+
+    onBackupFrequencyChange();
 
     const elRet = document.getElementById('f_backup_retention');
     if (elRet) elRet.value = cfg.retention || 7;
@@ -1704,32 +1757,58 @@ async function loadBackupStatus() {
 
     const elBark = document.getElementById('f_backup_bark_url');
     if (elBark && !elBark.dataset.edited) {
-      elBark.value = (rawConfigObj?.backup?.bark_url) || '';
+      elBark.value = cfg.bark_url || '';
       elBark.oninput = () => { elBark.dataset.edited = '1'; };
     }
 
-    // Render banner
+    // Render banner and live state
     const banner = document.getElementById('backupStatusBanner');
     const iconEl = document.getElementById('backupBannerIcon');
     const textEl = document.getElementById('backupBannerText');
-    if (banner && textEl) {
-      banner.className = 'status-banner';
-      if (!last) {
-        banner.classList.add('is-running');
-        iconEl.textContent = 'ℹ️';
-        textEl.textContent = '尚未执行过自动备份。配置完成后将在每日定时触发，或点击右上方「立即手动备份」。';
-      } else if (last.success) {
-        banner.classList.add('is-success');
-        iconEl.textContent = '✅';
-        const dateStr = new Date(last.completedAt).toLocaleString();
-        const rcloneStatus = last.rcloneTarget
-          ? (last.rcloneSuccess ? ` · ☁️ 已同步至 ${last.rcloneTarget}` : ` · ⚠️ 远端同步异常`)
-          : '';
-        textEl.textContent = `上次备份成功：${last.archiveFilename} (${last.archiveSizeFormatted}，耗时 ${last.durationSec}s)${rcloneStatus} · 时间: ${dateStr}`;
-      } else {
-        banner.classList.add('is-error');
-        iconEl.textContent = '❌';
-        textEl.textContent = `上次备份失败: ${last.error || '未知异常'} (时间: ${new Date(last.completedAt).toLocaleString()})`;
+    const btn = document.getElementById('btnManualBackup');
+    const logBox = document.getElementById('backupLogBox');
+
+    if (data.isBackingUp) {
+      if (btn) btn.disabled = true;
+      if (banner && textEl) {
+        banner.className = 'status-banner is-running';
+        iconEl.textContent = '🔄';
+        textEl.textContent = `备份进行中: ${data.currentStep || '正在处理中，请稍候...'}`;
+      }
+      if (logBox && Array.isArray(data.liveLogs) && data.liveLogs.length > 0) {
+        logBox.classList.remove('hidden');
+        logBox.textContent = data.liveLogs.join('\n');
+        logBox.scrollTop = logBox.scrollHeight;
+      }
+      startBackupPolling();
+    } else {
+      if (btn) btn.disabled = false;
+      stopBackupPolling();
+
+      if (banner && textEl) {
+        banner.className = 'status-banner';
+        if (!last) {
+          banner.classList.add('is-running');
+          iconEl.textContent = 'ℹ️';
+          textEl.textContent = '尚未执行过自动备份。配置完成后将根据排程策略定时触发，或点击右上方「立即手动备份」。';
+        } else if (last.success) {
+          banner.classList.add('is-success');
+          iconEl.textContent = '✅';
+          const dateStr = new Date(last.completedAt).toLocaleString();
+          const rcloneStatus = last.rcloneTarget
+            ? (last.rcloneSuccess ? ` · ☁️ 已同步至 ${last.rcloneTarget}` : ` · ⚠️ 远端同步异常: ${last.rcloneError || ''}`)
+            : '';
+          textEl.textContent = `上次备份成功：${last.archiveFilename} (${last.archiveSizeFormatted}，耗时 ${last.durationSec}s)${rcloneStatus} · 时间: ${dateStr}`;
+        } else {
+          banner.classList.add('is-error');
+          iconEl.textContent = '❌';
+          textEl.textContent = `上次备份失败: ${last.error || '未知异常'} (时间: ${new Date(last.completedAt).toLocaleString()})`;
+        }
+      }
+
+      if (logBox && Array.isArray(data.liveLogs) && data.liveLogs.length > 0 && !logBox.classList.contains('hidden')) {
+        logBox.textContent = data.liveLogs.join('\n');
+        logBox.scrollTop = logBox.scrollHeight;
       }
     }
 
@@ -1744,7 +1823,10 @@ async function loadBackupStatus() {
 
 async function saveBackupConfig() {
   const enabled = document.getElementById('f_backup_enabled')?.value === 'true';
+  const frequency = document.getElementById('f_backup_frequency')?.value || 'daily';
   const schedule = document.getElementById('f_backup_schedule')?.value || '03:00';
+  const weekday = parseInt(document.getElementById('f_backup_weekday')?.value, 10) || 0;
+  const cron_expression = document.getElementById('f_backup_cron')?.value.trim() || '';
   const retention = parseInt(document.getElementById('f_backup_retention')?.value, 10) || 7;
   const local_dir = document.getElementById('f_backup_local_dir')?.value.trim() || './data/backups';
   const rclone_target = document.getElementById('f_backup_rclone_target')?.value.trim() || '';
@@ -1759,7 +1841,10 @@ async function saveBackupConfig() {
         patch: {
           backup: {
             enabled,
+            frequency,
             schedule,
+            weekday,
+            cron_expression,
             retention,
             local_dir,
             rclone_target,
@@ -1777,8 +1862,9 @@ async function saveBackupConfig() {
       } catch {}
       throw new Error(errMsg);
     }
-    const data = await res.json();
     showToast('💾 ' + t('toastConfigSaved'));
+    const elBark = document.getElementById('f_backup_bark_url');
+    if (elBark) delete elBark.dataset.edited;
     await loadBackupStatus();
   } catch (err) {
     alert('保存备份设置失败: ' + err.message);
@@ -1797,19 +1883,15 @@ async function triggerRunBackup() {
   try {
     const res = await fetch('/api/platform/backup/run', { method: 'POST' });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || '备份执行失败');
-    if (logBox && Array.isArray(data.logs)) {
-      logBox.textContent = data.logs.join('\n');
-    }
-    showToast('✅ ' + t('backupSuccess'));
-    await loadBackupStatus();
+    if (!res.ok) throw new Error(data.error || '备份启动失败');
+    showToast(t('backupStartedToast') || '🚀 备份任务已在后台启动，正在实时同步...');
+    startBackupPolling();
   } catch (err) {
     if (logBox) {
-      logBox.textContent += `\n❌ 备份失败: ${err.message}`;
+      logBox.textContent += `\n❌ 启动失败: ${err.message}`;
     }
-    alert(t('backupFailed', { error: err.message }));
-  } finally {
     if (btn) btn.disabled = false;
+    alert(t('backupFailed', { error: err.message }));
   }
 }
 

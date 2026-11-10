@@ -77,3 +77,48 @@ test('performBackup executes full archive, applies local retention and records s
   }
 });
 
+test('backup-scheduler supports daily, every_12h, every_6h, hourly, weekly, and cron', () => {
+  const { shouldTriggerBackup } = require('../src/core/backup-scheduler');
+
+  // 1. Daily
+  const dNow1 = new Date('2026-11-11T03:00:00');
+  const dNow2 = new Date('2026-11-11T04:00:00');
+  const dailyRes = shouldTriggerBackup({ enabled: true, frequency: 'daily', schedule: '03:00' }, dNow1);
+  assert.equal(dailyRes.shouldTrigger, true);
+  assert.equal(shouldTriggerBackup({ enabled: true, frequency: 'daily', schedule: '03:00' }, dNow2).shouldTrigger, false);
+
+  // 2. Every 12h
+  const h12_1 = new Date('2026-11-11T03:00:00');
+  const h12_2 = new Date('2026-11-11T15:00:00');
+  const h12_3 = new Date('2026-11-11T06:00:00');
+  assert.equal(shouldTriggerBackup({ enabled: true, frequency: 'every_12h', schedule: '03:00' }, h12_1).shouldTrigger, true);
+  assert.equal(shouldTriggerBackup({ enabled: true, frequency: 'every_12h', schedule: '03:00' }, h12_2).shouldTrigger, true);
+  assert.equal(shouldTriggerBackup({ enabled: true, frequency: 'every_12h', schedule: '03:00' }, h12_3).shouldTrigger, false);
+
+  // 3. Every 6h
+  const h6_1 = new Date('2026-11-11T00:00:00');
+  const h6_2 = new Date('2026-11-11T06:00:00');
+  const h6_3 = new Date('2026-11-11T08:00:00');
+  assert.equal(shouldTriggerBackup({ enabled: true, frequency: 'every_6h', schedule: '00:00' }, h6_1).shouldTrigger, true);
+  assert.equal(shouldTriggerBackup({ enabled: true, frequency: 'every_6h', schedule: '00:00' }, h6_2).shouldTrigger, true);
+  assert.equal(shouldTriggerBackup({ enabled: true, frequency: 'every_6h', schedule: '00:00' }, h6_3).shouldTrigger, false);
+
+  // 4. Hourly
+  const h1 = new Date('2026-11-11T14:15:00');
+  const h2 = new Date('2026-11-11T14:16:00');
+  assert.equal(shouldTriggerBackup({ enabled: true, frequency: 'hourly', schedule: '00:15' }, h1).shouldTrigger, true);
+  assert.equal(shouldTriggerBackup({ enabled: true, frequency: 'hourly', schedule: '00:15' }, h2).shouldTrigger, false);
+
+  // 5. Weekly (Sunday = 0)
+  const sunday = new Date('2026-11-15T03:00:00'); // Nov 15, 2026 is Sunday
+  const monday = new Date('2026-11-16T03:00:00');
+  assert.equal(shouldTriggerBackup({ enabled: true, frequency: 'weekly', weekday: 0, schedule: '03:00' }, sunday).shouldTrigger, true);
+  assert.equal(shouldTriggerBackup({ enabled: true, frequency: 'weekly', weekday: 0, schedule: '03:00' }, monday).shouldTrigger, false);
+
+  // 6. Cron
+  const cronMatch = new Date('2026-11-11T02:30:00');
+  const cronMismatch = new Date('2026-11-11T02:31:00');
+  assert.equal(shouldTriggerBackup({ enabled: true, frequency: 'cron', cron_expression: '30 2 * * *' }, cronMatch).shouldTrigger, true);
+  assert.equal(shouldTriggerBackup({ enabled: true, frequency: 'cron', cron_expression: '30 2 * * *' }, cronMismatch).shouldTrigger, false);
+});
+

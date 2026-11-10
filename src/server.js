@@ -49,7 +49,8 @@ const {
   performBackup,
   testBarkNotification,
   testRcloneTarget,
-  getBackupStatus
+  getBackupStatus,
+  isBackupInProgress
 } = require('./core/backup-service');
 const { startBackupScheduler } = require('./core/backup-scheduler');
 const { registerImageHostModule, clearCacheDir, getStorageHealth } = require('./modules/image-host');
@@ -506,8 +507,19 @@ app.get('/api/platform/backup/status', requireAdmin, (req, res) => {
 
 app.post('/api/platform/backup/run', requireAdmin, async (req, res) => {
   try {
-    const result = await performBackup({ manual: true });
-    res.json(result);
+    if (isBackupInProgress()) {
+      return res.status(409).json({ error: '备份任务正在进行中，请稍候...' });
+    }
+    const shouldWait = req.query?.wait === '1' || req.body?.wait === true;
+    if (shouldWait) {
+      const result = await performBackup({ manual: true });
+      return res.json(result);
+    }
+    // Launch in background asynchronously to prevent HTTP/Nginx timeout on large transfers
+    performBackup({ manual: true }).catch((err) => {
+      console.error('[Backup] Background backup task failed:', err.message);
+    });
+    return res.json({ success: true, started: true, message: '备份任务已在后台启动，实时日志已同步' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
