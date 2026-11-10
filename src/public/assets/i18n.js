@@ -78,6 +78,15 @@ const I18N = {
 
     // 交互提示与按钮
     allAssets: "全部文件",
+    sortTime: "时间",
+    sortSize: "大小",
+    sortName: "名称",
+    sortHits: "热度",
+    downloadRawBtn: "⬇️ 下载原文件",
+    btnCopyActiveLink: "📋 复制链接",
+    btnCopyActiveMd: "📝 复制 Markdown",
+    globalDropTitle: "释放文件即可立即上传",
+    globalDropDesc: "支持多图与音视频附件批量入库",
     sortTimeDesc: "🕒 上传时间：最新优先",
     sortTimeAsc: "🕒 上传时间：最早优先",
     sortSizeDesc: "⬇️ 文件大小：从大到小",
@@ -462,6 +471,15 @@ const I18N = {
 
     // Prompts & Buttons
     allAssets: "All files",
+    sortTime: "Time",
+    sortSize: "Size",
+    sortName: "Name",
+    sortHits: "Hits",
+    downloadRawBtn: "⬇️ Download Original",
+    btnCopyActiveLink: "📋 Copy Link",
+    btnCopyActiveMd: "📝 Copy Markdown",
+    globalDropTitle: "Drop files here to upload",
+    globalDropDesc: "Supports images, audio, video and documents",
     sortTimeDesc: "🕒 Upload time: Newest first",
     sortTimeAsc: "🕒 Upload time: Oldest first",
     sortSizeDesc: "⬇️ File size: Largest first",

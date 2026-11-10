@@ -160,11 +160,6 @@
           </div>
         </div>
 
-        <div id="dropZone" class="upload-zone" onclick="document.getElementById('fileInput').click()">
-          <div style="font-size: 15px; font-weight: 600; margin-bottom: 4px;" data-i18n="dropZoneTitle">📥 点击选择文件、将文件拖拽至此，或直接从剪贴板粘贴 (Ctrl+V)</div>
-          <div style="font-size: 12px; color: var(--muted);" data-i18n="dropZoneDesc">原始文件无损留存；当访问优化路径时动态按需生成 WebP 水印图</div>
-        </div>
-
         <div class="explorer-layout">
           <!-- Left: Year/Month folder tree -->
           <div class="folder-panel">
@@ -178,22 +173,34 @@
 
           <!-- Right: Toolbar and asset cards -->
           <div>
-            <div class="toolbar">
-              <div style="display:flex; align-items:center; gap:8px; font-size:13px;">
-                <span id="currentFolderBreadcrumb" style="font-weight:600; color:var(--text);" data-i18n="allAssets">📁 全部资源</span>
-                <span id="currentFolderStats" style="color:var(--muted); font-size:12px;"></span>
+            <div class="things-toolbar">
+              <div class="toolbar-left">
+                <span id="currentFolderBreadcrumb" class="toolbar-breadcrumb" data-i18n="allAssets">📁 全部资源</span>
+                <span id="currentFolderStats" class="toolbar-stats-pill"></span>
               </div>
-              <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-                <select id="sortSelect" class="form-input" style="height:36px; padding:4px 10px; font-size:13px; width:auto; cursor:pointer;" onchange="changeGallerySort(this.value)">
-                  <option value="time_desc" data-i18n="sortTimeDesc">🕒 上传时间：最新优先</option>
-                  <option value="time_asc" data-i18n="sortTimeAsc">🕒 上传时间：最早优先</option>
-                  <option value="size_desc" data-i18n="sortSizeDesc">⬇️ 文件大小：从大到小</option>
-                  <option value="size_asc" data-i18n="sortSizeAsc">⬆️ 文件大小：从小到大</option>
-                  <option value="name_asc" data-i18n="sortNameAsc">🔤 文件名：A → Z</option>
-                  <option value="name_desc" data-i18n="sortNameDesc">🔤 文件名：Z → A</option>
-                  <option value="hits_desc" data-i18n="sortHitsDesc">👁️ 访问热度：从高到低</option>
-                </select>
-                <input type="text" id="searchInput" class="form-input search-input" placeholder="搜索当前目录中的文件" data-i18n-placeholder="searchPlaceholder" oninput="renderGallery()" />
+              <div class="toolbar-right">
+                <div class="things-sort-control" role="group" aria-label="排序">
+                  <button type="button" class="sort-tab active" data-sort="time" onclick="toggleSortField('time')">
+                    <span data-i18n="sortTime">时间</span>
+                    <span class="sort-indicator" id="sortArrow_time">↓</span>
+                  </button>
+                  <button type="button" class="sort-tab" data-sort="size" onclick="toggleSortField('size')">
+                    <span data-i18n="sortSize">大小</span>
+                    <span class="sort-indicator" id="sortArrow_size"></span>
+                  </button>
+                  <button type="button" class="sort-tab" data-sort="name" onclick="toggleSortField('name')">
+                    <span data-i18n="sortName">名称</span>
+                    <span class="sort-indicator" id="sortArrow_name"></span>
+                  </button>
+                  <button type="button" class="sort-tab" data-sort="hits" onclick="toggleSortField('hits')">
+                    <span data-i18n="sortHits">热度</span>
+                    <span class="sort-indicator" id="sortArrow_hits"></span>
+                  </button>
+                </div>
+                <div class="things-search-box">
+                  <span class="search-icon">🔍</span>
+                  <input type="text" id="searchInput" class="things-search-input" placeholder="搜索当前目录中的文件..." data-i18n-placeholder="searchPlaceholder" oninput="renderGallery()" />
+                </div>
               </div>
             </div>
 
@@ -748,20 +755,47 @@
     </main>
   </div>
 
-  <!-- ================= 3. Preview Modal ================= -->
+  <!-- ================= 3. Preview Modal (Things 3 Style Inspector) ================= -->
   <div id="previewModal" class="modal-backdrop hidden" onclick="if(event.target===this) closeModal()">
-    <div class="modal-box">
-      <div class="modal-header">
-        <div style="display:flex; align-items:center; gap:10px;">
-          <strong id="modalTitle" style="font-size:14px;" data-i18n="modalPreviewTitle">资产预览</strong>
-          <button id="btnViewPub" class="btn btn-primary" style="padding:5px 12px; font-size:12px;" onclick="setModalMode('pub')" data-i18n="btnViewPubText">👁️ 优化水印预览</button>
-          <button id="btnViewRaw" class="btn btn-outline" style="padding:5px 12px; font-size:12px;" onclick="setModalMode('raw')" data-i18n="btnViewRawText">🔍 原始无损素材</button>
+    <div class="modal-box preview-modal-box">
+      <div class="modal-header preview-modal-header">
+        <div class="preview-header-left">
+          <strong id="modalTitle" class="preview-title-text" data-i18n="modalPreviewTitle">资产预览</strong>
         </div>
-        <button class="btn btn-outline" style="padding:5px 10px;" onclick="closeModal()" data-i18n="closeBtn">✕ 关闭</button>
+        <div class="preview-mode-switch" id="previewModeGroup">
+          <button id="btnViewPub" class="mode-tab-btn active" type="button" onclick="setModalMode('pub')" data-i18n="btnViewPubText">👁️ 优化水印版</button>
+          <button id="btnViewRaw" class="mode-tab-btn" type="button" onclick="setModalMode('raw')" data-i18n="btnViewRawText">🔍 原始无损版</button>
+        </div>
+        <button class="preview-close-btn" onclick="closeModal()" title="关闭 (Esc)" data-i18n="closeBtn">✕</button>
       </div>
-      <div class="modal-body">
+      <div class="modal-body preview-modal-body">
         <img id="modalImg" src="" alt="preview" />
       </div>
+      <div class="preview-modal-footer">
+        <div class="preview-meta-chips" id="previewMetaChips">
+          <span class="meta-chip" id="previewChipRawSize">Raw 0 MB</span>
+          <span class="meta-chip" id="previewChipPubSize">WebP 0 MB</span>
+          <span class="meta-chip" id="previewChipHits">👁️ 0 次访问</span>
+          <span class="meta-chip" id="previewChipPath">2026/11</span>
+        </div>
+        <div class="preview-actions-row">
+          <button class="btn btn-primary" onclick="copyModalActiveLink()" id="btnModalCopyLink" data-i18n="btnCopyActiveLink">📋 复制链接</button>
+          <button class="btn btn-outline" onclick="copyModalMarkdown()" data-i18n="btnCopyActiveMd">📝 复制 Markdown</button>
+          <button class="btn btn-outline" onclick="downloadModalFile()" data-i18n="downloadRawBtn">⬇️ 下载原文件</button>
+          <button class="btn btn-outline" id="btnModalLock" onclick="toggleModalLock()">🔒 锁定保护</button>
+          <button class="btn btn-outline" onclick="shareModalFile()" data-i18n="shareBtn">🔗 分享</button>
+          <button class="btn btn-danger" id="btnModalDelete" onclick="deleteModalFile()" data-i18n="deleteBtn">🗑️ 移入回收站</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Global Drag and Drop Overlay -->
+  <div id="globalDropOverlay" class="global-drop-overlay hidden">
+    <div class="drop-overlay-box">
+      <div style="font-size: 42px; margin-bottom: 8px;">📥</div>
+      <div style="font-size: 18px; font-weight: 700; color: #111827;" data-i18n="globalDropTitle">释放文件即可立即上传</div>
+      <div style="font-size: 13px; color: #6b7280; margin-top: 4px;" data-i18n="globalDropDesc">支持多图与音视频附件批量入库</div>
     </div>
   </div>
 

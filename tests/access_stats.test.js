@@ -44,3 +44,4 @@ test('Access statistics tracks hits, debounces persistence and removes on deleti
   const diskDataAfter = JSON.parse(fs.readFileSync(filePath, 'utf8'));
   assert.equal(diskDataAfter[`${year}/${month}/${filename}`], undefined);
 });
+

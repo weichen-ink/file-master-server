@@ -737,19 +737,41 @@ function renderFolderTree() {
   treeEl.innerHTML = html;
 }
 
-let gallerySortMode = 'time_desc';
+let currentSortField = 'time';
+let currentSortOrder = 'desc';
 
-function changeGallerySort(mode) {
-  gallerySortMode = mode || 'time_desc';
+function toggleSortField(field) {
+  if (currentSortField === field) {
+    currentSortOrder = (currentSortOrder === 'desc') ? 'asc' : 'desc';
+  } else {
+    currentSortField = field;
+    currentSortOrder = (field === 'name') ? 'asc' : 'desc';
+  }
+  updateSortUI();
   galleryPage = 0;
   renderGallery();
+}
+
+function updateSortUI() {
+  const fields = ['time', 'size', 'name', 'hits'];
+  for (const f of fields) {
+    const btn = document.querySelector(`.sort-tab[data-sort="${f}"]`);
+    const arrow = document.getElementById(`sortArrow_${f}`);
+    if (!btn || !arrow) continue;
+    if (f === currentSortField) {
+      btn.classList.add('active');
+      arrow.textContent = currentSortOrder === 'asc' ? '↑' : '↓';
+    } else {
+      btn.classList.remove('active');
+      arrow.textContent = '';
+    }
+  }
 }
 
 function renderGallery() {
   const q = document.getElementById('searchInput').value.trim().toLowerCase();
   const grid = document.getElementById('galleryGrid');
-  const sortMode = document.getElementById('sortSelect')?.value || gallerySortMode;
-  const filterKey = `${selectedFolder}:${q}:${sortMode}`;
+  const filterKey = `${selectedFolder}:${q}:${currentSortField}:${currentSortOrder}`;
   if (filterKey !== galleryFilterKey) { galleryPage = 0; galleryFilterKey = filterKey; }
 
   const filtered = allImages.filter(item => {
@@ -765,13 +787,21 @@ function renderGallery() {
   });
 
   filtered.sort((a, b) => {
-    if (sortMode === 'size_desc') return (b.size || 0) - (a.size || 0);
-    if (sortMode === 'size_asc') return (a.size || 0) - (b.size || 0);
-    if (sortMode === 'name_asc') return (a.filename || '').localeCompare(b.filename || '', undefined, { numeric: true, sensitivity: 'base' });
-    if (sortMode === 'name_desc') return (b.filename || '').localeCompare(a.filename || '', undefined, { numeric: true, sensitivity: 'base' });
-    if (sortMode === 'hits_desc') return ((b.hits || 0) - (a.hits || 0)) || ((b.createdAt || 0) - (a.createdAt || 0));
-    if (sortMode === 'time_asc') return (a.createdAt || 0) - (b.createdAt || 0);
-    return (b.createdAt || 0) - (a.createdAt || 0);
+    if (currentSortField === 'size') {
+      const diff = (b.size || 0) - (a.size || 0);
+      return currentSortOrder === 'asc' ? -diff : diff;
+    }
+    if (currentSortField === 'name') {
+      const diff = (a.filename || '').localeCompare(b.filename || '', undefined, { numeric: true, sensitivity: 'base' });
+      return currentSortOrder === 'asc' ? diff : -diff;
+    }
+    if (currentSortField === 'hits') {
+      const diff = ((b.hits || 0) - (a.hits || 0)) || ((b.createdAt || 0) - (a.createdAt || 0));
+      return currentSortOrder === 'asc' ? -diff : diff;
+    }
+    // Default 'time'
+    const diff = (b.createdAt || 0) - (a.createdAt || 0);
+    return currentSortOrder === 'asc' ? -diff : diff;
   });
 
   const filteredBytes = filtered.reduce((acc, cur) => acc + (cur.size || 0), 0);
@@ -798,88 +828,50 @@ function renderGallery() {
 
   grid.innerHTML = filtered.slice(galleryPage * GALLERY_PAGE_SIZE, (galleryPage + 1) * GALLERY_PAGE_SIZE).map((item) => {
     const isImg = item.isImage !== false;
-    const iconMap = {
-      pdf: t('catPdf'),
-      video: t('catVideo'),
-      audio: t('catAudio'),
-      archive: t('catArchive'),
-      document: t('catDocument')
-    };
-    const badgeLabel = iconMap[item.category] || t('catAttachment');
-    const rawMdText = isImg ? `![](${item.rawUrl})` : `[📎 ${item.filename}](${item.rawUrl})`;
-    const optMdText = isImg && item.pubUrl ? `![](${item.pubUrl})` : rawMdText;
     const isLocked = Boolean(item.locked);
+    const primaryUrl = (isOptimizationEnabled && item.isProcessableImage && item.pubUrl) ? item.pubUrl : item.rawUrl;
     const lockBadgeHtml = isLocked
-      ? `<span style="position:absolute; top:8px; left:8px; background:rgba(245,158,11,0.92); color:#fff; font-size:11px; font-weight:700; padding:2px 8px; border-radius:6px;">${t('lockBtn')}</span>`
+      ? `<span class="card-lock-badge" title="${t('lockedNotice', { filename: item.filename })}">🔒</span>`
       : '';
 
-    const thumbHtml = isImg
-      ? `<div class="img-thumb-wrap" onclick="openPreview(${jsArg(item.year)}, ${jsArg(item.month)}, ${jsArg(item.filename)})">
-           <img src="${escapeHtml(item.thumbnailUrl || item.rawPreviewPath)}" loading="lazy" alt="${escapeHtml(item.filename)}" />
-           ${lockBadgeHtml}
-           <span class="img-tag">${item.year}/${item.month}</span>
-         </div>`
-      : `<div class="img-thumb-wrap" onclick="window.open(${jsArg(item.rawPreviewPath)}, '_blank')" style="flex-direction:column; gap:6px; cursor:pointer;">
-           ${lockBadgeHtml}
-           <div style="font-size:28px;">${badgeLabel.split(' ')[0]}</div>
-           <div style="font-size:12px; color:var(--primary); font-weight:600;">${escapeHtml(badgeLabel.split(' ')[1] || '')} (${escapeHtml((item.ext || '').toUpperCase())})</div>
-           <span class="img-tag">${item.year}/${item.month}</span>
+    const thumbInner = isImg
+      ? `<img src="${escapeHtml(item.thumbnailUrl || item.rawPreviewPath)}" loading="lazy" alt="${escapeHtml(item.filename)}" />`
+      : `<div class="file-icon-placeholder">
+           <div style="font-size:32px;">📄</div>
+           <div class="file-ext-label">${escapeHtml((item.ext || '').toUpperCase())}</div>
          </div>`;
 
-    const lockBtnHtml = `<button class="btn btn-outline" onclick="toggleLockImage(${jsArg(item.year)}, ${jsArg(item.month)}, ${jsArg(item.filename)}, ${!isLocked})" style="${isLocked ? 'border-color:#d99b46; color:#855000;' : ''}">${isLocked ? t('unlockBtn') : t('lockBtn')}</button>`;
-
-    const optRowHtml = (isOptimizationEnabled && item.isProcessableImage && item.pubUrl)
-      ? `<div class="track-row">
-           <span class="track-tag track-webp">${t('trackWebp')}</span>
-           <button class="btn btn-outline" onclick="copyText(${jsArg(optMdText)}, 'Optimized Markdown')">${t('btnMarkdown')}</button>
-           <button class="btn btn-outline" style="border-color:#a6d1be; color:#167a5c;" onclick="copyText(${jsArg(item.pubUrl)}, 'Optimized WebP URL')">${t('btnDirectUrl')}</button>
-         </div>`
-      : '';
-
     const rightMetaHtml = !isImg
-      ? t('tagDirectStream')
+      ? `<span class="meta-tag meta-direct">${t('tagDirectStream')}</span>`
       : isOptimizationEnabled
-        ? (item.hasCache ? t('tagOptimized', { size: formatBytes(item.cacheSize) }) : t('tagOnDemand'))
-        : t('tagRawOnly');
+        ? (item.hasCache ? `<span class="meta-tag meta-opt">WebP ${formatBytes(item.cacheSize)}</span>` : `<span class="meta-tag meta-ondemand">${t('tagOnDemand')}</span>`)
+        : `<span class="meta-tag meta-raw">${t('tagRawOnly')}</span>`;
 
     return `
-    <div class="img-card" style="${isLocked ? 'border-color: rgba(245,158,11,0.45);' : ''}">
-      ${thumbHtml}
-      <div class="img-body">
-        <div>
-          <div class="img-name" title="${escapeHtml(item.filename)}">${escapeHtml(item.filename)}</div>
-          <div class="img-meta">
-            <span>Raw ${formatBytes(item.size)}</span>
-            <span title="${escapeHtml(t('hitsCount', { hits: item.hits || 0 }))}">👁️ ${item.hits || 0}</span>
-            <span>${rightMetaHtml}</span>
-          </div>
-        </div>
-        <div class="card-actions">
-          <button class="btn btn-primary btn-block" onclick="copyText(${jsArg(item.rawUrl)}, t('copyFileLink'))">${t('copyFileLink')}</button>
-          <details class="card-more">
-            <summary>${t('moreFileActions')}</summary>
-            <div class="card-more-panel">
-              <div class="link-tracks">
-                <div class="track-row">
-                  <span class="track-tag track-raw">${t('trackRaw')}</span>
-                  <button class="btn btn-outline" onclick="copyText(${jsArg(rawMdText)}, 'Raw Markdown')">${t('btnMarkdown')}</button>
-                  <button class="btn btn-outline" onclick="copyText(${jsArg(item.rawUrl)}, 'Raw URL')">${t('btnDirectUrl')}</button>
-                </div>
-                ${optRowHtml}
-              </div>
-              <div class="card-footer-actions">
-                <button class="btn btn-outline" onclick="createShareLink(${jsArg(item.year)}, ${jsArg(item.month)}, ${jsArg(item.filename)})" title="${t('shareTooltip')}">${t('shareBtn')}</button>
-                <div class="card-footer-right">
-                  ${lockBtnHtml}
-                  <button class="btn btn-danger" ${isLocked ? `disabled style="opacity:0.45; cursor:not-allowed;" title="${t('delLockedTooltip')}"` : ''} onclick="deleteImage(${jsArg(item.year)}, ${jsArg(item.month)}, ${jsArg(item.filename)}, ${isLocked})">${t('deleteBtn')}</button>
-                </div>
-              </div>
-            </div>
-          </details>
+    <div class="img-card ${isLocked ? 'is-locked' : ''}">
+      <div class="img-thumb-wrap" onclick="openPreview(${jsArg(item.year)}, ${jsArg(item.month)}, ${jsArg(item.filename)})">
+        ${thumbInner}
+        ${lockBadgeHtml}
+        <span class="img-tag">${item.year}/${item.month}</span>
+        <div class="thumb-hover-actions">
+          <button class="thumb-action-pill" onclick="event.stopPropagation(); copyText(${jsArg(primaryUrl)}, t('copyFileLink'))" title="${t('copyFileLink')}">📋 ${t('btnCopy')}</button>
+          <button class="thumb-action-pill" onclick="event.stopPropagation(); openPreview(${jsArg(item.year)}, ${jsArg(item.month)}, ${jsArg(item.filename)})" title="${t('modalPreviewTitle')}">🔍</button>
         </div>
       </div>
-    </div>
-  `;
+      <div class="img-body">
+        <div class="img-name" title="${escapeHtml(item.filename)}" onclick="openPreview(${jsArg(item.year)}, ${jsArg(item.month)}, ${jsArg(item.filename)})">${escapeHtml(item.filename)}</div>
+        <div class="img-meta">
+          <span class="meta-size">${formatBytes(item.size)}</span>
+          <span class="meta-hits" title="${escapeHtml(t('hitsCount', { hits: item.hits || 0 }))}">👁️ ${item.hits || 0}</span>
+          ${rightMetaHtml}
+        </div>
+        <div class="card-footer-action">
+          <button class="card-copy-btn" onclick="copyText(${jsArg(primaryUrl)}, t('copyFileLink'))">
+            📋 ${t('copyFileLink')}
+          </button>
+        </div>
+      </div>
+    </div>`;
   }).join('');
 }
 
@@ -1152,13 +1144,36 @@ async function toggleLockImage(year, month, filename, locked) {
   loadImages();
 }
 
-const dropZone = document.getElementById('dropZone');
-dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
-dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
-dropZone.addEventListener('drop', (e) => {
+let dragCounter = 0;
+const globalDropOverlay = document.getElementById('globalDropOverlay');
+
+window.addEventListener('dragenter', (e) => {
+  if (document.getElementById('appView').classList.contains('hidden')) return;
   e.preventDefault();
-  dropZone.classList.remove('dragover');
-  if (e.dataTransfer.files.length) uploadFiles(e.dataTransfer.files);
+  dragCounter++;
+  if (globalDropOverlay) globalDropOverlay.classList.remove('hidden');
+});
+
+window.addEventListener('dragleave', (e) => {
+  e.preventDefault();
+  dragCounter--;
+  if (dragCounter <= 0) {
+    dragCounter = 0;
+    if (globalDropOverlay) globalDropOverlay.classList.add('hidden');
+  }
+});
+
+window.addEventListener('dragover', (e) => {
+  e.preventDefault();
+});
+
+window.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dragCounter = 0;
+  if (globalDropOverlay) globalDropOverlay.classList.add('hidden');
+  if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) {
+    uploadFiles(e.dataTransfer.files);
+  }
 });
 window.addEventListener('paste', (e) => {
   if (document.getElementById('appView').classList.contains('hidden')) return;
@@ -1315,31 +1330,135 @@ async function revokeShare(shareId) {
   }
 }
 
+let currentModalMode = 'pub';
+
 function openPreview(year, month, filename) {
   currentModalItem = allImages.find(i => i.year === year && i.month === month && i.filename === filename);
   if (!currentModalItem) return;
+
   document.getElementById('modalTitle').textContent = filename;
   document.getElementById('previewModal').classList.remove('hidden');
-  const btnPub = document.getElementById('btnViewPub');
+
   const canShowOpt = isOptimizationEnabled && currentModalItem.isProcessableImage;
-  if (btnPub) btnPub.style.display = canShowOpt ? '' : 'none';
+  const modeGroup = document.getElementById('previewModeGroup');
+  if (modeGroup) modeGroup.style.display = canShowOpt ? 'flex' : 'none';
+
   setModalMode(canShowOpt ? 'pub' : 'raw');
+
+  // Populate metadata chips
+  const chipRaw = document.getElementById('previewChipRawSize');
+  if (chipRaw) chipRaw.textContent = `Raw: ${formatBytes(currentModalItem.size)}`;
+
+  const chipPub = document.getElementById('previewChipPubSize');
+  if (chipPub) {
+    if (canShowOpt) {
+      chipPub.style.display = '';
+      chipPub.textContent = currentModalItem.hasCache
+        ? `WebP: ${formatBytes(currentModalItem.cacheSize)}`
+        : `WebP: ${t('tagOnDemand')}`;
+    } else {
+      chipPub.style.display = 'none';
+    }
+  }
+
+  const chipHits = document.getElementById('previewChipHits');
+  if (chipHits) chipHits.textContent = `👁️ ${t('hitsCount', { hits: currentModalItem.hits || 0 })}`;
+
+  const chipPath = document.getElementById('previewChipPath');
+  if (chipPath) chipPath.textContent = `📂 ${currentModalItem.year}/${currentModalItem.month}`;
+
+  updateModalLockBtn();
+
+  const delBtn = document.getElementById('btnModalDelete');
+  if (delBtn) {
+    delBtn.disabled = Boolean(currentModalItem.locked);
+    delBtn.style.opacity = currentModalItem.locked ? '0.45' : '1';
+    delBtn.title = currentModalItem.locked ? t('delLockedTooltip') : '';
+  }
+}
+
+function updateModalLockBtn() {
+  const lockBtn = document.getElementById('btnModalLock');
+  if (!lockBtn || !currentModalItem) return;
+  if (currentModalItem.locked) {
+    lockBtn.innerHTML = `🔓 ${t('unlockBtn')}`;
+    lockBtn.style.borderColor = '#d99b46';
+    lockBtn.style.color = '#855000';
+  } else {
+    lockBtn.innerHTML = `🔒 ${t('lockBtn')}`;
+    lockBtn.style.borderColor = '';
+    lockBtn.style.color = '';
+  }
 }
 
 function setModalMode(mode) {
   if (!currentModalItem) return;
+  currentModalMode = mode;
   const img = document.getElementById('modalImg');
   const btnPub = document.getElementById('btnViewPub');
   const btnRaw = document.getElementById('btnViewRaw');
-  if (mode === 'pub') {
+  if (mode === 'pub' && currentModalItem.pubPreviewPath) {
     img.src = currentModalItem.pubPreviewPath + '?t=' + Date.now();
-    btnPub.className = 'btn btn-primary';
-    btnRaw.className = 'btn btn-outline';
+    if (btnPub) btnPub.classList.add('active');
+    if (btnRaw) btnRaw.classList.remove('active');
   } else {
     img.src = currentModalItem.rawPreviewPath;
-    btnRaw.className = 'btn btn-primary';
-    btnPub.className = 'btn btn-outline';
+    if (btnRaw) btnRaw.classList.add('active');
+    if (btnPub) btnPub.classList.remove('active');
   }
+}
+
+function copyModalActiveLink() {
+  if (!currentModalItem) return;
+  const isPub = (currentModalMode === 'pub' && currentModalItem.pubUrl);
+  const url = isPub ? currentModalItem.pubUrl : currentModalItem.rawUrl;
+  copyText(url, isPub ? 'WebP URL' : 'Raw URL');
+}
+
+function copyModalMarkdown() {
+  if (!currentModalItem) return;
+  const isPub = (currentModalMode === 'pub' && currentModalItem.pubUrl);
+  const url = isPub ? currentModalItem.pubUrl : currentModalItem.rawUrl;
+  const md = currentModalItem.isImage !== false
+    ? `![](${url})`
+    : `[📎 ${currentModalItem.filename}](${url})`;
+  copyText(md, 'Markdown');
+}
+
+function downloadModalFile() {
+  if (!currentModalItem) return;
+  const a = document.createElement('a');
+  a.href = currentModalItem.rawUrl;
+  a.download = currentModalItem.filename;
+  a.target = '_blank';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  showToast('⬇️ ' + t('copied', { label: currentModalItem.filename }));
+}
+
+async function toggleModalLock() {
+  if (!currentModalItem) return;
+  const newLock = !currentModalItem.locked;
+  await toggleLockImage(currentModalItem.year, currentModalItem.month, currentModalItem.filename, newLock);
+  currentModalItem.locked = newLock;
+  updateModalLockBtn();
+  const delBtn = document.getElementById('btnModalDelete');
+  if (delBtn) {
+    delBtn.disabled = newLock;
+    delBtn.style.opacity = newLock ? '0.45' : '1';
+  }
+}
+
+function shareModalFile() {
+  if (!currentModalItem) return;
+  createShareLink(currentModalItem.year, currentModalItem.month, currentModalItem.filename);
+}
+
+function deleteModalFile() {
+  if (!currentModalItem) return;
+  deleteImage(currentModalItem.year, currentModalItem.month, currentModalItem.filename, currentModalItem.locked);
+  closeModal();
 }
 
 function closeModal() {
