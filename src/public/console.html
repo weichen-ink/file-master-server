@@ -110,17 +110,36 @@
           </div>
         </div>
 
-        <p id="storageWarning" class="hidden" role="alert" data-i18n="storageWarning" style="color:var(--warn)"></p>
-
-        <div id="uploadProgress" class="hidden" role="status">
-          <span id="uploadStatus"></span>
-          <button id="cancelUpload" class="btn btn-outline" onclick="cancelUploads()" data-i18n="btnCancelTask">停止上传</button>
-          <button id="retryUploads" class="btn btn-outline hidden" onclick="retryFailedUploads()" data-i18n="btnRetryFailed">重试未完成项</button>
+        <div id="storageWarning" class="status-banner is-warn hidden" role="alert">
+          <div class="status-banner-left">
+            <span class="status-banner-icon">⚠️</span>
+            <div class="status-banner-text" data-i18n="storageWarning">存储探测未通过：上传需要可写且支持硬链接的文件系统。请检查服务日志，修复权限或更换存储目录后重启。</div>
+          </div>
         </div>
-        <div id="integrityProgress" class="hidden" role="status">
-          <span id="integrityStatus"></span>
-          <button id="cancelIntegrity" class="btn btn-outline" onclick="cancelIntegrityCheck()" data-i18n="btnCancelCheck">停止校验</button>
-          <button id="downloadIntegrity" class="btn btn-outline hidden" onclick="downloadIntegrityReport()" data-i18n="btnDownloadCheck">下载校验报告</button>
+
+        <div id="uploadProgress" class="status-banner hidden" role="status">
+          <div class="status-banner-left">
+            <span id="uploadBannerIcon" class="status-banner-icon">⏳</span>
+            <div id="uploadStatus" class="status-banner-text"></div>
+          </div>
+          <div class="status-banner-actions">
+            <button id="cancelUpload" class="btn btn-outline btn-sm" onclick="cancelUploads()" data-i18n="btnCancelTask">停止上传</button>
+            <button id="retryUploads" class="btn btn-outline btn-sm hidden" onclick="retryFailedUploads()" data-i18n="btnRetryFailed">重试未完成项</button>
+            <button id="closeUploadBanner" class="status-banner-close" onclick="closeUploadBanner()" title="关闭提示" data-i18n-title="btnDismiss" aria-label="关闭提示" data-i18n-aria-label="btnDismiss">×</button>
+          </div>
+        </div>
+
+        <div id="integrityProgress" class="status-banner hidden" role="status">
+          <div class="status-banner-left">
+            <span id="integrityBannerIcon" class="status-banner-icon">🛡️</span>
+            <div id="integrityStatus" class="status-banner-text"></div>
+          </div>
+          <div class="status-banner-actions">
+            <button id="cancelIntegrity" class="btn btn-outline btn-sm" onclick="cancelIntegrityCheck()" data-i18n="btnCancelCheck">停止校验</button>
+            <button id="viewIntegrityReport" class="btn btn-outline btn-sm hidden" onclick="viewIntegrityDetails()" data-i18n="btnViewReport">查看明细</button>
+            <button id="downloadIntegrity" class="btn btn-outline btn-sm hidden" onclick="downloadIntegrityReport()" data-i18n="btnDownloadCheck">下载校验报告</button>
+            <button id="closeIntegrityBanner" class="status-banner-close" onclick="closeIntegrityBanner()" title="关闭提示" data-i18n-title="btnDismiss" aria-label="关闭提示" data-i18n-aria-label="btnDismiss">×</button>
+          </div>
         </div>
 
         <div class="stats-row">
@@ -757,6 +776,24 @@
         <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px;">
           <button class="btn btn-outline" onclick="closeShareModal()" data-i18n="btnCancelTask">取消</button>
           <button class="btn btn-primary" id="btnConfirmShare" onclick="submitCreateShare()" data-i18n="btnCreateShareConfirm">生成并复制短链</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= 5. Integrity Report Modal ================= -->
+  <div id="integrityModal" class="modal-backdrop hidden" onclick="if(event.target===this) closeIntegrityModal()">
+    <div class="modal-box" style="max-width: 680px;">
+      <div class="modal-header">
+        <strong style="font-size: 14px;" data-i18n="integrityModalTitle">🛡️ 原文件完整性校验报告</strong>
+        <button class="btn btn-outline" style="padding: 5px 10px;" onclick="closeIntegrityModal()" data-i18n="closeBtn">✕ 关闭</button>
+      </div>
+      <div style="padding: 20px;">
+        <div id="integrityModalSummary"></div>
+        <div id="integrityModalContent" style="margin-top: 14px; max-height: 360px; overflow-y: auto;"></div>
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--border);">
+          <button class="btn btn-outline" onclick="downloadIntegrityReport()" data-i18n="btnDownloadCheck">下载校验报告</button>
+          <button class="btn btn-primary" onclick="closeIntegrityModal()" data-i18n="closeBtn">✕ 关闭</button>
         </div>
       </div>
     </div>

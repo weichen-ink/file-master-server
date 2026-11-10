@@ -873,14 +873,25 @@ async function uploadFiles(files) {
   const controller = uploadController = new AbortController();
   failedUploads = [];
   let succeeded = 0;
-  document.getElementById('uploadProgress').classList.remove('hidden');
+  const uploadBanner = document.getElementById('uploadProgress');
+  if (uploadBanner) {
+    uploadBanner.className = 'status-banner is-running';
+    uploadBanner.classList.remove('hidden');
+  }
+  const bannerIcon = document.getElementById('uploadBannerIcon');
+  if (bannerIcon) bannerIcon.textContent = '⏳';
   document.getElementById('cancelUpload').classList.remove('hidden');
   document.getElementById('retryUploads').classList.add('hidden');
+  const closeBtn = document.getElementById('closeUploadBanner');
+  if (closeBtn) closeBtn.classList.add('hidden');
+
   try {
     for (let i = 0; i < selected.length; i++) {
       if (controller.signal.aborted) { failedUploads.push(...selected.slice(i)); break; }
       const file = selected[i];
-      document.getElementById('uploadStatus').textContent = t('uploadItem', { current: i + 1, total: selected.length, name: file.name });
+      document.getElementById('uploadStatus').innerHTML =
+        `<span><strong>${t('uploadingFiles')}</strong> (${i + 1}/${selected.length})</span>` +
+        `<span class="status-pill">${escapeHtml(file.name)}</span>`;
       try {
         const fd = new FormData();
         fd.append('file', file);
@@ -898,23 +909,61 @@ async function uploadFiles(files) {
     document.getElementById('fileInput').value = '';
     document.getElementById('cancelUpload').classList.add('hidden');
     document.getElementById('retryUploads').classList.toggle('hidden', failedUploads.length === 0);
+    if (closeBtn) closeBtn.classList.remove('hidden');
+
+    if (uploadBanner) {
+      uploadBanner.className = 'status-banner ' + (failedUploads.length === 0 ? 'is-success' : 'is-warn');
+    }
+    if (bannerIcon) bannerIcon.textContent = failedUploads.length === 0 ? '✅' : '⚠️';
+
+    if (failedUploads.length === 0) {
+      document.getElementById('uploadStatus').innerHTML =
+        `<span><strong>${t('uploadCompleted')}</strong></span>` +
+        `<span class="status-pill status-pill-success">${t('lblSuccess')}: ${succeeded}</span>`;
+    } else {
+      document.getElementById('uploadStatus').innerHTML =
+        `<span><strong>${t('uploadPartial')}</strong></span>` +
+        `<span class="status-pill status-pill-success">${t('lblSuccess')}: ${succeeded}</span>` +
+        `<span class="status-pill status-pill-warn">${t('lblFailed')}: ${failedUploads.length}</span>`;
+    }
+
     const summary = t('uploadSummary', { success: succeeded, remaining: failedUploads.length });
-    document.getElementById('uploadStatus').textContent = summary;
     showToast(summary);
     try { await loadImages(); }
     catch (err) { showToast(t('errorGeneric', { error: err.message })); }
   }
 }
 
+function closeUploadBanner() {
+  document.getElementById('uploadProgress').classList.add('hidden');
+}
+
 function cancelUploads() { uploadController?.abort(); }
 function retryFailedUploads() { return uploadFiles(failedUploads); }
+
+function closeIntegrityBanner() {
+  document.getElementById('integrityProgress').classList.add('hidden');
+}
 
 async function startIntegrityCheck() {
   try {
     const res = await fetch('/api/modules/image-host/integrity', { method: 'POST' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    document.getElementById('integrityProgress').classList.remove('hidden');
+    const banner = document.getElementById('integrityProgress');
+    if (banner) {
+      banner.className = 'status-banner is-running';
+      banner.classList.remove('hidden');
+    }
+    const iconEl = document.getElementById('integrityBannerIcon');
+    if (iconEl) iconEl.textContent = '⏳';
     document.getElementById('downloadIntegrity').classList.add('hidden');
+    const viewBtn = document.getElementById('viewIntegrityReport');
+    if (viewBtn) viewBtn.classList.add('hidden');
+    const closeBtn = document.getElementById('closeIntegrityBanner');
+    if (closeBtn) closeBtn.classList.add('hidden');
+    document.getElementById('cancelIntegrity').classList.remove('hidden');
+    document.getElementById('integrityStatus').innerHTML =
+      `<span><strong>${t('integrityRunning')}</strong></span>`;
     clearTimeout(integrityPoll);
     await pollIntegrityCheck();
   } catch (err) { showToast(t('errorGeneric', { error: err.message })); }
@@ -925,13 +974,52 @@ async function pollIntegrityCheck() {
     const res = await fetch('/api/modules/image-host/integrity');
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     integrityReport = await res.json();
-    const { state, checked, matched, issues } = integrityReport;
-    document.getElementById('integrityStatus').textContent = t('integritySummary', {
-      state: t(`integrity_${state}`), checked, matched, issues: issues.length
-    }) + (integrityReport.error ? `: ${integrityReport.error}` : '');
-    document.getElementById('cancelIntegrity').classList.toggle('hidden', state !== 'running');
-    document.getElementById('downloadIntegrity').classList.toggle('hidden', state === 'running');
-    if (state === 'running') integrityPoll = setTimeout(pollIntegrityCheck, 1000);
+    const { state, checked = 0, matched = 0, issues = [] } = integrityReport;
+    const banner = document.getElementById('integrityProgress');
+    const statusEl = document.getElementById('integrityStatus');
+    const iconEl = document.getElementById('integrityBannerIcon');
+    const cancelBtn = document.getElementById('cancelIntegrity');
+    const dlBtn = document.getElementById('downloadIntegrity');
+    const viewBtn = document.getElementById('viewIntegrityReport');
+    const closeBtn = document.getElementById('closeIntegrityBanner');
+
+    if (state === 'running') {
+      if (banner) banner.className = 'status-banner is-running';
+      if (iconEl) iconEl.textContent = '⏳';
+      cancelBtn.classList.remove('hidden');
+      dlBtn.classList.add('hidden');
+      if (viewBtn) viewBtn.classList.add('hidden');
+      if (closeBtn) closeBtn.classList.add('hidden');
+      statusEl.innerHTML =
+        `<span><strong>${t('integrityRunning')}</strong></span>` +
+        `<span class="status-pill">${t('statusChecked')}: ${checked}</span>` +
+        `<span class="status-pill status-pill-success">${t('statusMatched')}: ${matched}</span>`;
+      integrityPoll = setTimeout(pollIntegrityCheck, 1000);
+    } else {
+      cancelBtn.classList.add('hidden');
+      dlBtn.classList.remove('hidden');
+      if (viewBtn) viewBtn.classList.remove('hidden');
+      if (closeBtn) closeBtn.classList.remove('hidden');
+
+      if (state === 'completed' && issues.length === 0) {
+        if (banner) banner.className = 'status-banner is-success';
+        if (iconEl) iconEl.textContent = '✅';
+        statusEl.innerHTML =
+          `<span><strong>${t('integrity_completed')}</strong>：${t('integrityMatchedAll')}</span>` +
+          `<span class="status-pill status-pill-success">${t('statusChecked')}: ${checked}</span>` +
+          `<span class="status-pill status-pill-success">${t('statusMatched')}: ${matched}</span>` +
+          `<span class="status-pill">${t('statusIssues')}: 0</span>`;
+      } else {
+        if (banner) banner.className = 'status-banner ' + (issues.length > 0 ? 'is-warn' : 'is-error');
+        if (iconEl) iconEl.textContent = issues.length > 0 ? '⚠️' : '❌';
+        statusEl.innerHTML =
+          `<span><strong>${t('integrity_completed')}</strong>：${t('integrityHasIssues')}</span>` +
+          `<span class="status-pill">${t('statusChecked')}: ${checked}</span>` +
+          `<span class="status-pill status-pill-success">${t('statusMatched')}: ${matched}</span>` +
+          `<span class="status-pill status-pill-warn">${t('statusIssues')}: ${issues.length}</span>` +
+          (integrityReport.error ? ` <span style="color:var(--danger)">(${escapeHtml(integrityReport.error)})</span>` : '');
+      }
+    }
   } catch (err) { showToast(t('errorGeneric', { error: err.message })); }
 }
 
@@ -940,6 +1028,70 @@ async function cancelIntegrityCheck() {
     const res = await fetch('/api/modules/image-host/integrity', { method: 'DELETE' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
   } catch (err) { showToast(t('errorGeneric', { error: err.message })); }
+}
+
+function viewIntegrityDetails() {
+  if (!integrityReport) return;
+  const { checked = 0, matched = 0, issues = [] } = integrityReport;
+  const summaryEl = document.getElementById('integrityModalSummary');
+  const contentEl = document.getElementById('integrityModalContent');
+
+  if (summaryEl) {
+    summaryEl.innerHTML = `
+      <div class="integrity-grid">
+        <div class="integrity-grid-item">
+          <div class="integrity-grid-val">${checked}</div>
+          <div class="integrity-grid-lbl">${t('lblTotalChecked')}</div>
+        </div>
+        <div class="integrity-grid-item">
+          <div class="integrity-grid-val is-success">${matched}</div>
+          <div class="integrity-grid-lbl">${t('lblShaMatched')}</div>
+        </div>
+        <div class="integrity-grid-item">
+          <div class="integrity-grid-val ${issues.length ? 'is-warn' : 'is-success'}">${issues.length}</div>
+          <div class="integrity-grid-lbl">${t('lblIssuesFound')}</div>
+        </div>
+      </div>
+    `;
+  }
+
+  if (contentEl) {
+    if (issues.length === 0) {
+      contentEl.innerHTML = `
+        <div style="background:#f0fdf7; border:1px solid #bbf7d0; border-radius:6px; padding:20px; text-align:center; color:#166534; font-size:13px; line-height:1.6;">
+          ${t('integrityAllMatched')}
+        </div>
+      `;
+    } else {
+      const rows = issues.map(iss => `
+        <tr>
+          <td style="font-family:var(--font-mono); font-size:12px;">${escapeHtml(iss.path || '-')}</td>
+          <td><span class="status-pill status-pill-warn">${escapeHtml(iss.type || 'unknown')}</span></td>
+          <td style="font-size:11px; color:var(--muted);">${escapeHtml(iss.error || (iss.expected ? `预期: ${iss.expected.slice(0, 12)}... / 实际: ${iss.actual?.slice(0, 12)}...` : '-'))}</td>
+        </tr>
+      `).join('');
+      contentEl.innerHTML = `
+        <div style="font-size:12.5px; font-weight:600; color:var(--warn); margin-bottom:8px;">${t('integrityIssuesFound')}</div>
+        <table class="integrity-issues-table">
+          <thead>
+            <tr>
+              <th>${t('lblPath')}</th>
+              <th>${t('lblIssueType')}</th>
+              <th>${t('lblIssueDetail')}</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `;
+    }
+  }
+  const modal = document.getElementById('integrityModal');
+  if (modal) modal.classList.remove('hidden');
+}
+
+function closeIntegrityModal() {
+  const modal = document.getElementById('integrityModal');
+  if (modal) modal.classList.add('hidden');
 }
 
 function downloadIntegrityReport() {

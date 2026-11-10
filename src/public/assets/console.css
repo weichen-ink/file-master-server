@@ -138,6 +138,168 @@ body {
 .btn:focus-visible, .nav-item:focus-visible, .folder-btn:focus-visible, .tab-pill:focus-visible,
 .mobile-nav-button:focus-visible { outline: 2px solid #54aa9a; outline-offset: 2px; }
 .btn-block { width: 100%; }
+.btn-sm {
+  min-height: 28px;
+  padding: 4px 10px;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+/* Status Banner (Upload & Integrity & Alerts) */
+.status-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--primary);
+  border-radius: 8px;
+  padding: 11px 16px;
+  margin-bottom: 18px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+.status-banner.is-success {
+  border-left-color: var(--success);
+  background: #f7fbf9;
+}
+.status-banner.is-running {
+  border-left-color: var(--primary);
+  background: #f4faf9;
+}
+.status-banner.is-warn {
+  border-left-color: var(--warn);
+  background: #fdfaf2;
+}
+.status-banner.is-error {
+  border-left-color: var(--danger);
+  background: #fdf6f6;
+}
+.status-banner-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+.status-banner-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  font-size: 15px;
+  flex-shrink: 0;
+  background: #e6f4f1;
+}
+.status-banner.is-success .status-banner-icon {
+  background: #e6f7ef;
+}
+.status-banner.is-warn .status-banner-icon {
+  background: #fef3c7;
+}
+.status-banner.is-error .status-banner-icon {
+  background: #fee2e2;
+}
+.status-banner-text {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--text);
+  line-height: 1.5;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+}
+.status-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--ink-panel);
+  color: var(--muted);
+}
+.status-pill-success {
+  background: #def7ec;
+  color: #03543f;
+}
+.status-pill-warn {
+  background: #feecdc;
+  color: #92400e;
+}
+.status-banner-close {
+  background: transparent;
+  border: none;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+.status-banner-close:hover {
+  color: var(--text);
+  background: var(--panel-hover);
+}
+
+/* Integrity Modal Summary Grid & Issues Table */
+.integrity-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.integrity-grid-item {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px 14px;
+  text-align: center;
+}
+.integrity-grid-val {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text);
+}
+.integrity-grid-val.is-success {
+  color: var(--success);
+}
+.integrity-grid-val.is-warn {
+  color: var(--warn);
+}
+.integrity-grid-lbl {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.integrity-issues-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.integrity-issues-table th, .integrity-issues-table td {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  text-align: left;
+}
+.integrity-issues-table th {
+  background: var(--bg);
+  color: var(--muted);
+  font-weight: 600;
+}
 .stats-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
