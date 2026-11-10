@@ -12,11 +12,9 @@ const {
 const { verifyPassword } = require('../src/core/security');
 
 test('Setup Wizard & Image Optimization: uninitialized mode, setup flow, and optimization switch', () => {
-  const backupPath = `${CONFIG_PATH}.test_backup`;
-  const hadConfig = fs.existsSync(CONFIG_PATH);
-  if (hadConfig) {
-    fs.renameSync(CONFIG_PATH, backupPath);
-  }
+  assert.strictEqual(path.resolve(process.env.FILE_MASTER_TEST_ROOT || '.'), path.dirname(CONFIG_PATH),
+    'Run npm test: setup tests require their own temporary project');
+  assert.strictEqual(fs.existsSync(CONFIG_PATH), false);
 
   try {
     // 1. Uninitialized state should not write config.yaml automatically
@@ -77,9 +75,6 @@ test('Setup Wizard & Image Optimization: uninitialized mode, setup flow, and opt
   } finally {
     if (fs.existsSync(CONFIG_PATH)) {
       fs.unlinkSync(CONFIG_PATH);
-    }
-    if (hadConfig && fs.existsSync(backupPath)) {
-      fs.renameSync(backupPath, CONFIG_PATH);
     }
   }
 });

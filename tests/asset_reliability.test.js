@@ -98,24 +98,25 @@ test('Full integrity check rereads bytes, preserves baselines, and reports missi
   } finally { await fs.rm(dir, { recursive: true, force: true }); }
 });
 
-test('Uploads fall back to an exclusive copy when hard links are unsupported', async () => {
+test('Unsupported hard links fail without exposing a partial file or overwriting an existing file', async () => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'fm-nolink-'));
   const realLink = fs.link;
+  const realCopy = fs.copyFile;
+  let copies = 0;
   fs.link = async () => { throw Object.assign(new Error('not supported'), { code: 'EPERM' }); };
+  fs.copyFile = async (...args) => { copies++; return realCopy(...args); };
   try {
-    const bytes = Buffer.from('fallback-bytes');
-    const sha = digest(bytes);
-    await fs.writeFile(path.join(dir, 'a.png'), 'existing');
-    const first = await persistUniqueUpload({ buffer: bytes }, dir, 'a.png', sha);
-    assert.notEqual(first.filename, 'a.png');
-    assert.equal(first.deduplicated, false);
-    const again = await persistUniqueUpload({ buffer: bytes }, dir, 'a.png', sha);
-    assert.equal(again.deduplicated, true);
-    assert.equal(await fs.readFile(path.join(dir, 'a.png'), 'utf8'), 'existing');
-    assert.equal(await hashFileSha256(path.join(dir, first.filename)), sha);
-    assert.ok(!(await fs.readdir(dir)).some((name) => name.endsWith('.tmp')));
+    await fs.writeFile(path.join(dir, 'existing.png'), 'original');
+    for (const name of ['new.png', 'existing.png']) {
+      await assert.rejects(persistUniqueUpload({ buffer: Buffer.from('incoming') }, dir, name, digest('incoming')),
+        { code: 'ATOMIC_PUBLISH_UNSUPPORTED', status: 501 });
+    }
+    assert.equal(copies, 0, 'never copy incomplete bytes to the public filename');
+    assert.deepEqual(await fs.readdir(dir), ['existing.png']);
+    assert.equal(await fs.readFile(path.join(dir, 'existing.png'), 'utf8'), 'original');
   } finally {
     fs.link = realLink;
+    fs.copyFile = realCopy;
     await fs.rm(dir, { recursive: true, force: true });
   }
 });

@@ -6,7 +6,7 @@ The supported deployment is one server process per writable storage directory. T
 
 ## 上传与迁移
 
-- 上传先写入完整的临时文件，再以不覆盖已有文件的方式发布。名称冲突始终比较完整 SHA-256，短哈希后缀只用于命名。
+- 上传先写入完整的临时文件，再以硬链接原子发布，且不覆盖已有文件。存储必须支持同目录硬链接；不支持时返回 501 并保留已有文件，不回退到可能暴露半成品的复制。名称冲突始终比较完整 SHA-256，短哈希后缀只用于命名。
 - 服务端将上传落盘、删除和锁状态修改串行处理。图片转换独立使用最多 2 个活动任务、128 个等待任务的队列；相同缓存目标合并为同一任务。缓存清理会使旧任务失效。
 - 上传限流保持每个 IP 每分钟 120 次。429 包含 `Retry-After`；插件和网页对 429、部分 5xx 和网络错误最多重试 4 次，不重试身份认证失败。
 - 插件逐文件传输，随后按受影响笔记集中修改最新正文。删除前重新读取引用，并核对本地附件内容；最终检查后笔记发生变化时保留本地文件。
@@ -14,7 +14,7 @@ The supported deployment is one server process per writable storage directory. T
 - 插件保存最近一次上传的恢复清单 `migration-pending.json`。失败、取消或重启后，在命令面板运行“恢复未完成上传”，检查所列文件后继续。服务器地址必须与原任务一致；再次上传由服务端 SHA 去重。开始另一项上传会替换此恢复清单。
 - 网页可停止上传并重试未完成项；浏览器刷新后需要重新选择文件。下载批次可在结果页重试，下载内容在写入前与原文件 SHA 比较。
 
-Uploads publish complete files exclusively and deduplicate only by full SHA-256. Image generation has bounded concurrency and coalesces identical requests. Transfers retry transient failures, preserve current note edits, and verify originals before local deletion. Plugin upload recovery covers the most recent upload; browser retry state lasts until page reload. Cancellation finishes already successful transfers consistently.
+Storage must support same-directory hard links; unsupported storage returns 501 without exposing partial copies. Uploads publish complete files exclusively and deduplicate only by full SHA-256. Image generation has bounded concurrency and coalesces identical requests. Transfers retry transient failures, preserve current note edits, and verify originals before local deletion. Plugin upload recovery covers the most recent upload; browser retry state lasts until page reload. Cancellation finishes already successful transfers consistently.
 
 ## 引用、列表与图库
 
@@ -46,7 +46,7 @@ Full verification streams original bytes against persistent per-path baselines. 
 
 ## 验证与后续升级条件
 
-运行 `npm test`。`tests/server_scale.test.js` 自动建立独立临时项目，生成 1,000 张小图片，验证冷/热列表、事件循环让出、运行指标、重复副本删除、内容篡改与索引重启兼容性。测试不会使用实际用户配置或图片。
+运行 `npm test`。测试运行器为每个测试文件建立独立临时项目，并行执行后自动清理，不会读写实际配置、图片或索引。`tests/server_scale.test.js` 自动建立独立临时项目，生成 1,000 张小图片，验证冷/热列表、事件循环让出、运行指标、重复副本删除、内容篡改与索引重启兼容性。测试不会使用实际用户配置或图片。
 
 插件仓库运行 `npm run build`、`npm test`、`node scripts/benchmark-references.js`。引用基准包含 1,000 和 3,000 张附件及同等数量的约 9.6KB 合成笔记。
 

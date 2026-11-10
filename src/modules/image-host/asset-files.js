@@ -69,25 +69,17 @@ async function verifyOriginalFiles(directory, expected, { signal, onProgress = (
   return result;
 }
 
-// Filesystems that cannot hard-link (some Docker volumes, SMB/NFS, exFAT).
+// A complete inode must become visible in one operation; copying to a public name is unsafe.
 const LINK_UNSUPPORTED = new Set(['EPERM', 'ENOTSUP', 'EOPNOTSUPP', 'EXDEV', 'EMLINK', 'ENOSYS']);
 
-/**
- * Atomically publish `staged` at `target` without overwriting. Prefers a hard link
- * (atomic, fails with EEXIST); falls back to an exclusive copy when links are unsupported.
- */
 async function publishExclusive(staged, target) {
   try {
     await fs.promises.link(staged, target);
   } catch (err) {
     if (!LINK_UNSUPPORTED.has(err.code)) throw err;
-    try {
-      await fs.promises.copyFile(staged, target, fs.constants.COPYFILE_EXCL);
-    } catch (copyErr) {
-      // Never leave a partially written public file behind.
-      if (copyErr.code !== 'EEXIST') await fs.promises.unlink(target).catch(() => {});
-      throw copyErr;
-    }
+    throw Object.assign(new Error('Storage must support hard links for atomic uploads; use a compatible local filesystem'), {
+      code: 'ATOMIC_PUBLISH_UNSUPPORTED', status: 501, cause: err
+    });
   }
 }
 
