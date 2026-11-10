@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>File Master Server Console</title>
-  <link rel="stylesheet" href="/assets/console.css?v=1.0.1" />
+  <link rel="stylesheet" href="/assets/console.css?v=1.0.2" />
 </head>
 <body>
 
@@ -844,7 +844,11 @@
 
   <div id="toast" class="toast hidden"></div>
 
-  <script src="/assets/i18n.js?v=1.0.1"></script>
-  <script src="/assets/console.js?v=1.0.1"></script>
+  <!-- Compatibility hooks for cached legacy client scripts -->
+  <div id="dropZone" style="display:none;" aria-hidden="true"></div>
+  <select id="sortSelect" style="display:none;" aria-hidden="true"></select>
+
+  <script src="/assets/i18n.js?v=1.0.2"></script>
+  <script src="/assets/console.js?v=1.0.2"></script>
 </body>
 </html>

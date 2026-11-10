@@ -266,41 +266,68 @@ function switchSettingsSubtab(subtabId, btnEl) {
 
 async function initApp() {
   applyLocaleToStaticDom();
-  const res = await fetch('/api/platform/status');
-  const data = await res.json();
-  if (data.needsSetup) {
-    window.location.href = '/setup';
-    return;
-  }
-  isOptimizationEnabled = data.optimizationEnabled !== false;
-  document.title = data.siteName + ' - Console';
-  document.getElementById('loginSiteName').textContent = data.siteName;
-  document.getElementById('navSiteName').textContent = data.siteName;
-  document.getElementById('mobileSiteName').textContent = data.siteName;
-
-  if (data.totpEnabled) {
-    document.getElementById('totpGroup').classList.remove('hidden');
-  }
-
-  if (data.authenticated) {
-    document.getElementById('storageWarning').classList.toggle('hidden', data.storageHealth?.atomicUploads === true);
-    document.getElementById('loginView').classList.add('hidden');
-    document.getElementById('appView').classList.remove('hidden');
-    loadImages();
-    loadShares();
-  } else {
-    document.getElementById('loginView').classList.remove('hidden');
-    document.getElementById('appView').classList.add('hidden');
-    const savedUser = localStorage.getItem('filemaster_saved_username');
-    const savedRem = localStorage.getItem('filemaster_remember_pref');
-    if (savedRem !== null) {
-      document.getElementById('rememberAccount').checked = savedRem === '1';
+  try {
+    const res = await fetch('/api/platform/status');
+    if (res && res.ok === false) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (data.needsSetup) {
+      window.location.href = '/setup';
+      return;
     }
-    if (savedUser) {
-      document.getElementById('loginUsername').value = savedUser;
-      document.getElementById('loginPassword').focus();
+    isOptimizationEnabled = data.optimizationEnabled !== false;
+    document.title = (data.siteName || 'File Master') + ' - Console';
+    const loginSite = document.getElementById('loginSiteName');
+    if (loginSite) loginSite.textContent = data.siteName || 'File Master Server';
+    const navSite = document.getElementById('navSiteName');
+    if (navSite) navSite.textContent = data.siteName || 'File Master Server';
+    const mobileSite = document.getElementById('mobileSiteName');
+    if (mobileSite) mobileSite.textContent = data.siteName || 'File Master Server';
+
+    const totpGroup = document.getElementById('totpGroup');
+    if (totpGroup) {
+      totpGroup.classList.toggle('hidden', !data.totpEnabled);
+    }
+
+    const storageWarning = document.getElementById('storageWarning');
+    if (storageWarning) {
+      storageWarning.classList.toggle('hidden', data.storageHealth?.atomicUploads === true);
+    }
+
+    const loginView = document.getElementById('loginView');
+    const appView = document.getElementById('appView');
+
+    if (data.authenticated) {
+      if (loginView) loginView.classList.add('hidden');
+      if (appView) appView.classList.remove('hidden');
+      loadImages();
+      loadShares();
     } else {
-      document.getElementById('loginUsername').focus();
+      if (loginView) loginView.classList.remove('hidden');
+      if (appView) appView.classList.add('hidden');
+      const savedUser = localStorage.getItem('filemaster_saved_username');
+      const savedRem = localStorage.getItem('filemaster_remember_pref');
+      const remEl = document.getElementById('rememberAccount');
+      if (savedRem !== null && remEl) {
+        remEl.checked = savedRem === '1';
+      }
+      const userEl = document.getElementById('loginUsername');
+      const passEl = document.getElementById('loginPassword');
+      if (savedUser && userEl) {
+        userEl.value = savedUser;
+        if (passEl) passEl.focus();
+      } else if (userEl) {
+        userEl.focus();
+      }
+    }
+  } catch (err) {
+    console.error('[InitApp] Initialization failed:', err);
+    // Unhide login view as fallback so user is never left with an empty white screen
+    const loginView = document.getElementById('loginView');
+    if (loginView) loginView.classList.remove('hidden');
+    const errBox = document.getElementById('loginError');
+    if (errBox) {
+      errBox.textContent = '无法连接服务，请检查后端运行状态或稍后刷新重试。';
+      errBox.classList.remove('hidden');
     }
   }
 }

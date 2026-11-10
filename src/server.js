@@ -498,6 +498,9 @@ app.use('/assets', express.static(path.join(__dirname, 'public/assets'), { maxAg
 
 app.get('/setup', (req, res) => {
   if (!isConfigInitialized()) {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     return res.sendFile(path.join(__dirname, 'public/setup.html'));
   }
   const cfg = getConfig();
@@ -523,6 +526,9 @@ app.get('/:customAdminPath', (req, res, next) => {
     if (ban.banned) {
       return res.status(403).send(`IP is currently banned. Try again in ${ban.hoursLeft} hours.`);
     }
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     return res.sendFile(path.join(__dirname, 'public/console.html'));
   }
   next();
