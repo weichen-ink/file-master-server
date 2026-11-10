@@ -867,12 +867,21 @@ function renderGallery() {
   }).join('');
 }
 
+function formatTransferSpeed(bytesPerSec) {
+  if (!bytesPerSec || bytesPerSec <= 0) return '0 KB/s';
+  if (bytesPerSec >= 1024 * 1024) return (bytesPerSec / (1024 * 1024)).toFixed(1) + ' MB/s';
+  return Math.round(bytesPerSec / 1024) + ' KB/s';
+}
+
 async function uploadFiles(files) {
   if (!files?.length || uploadController) return;
   const selected = Array.from(files);
   const controller = uploadController = new AbortController();
   failedUploads = [];
   let succeeded = 0;
+  const startTime = Date.now();
+  let transferredBytes = 0;
+
   const uploadBanner = document.getElementById('uploadProgress');
   if (uploadBanner) {
     uploadBanner.className = 'status-banner is-running';
@@ -889,9 +898,13 @@ async function uploadFiles(files) {
     for (let i = 0; i < selected.length; i++) {
       if (controller.signal.aborted) { failedUploads.push(...selected.slice(i)); break; }
       const file = selected[i];
+      const elapsed = Math.max(0.1, (Date.now() - startTime) / 1000);
+      const speed = formatTransferSpeed(transferredBytes / elapsed);
+      const speedTag = transferredBytes > 0 ? `<span class="status-pill status-pill-success">⚡ ${speed}</span>` : '';
       document.getElementById('uploadStatus').innerHTML =
         `<span><strong>${t('uploadingFiles')}</strong> (${i + 1}/${selected.length})</span>` +
-        `<span class="status-pill">${escapeHtml(file.name)}</span>`;
+        `<span class="status-pill">${escapeHtml(file.name)}</span>` +
+        speedTag;
       try {
         const fd = new FormData();
         fd.append('file', file);
@@ -899,6 +912,7 @@ async function uploadFiles(files) {
           headers: { 'X-File-Name': encodeURIComponent(file.name) }, body: fd, signal: controller.signal });
         if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
         succeeded++;
+        transferredBytes += file.size || 0;
       } catch (err) {
         failedUploads.push(file);
         if (!controller.signal.aborted) console.warn('Upload failed:', file.name, err.message);
@@ -916,14 +930,17 @@ async function uploadFiles(files) {
     }
     if (bannerIcon) bannerIcon.textContent = failedUploads.length === 0 ? '✅' : '⚠️';
 
+    const totalElapsed = Math.max(0.1, (Date.now() - startTime) / 1000);
+    const avgSpeed = transferredBytes > 0 ? ` · ⚡ ${formatTransferSpeed(transferredBytes / totalElapsed)}` : '';
+
     if (failedUploads.length === 0) {
       document.getElementById('uploadStatus').innerHTML =
         `<span><strong>${t('uploadCompleted')}</strong></span>` +
-        `<span class="status-pill status-pill-success">${t('lblSuccess')}: ${succeeded}</span>`;
+        `<span class="status-pill status-pill-success">${t('lblSuccess')}: ${succeeded}${avgSpeed}</span>`;
     } else {
       document.getElementById('uploadStatus').innerHTML =
         `<span><strong>${t('uploadPartial')}</strong></span>` +
-        `<span class="status-pill status-pill-success">${t('lblSuccess')}: ${succeeded}</span>` +
+        `<span class="status-pill status-pill-success">${t('lblSuccess')}: ${succeeded}${avgSpeed}</span>` +
         `<span class="status-pill status-pill-warn">${t('lblFailed')}: ${failedUploads.length}</span>`;
     }
 
