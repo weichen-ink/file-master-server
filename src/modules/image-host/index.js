@@ -428,6 +428,11 @@ function scanAllImages(cfg, forceRefresh = false) {
           hasBasenameCollision: hasCollision
         });
 
+        const globalWmEnabled = cfg.image_host?.watermark_enable !== false;
+        const activeWmType = cfg.image_host?.watermark_type || 'image';
+        const effectiveVariant = globalWmEnabled ? activeWmType : 'clean';
+        const expectedCacheFile = getWebpCacheFilePath(year, month, file, effectiveVariant);
+
         const primaryCacheFile = getWebpCacheFilePath(year, month, file);
         const legacyCacheFile = getLegacyWebpCacheFilePath(year, month, file);
         let activeCacheFile = null;
@@ -450,9 +455,9 @@ function scanAllImages(cfg, forceRefresh = false) {
             }
           }
         }
-        const hasCache = Boolean(activeCacheFile);
+        const hasCache = fs.existsSync(expectedCacheFile);
         const cacheSize = assetCacheBytes;
-        if (hasCache) {
+        if (assetCacheBytes > 0) {
           totalCacheBytes += assetCacheBytes;
         }
 

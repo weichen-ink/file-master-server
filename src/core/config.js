@@ -351,6 +351,26 @@ function saveRawConfigYaml(rawText) {
   return getConfig();
 }
 
+const IMAGE_PROCESSING_CONFIG_KEYS = [
+  'enable_optimization',
+  'webp_quality',
+  'max_width',
+  'watermark_enable',
+  'watermark_type',
+  'watermark_pos',
+  'watermark_opacity',
+  'watermark_scale',
+  'watermark_margin',
+  'watermark_min_width',
+  'watermark_image',
+  'watermark_image_dark',
+  'watermark_auto_contrast',
+  'watermark_text',
+  'watermark_color',
+  'watermark_color_dark',
+  'watermark_font'
+];
+
 /**
  * Updates specific config fields via AST nodes, preserving existing comments and structure.
  */
@@ -447,6 +467,7 @@ module.exports = {
   validateWatermarkImagePath,
   saveRawConfigYaml,
   updateConfigPreservingComments,
+  IMAGE_PROCESSING_CONFIG_KEYS,
   readJsonData,
   writeJsonData
 };

@@ -14,7 +14,8 @@ const {
   getRawConfigYaml,
   redactConfigForClient,
   saveRawConfigYaml,
-  updateConfigPreservingComments
+  updateConfigPreservingComments,
+  IMAGE_PROCESSING_CONFIG_KEYS
 } = require('./core/config');
 const {
   hashPassword,
@@ -40,13 +41,17 @@ const {
   getUpdateStatus,
   performHotUpdate,
   restartServerProcess,
-  validateGitMirror
+  validateGitMirror,
+  recoverInterruptedUpdate
 } = require('./core/updater');
 const { appendAuditLog } = require('./core/audit');
 const { registerImageHostModule, clearCacheDir } = require('./modules/image-host');
 const { registerShareModule } = require('./modules/share');
 
 let httpServer = null;
+
+// Ensure any update interrupted before process restart recovers its watermark & config
+recoverInterruptedUpdate();
 
 const app = express();
 const initCfg = getConfig();
@@ -284,13 +289,7 @@ app.get('/api/platform/config', requireAdmin, (req, res) => {
 function shouldPurgeImageCache(oldCfg, newCfg) {
   const o = oldCfg?.image_host || {};
   const n = newCfg?.image_host || {};
-  const sensitiveKeys = [
-    'watermark_enable', 'watermark_type', 'watermark_image', 'watermark_image_dark',
-    'watermark_text', 'watermark_font', 'watermark_font_size', 'watermark_color',
-    'watermark_color_dark', 'watermark_alpha', 'watermark_gravity', 'watermark_margin',
-    'watermark_tile_gap', 'webp_quality'
-  ];
-  return sensitiveKeys.some((k) => o[k] !== n[k]);
+  return IMAGE_PROCESSING_CONFIG_KEYS.some((k) => o[k] !== n[k]);
 }
 
 app.put('/api/platform/config', requireAdmin, (req, res) => {
@@ -314,11 +313,7 @@ app.put('/api/platform/config', requireAdmin, (req, res) => {
     }
 
     if (shouldPurgeImageCache(oldCfg, updatedCfg)) {
-      try {
-        clearCacheDir();
-      } catch (e) {
-        console.warn('[Config] Failed to clear WebP cache on watermark config change:', e.message);
-      }
+      clearCacheDir();
     }
 
     // Re-issue session cookie so password or admin path change doesn't break current session

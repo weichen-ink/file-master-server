@@ -89,39 +89,63 @@ test('Updater: preserves, backs up, and restores dual watermark files with error
 test('Updater: persistent watermark disk backup survives reset or process restart', () => {
   const {
     backupWatermarkFiles,
-    restoreWatermarkFiles,
-    WM_BACKUP_DIR
+    restoreWatermarkFiles
   } = require('../src/core/updater');
   const fs = require('fs');
   const path = require('path');
+  const os = require('os');
 
   const rootDir = path.resolve(__dirname, '..');
   const customWmPath = path.join(rootDir, 'watermark.png');
   const originalBytes = fs.existsSync(customWmPath) ? fs.readFileSync(customWmPath) : null;
+  const testBackupDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fm-wm-test-'));
 
   try {
     const dummyBytes = Buffer.from('persistent-watermark-bytes-12345');
     fs.writeFileSync(customWmPath, dummyBytes);
 
-    // 1. Back up watermarks
-    const backups = backupWatermarkFiles();
+    // 1. Back up watermarks to isolated test directory
+    const backups = backupWatermarkFiles(testBackupDir);
     assert.ok(backups.has(customWmPath));
 
-    // Verify disk backup exists in WM_BACKUP_DIR
-    const diskBackup = path.join(WM_BACKUP_DIR, 'watermark.png');
-    assert.ok(fs.existsSync(diskBackup), 'Disk backup file must exist in backups/watermarks');
+    // Verify disk backup exists in testBackupDir
+    const diskBackup = path.join(testBackupDir, 'watermark.png');
+    assert.ok(fs.existsSync(diskBackup), 'Disk backup file must exist in test directory');
     assert.deepStrictEqual(fs.readFileSync(diskBackup), dummyBytes);
 
     // 2. Simulate git reset --hard wiping the file
     fs.writeFileSync(customWmPath, Buffer.from('upstream-clobbered-bytes'));
 
-    // 3. Simulate process restart where in-memory Map is lost (pass null)
-    const restoreRes = restoreWatermarkFiles(null);
+    // 3. Simulate process restart where in-memory Map is lost (pass null with isolated backup dir)
+    const restoreRes = restoreWatermarkFiles(null, testBackupDir);
     assert.strictEqual(restoreRes.success, true);
     assert.deepStrictEqual(fs.readFileSync(customWmPath), dummyBytes, 'Watermark must be restored from disk backup');
   } finally {
     if (originalBytes) {
       fs.writeFileSync(customWmPath, originalBytes);
     }
+    try {
+      fs.rmSync(testBackupDir, { recursive: true, force: true });
+    } catch {}
+  }
+});
+
+test('Updater: recoverInterruptedUpdate restores watermarks and clears pending flag', () => {
+  const {
+    recoverInterruptedUpdate
+  } = require('../src/core/updater');
+  const { DATA_DIR } = require('../src/core/config');
+  const fs = require('fs');
+  const path = require('path');
+
+  const flagPath = path.join(DATA_DIR, 'update_pending_restore.flag');
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.writeFileSync(flagPath, 'interrupted', 'utf8');
+
+  try {
+    recoverInterruptedUpdate();
+    assert.strictEqual(fs.existsSync(flagPath), false, 'Pending flag must be cleared after recovery');
+  } finally {
+    if (fs.existsSync(flagPath)) fs.unlinkSync(flagPath);
   }
 });

@@ -41,31 +41,52 @@ test('Security: session token creation and explicit revocation', () => {
 
 test('Security: Token extraction rejects query string (?token=)', () => {
   const { requireApiOrAdmin } = require(path.join(serverRoot, 'src/core/security'));
-  let nextCalled = false;
-  const mockReq = {
-    headers: { cookie: '' },
-    query: { token: getConfig().api_token },
-    socket: { remoteAddress: '127.0.0.1' }
-  };
-  const mockRes = {
-    statusCode: 200,
-    status(code) { this.statusCode = code; return this; },
-    json(data) { this.data = data; return this; }
-  };
+  const { CONFIG_PATH } = require(path.join(serverRoot, 'src/core/config'));
+  const fs = require('fs');
 
-  requireApiOrAdmin(mockReq, mockRes, () => { nextCalled = true; });
-  assert.strictEqual(nextCalled, false, 'requireApiOrAdmin must reject query string token');
-  assert.strictEqual(mockRes.statusCode, 401, 'Query token attempt must return 401');
+  const hadConfig = fs.existsSync(CONFIG_PATH);
+  const originalYaml = hadConfig ? fs.readFileSync(CONFIG_PATH, 'utf8') : null;
+  const currentToken = getConfig().api_token;
 
-  // Verify Authorization: Bearer works
-  let bearerSuccess = false;
-  const validReq = {
-    headers: { authorization: `Bearer ${getConfig().api_token}` },
-    query: {},
-    socket: { remoteAddress: '127.0.0.1' }
-  };
-  requireApiOrAdmin(validReq, mockRes, () => { bearerSuccess = true; });
-  assert.strictEqual(bearerSuccess, true, 'Bearer token in authorization header must succeed');
+  try {
+    if (!currentToken) {
+      fs.writeFileSync(CONFIG_PATH, 'api_token: "test-auth-token-12345"\nport: 3000\n', 'utf8');
+    }
+    const effectiveToken = getConfig().api_token;
+    assert.ok(effectiveToken, 'Test requires an effective api_token to verify authentication');
+
+    let nextCalled = false;
+    const mockReq = {
+      headers: { cookie: '' },
+      query: { token: effectiveToken },
+      socket: { remoteAddress: '127.0.0.1' }
+    };
+    const mockRes = {
+      statusCode: 200,
+      status(code) { this.statusCode = code; return this; },
+      json(data) { this.data = data; return this; }
+    };
+
+    requireApiOrAdmin(mockReq, mockRes, () => { nextCalled = true; });
+    assert.strictEqual(nextCalled, false, 'requireApiOrAdmin must reject query string token');
+    assert.strictEqual(mockRes.statusCode, 401, 'Query token attempt must return 401');
+
+    // Verify Authorization: Bearer works
+    let bearerSuccess = false;
+    const validReq = {
+      headers: { authorization: `Bearer ${effectiveToken}` },
+      query: {},
+      socket: { remoteAddress: '127.0.0.1' }
+    };
+    requireApiOrAdmin(validReq, mockRes, () => { bearerSuccess = true; });
+    assert.strictEqual(bearerSuccess, true, 'Bearer token in authorization header must succeed');
+  } finally {
+    if (hadConfig) {
+      fs.writeFileSync(CONFIG_PATH, originalYaml, 'utf8');
+    } else if (fs.existsSync(CONFIG_PATH)) {
+      fs.unlinkSync(CONFIG_PATH);
+    }
+  }
 });
 
 test('Config: GET /api/platform/config desensitizes password and credentials', async () => {
