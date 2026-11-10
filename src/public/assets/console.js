@@ -699,17 +699,13 @@ function renderFolderTree() {
     </button>
   `;
 
-  const sortedYears = [...yearMap.keys()].sort((a, b) => {
-    if (a === 'protected') return -1;
-    if (b === 'protected') return 1;
-    return b.localeCompare(a);
-  });
+  const sortedYears = [...yearMap.keys()].sort((a, b) => b.localeCompare(a));
   for (const year of sortedYears) {
     const yData = yearMap.get(year);
     const isCollapsed = collapsedYears.has(year);
     const isYearActive = selectedFolder === year;
     const arrow = isCollapsed ? '▸' : '▾';
-    const yearLabel = year === 'protected' ? t('folderProtectedLabel') : `📂 ${year}`;
+    const yearLabel = `📂 ${year}`;
 
     html += `
       <button class="folder-btn ${isYearActive ? 'active' : ''}" onclick="selectFolder('${year}')">
@@ -727,7 +723,7 @@ function renderFolderTree() {
         const mData = yData.months.get(month);
         const folderKey = `${year}/${month}`;
         const isMonthActive = selectedFolder === folderKey;
-        const monthLabel = month === 'keep' ? t('folderKeepLabel') : `📁 ${month} <span style="font-size:11px; color:var(--muted);">(${year}/${month})</span>`;
+        const monthLabel = `📁 ${month} <span style="font-size:11px; color:var(--muted);">(${year}/${month})</span>`;
         html += `
           <button class="folder-btn month-node ${isMonthActive ? 'active' : ''}" onclick="selectFolder('${folderKey}')" title="${formatBytes(mData.bytes)}">
             <span>${monthLabel}</span>

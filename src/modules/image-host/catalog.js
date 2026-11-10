@@ -146,7 +146,6 @@ async function collectImages(cfg) {
       shaIndexDirty = true;
     }
     const locked = isItemLocked(year, month, file, protectedMap);
-    const inProtectedFolder = year === 'protected';
 
     list.push({
       filename: file,
@@ -158,7 +157,6 @@ async function collectImages(cfg) {
       year,
       month,
       locked,
-      inProtectedFolder,
       size: stat.size,
       cacheSize,
       hasCache,

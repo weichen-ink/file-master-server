@@ -8,11 +8,7 @@ function getProtectedMap() {
 function isItemLocked(year, month, filename, protectedMap = null) {
   const map = protectedMap || getProtectedMap();
   const key = `${year}/${month}/${filename}`;
-  if (map[key] !== undefined) {
-    return Boolean(map[key]);
-  }
-  if (year === 'protected') return true;
-  return false;
+  return Boolean(map[key]);
 }
 
 function setItemLockState(year, month, filename, locked) {
@@ -21,11 +17,7 @@ function setItemLockState(year, month, filename, locked) {
   if (locked) {
     map[key] = { lockedAt: Date.now() };
   } else {
-    if (year === 'protected') {
-      map[key] = false;
-    } else {
-      delete map[key];
-    }
+    delete map[key];
   }
   writeJsonData('protected_files', map);
   return Boolean(locked);

@@ -151,11 +151,11 @@ function sanitizeUploadFilename(seg) {
 }
 
 function isValidYearSeg(y) {
-  return /^\d{4}$/.test(y) || y === 'protected';
+  return /^\d{4}$/.test(y);
 }
 
 function isValidMonthSeg(m) {
-  return /^\d{2}$/.test(m) || m === 'keep';
+  return /^\d{2}$/.test(m);
 }
 
 /**
