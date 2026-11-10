@@ -460,6 +460,7 @@ function getBackupStatus() {
       frequency: backupCfg.frequency || 'daily',
       schedule: String(backupCfg.schedule || '03:00'),
       weekday: Number(backupCfg.weekday ?? 0),
+      monthday: Number(backupCfg.monthday ?? 1),
       cron_expression: backupCfg.cron_expression || '',
       retention: Math.max(1, Number(backupCfg.retention) || 7),
       local_dir: backupCfg.local_dir || './data/backups',

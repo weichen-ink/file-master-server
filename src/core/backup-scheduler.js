@@ -40,26 +40,53 @@ function shouldTriggerBackup(backupCfg, now, currentLastKey = '') {
   const curDay = now.getDay(); // 0 is Sunday
   const curMon = now.getMonth() + 1;
   const todayKey = `${now.getFullYear()}-${String(curMon).padStart(2, '0')}-${String(curD).padStart(2, '0')}`;
+  const daysEpoch = Math.floor(now.getTime() / 86400000);
 
-  if (frequency === 'hourly') {
+  if (frequency === 'hourly' || frequency === 'hourly_1') {
     const key = `${todayKey}-H${curH}`;
     if (curM === validM && currentLastKey !== key) {
       return { shouldTrigger: true, key };
     }
-  } else if (frequency === 'every_6h') {
+  } else if (frequency === 'hourly_2') {
+    const key = `${todayKey}-H${curH}`;
+    if ((curH % 2 === validH % 2) && curM === validM && currentLastKey !== key) {
+      return { shouldTrigger: true, key };
+    }
+  } else if (frequency === 'hourly_4') {
+    const key = `${todayKey}-H${curH}`;
+    if ((curH % 4 === validH % 4) && curM === validM && currentLastKey !== key) {
+      return { shouldTrigger: true, key };
+    }
+  } else if (frequency === 'hourly_6' || frequency === 'every_6h') {
     const key = `${todayKey}-H${curH}`;
     if ((curH % 6 === validH % 6) && curM === validM && currentLastKey !== key) {
       return { shouldTrigger: true, key };
     }
-  } else if (frequency === 'every_12h') {
+  } else if (frequency === 'hourly_12' || frequency === 'every_12h') {
     const key = `${todayKey}-H${curH}`;
     if ((curH % 12 === validH % 12) && curM === validM && currentLastKey !== key) {
+      return { shouldTrigger: true, key };
+    }
+  } else if (frequency === 'interval_2d') {
+    const key = `${todayKey}`;
+    if (daysEpoch % 2 === 0 && curH === validH && curM === validM && currentLastKey !== key) {
+      return { shouldTrigger: true, key };
+    }
+  } else if (frequency === 'interval_3d') {
+    const key = `${todayKey}`;
+    if (daysEpoch % 3 === 0 && curH === validH && curM === validM && currentLastKey !== key) {
       return { shouldTrigger: true, key };
     }
   } else if (frequency === 'weekly') {
     const targetWeekday = parseInt(backupCfg.weekday ?? 0, 10); // 0 = Sunday
     const key = `${todayKey}`;
     if (curDay === targetWeekday && curH === validH && curM === validM && currentLastKey !== key) {
+      return { shouldTrigger: true, key };
+    }
+  } else if (frequency === 'monthly') {
+    const targetMonthDay = parseInt(backupCfg.monthday ?? 1, 10);
+    const key = `${now.getFullYear()}-${String(curMon).padStart(2, '0')}`;
+    if (curD === targetMonthDay && curH === validH && curM === validM && currentLastKey !== key) {
       return { shouldTrigger: true, key };
     }
   } else if (frequency === 'cron') {

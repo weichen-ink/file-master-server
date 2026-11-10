@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>File Master Server Console</title>
-  <link rel="stylesheet" href="/assets/console.css?v=1.1.4" />
+  <link rel="stylesheet" href="/assets/console.css?v=1.1.5" />
 </head>
 <body>
 
@@ -738,17 +738,61 @@
           </div>
 
           <!-- Form Controls -->
-          <div class="form-grid form-grid-three" style="margin-bottom: 12px;">
+          <div class="form-grid form-grid-four" style="margin-bottom: 12px;">
             <div class="form-group">
               <label data-i18n="lblBackupEnabled">自动备份开关</label>
               <select id="f_backup_enabled" class="form-input">
-                <option value="true">开启全自动备份</option>
-                <option value="false">关闭自动备份</option>
+                <option value="true" data-i18n="optBackupOn">开启全自动备份</option>
+                <option value="false" data-i18n="optBackupOff">关闭自动备份</option>
               </select>
             </div>
             <div class="form-group">
-              <label data-i18n="lblBackupSchedule">每日备份时间</label>
+              <label data-i18n="lblBackupFrequency">备份策略与频率</label>
+              <select id="f_backup_frequency" class="form-input" onchange="onBackupFrequencyChange()">
+                <option value="daily" data-i18n="optFreqDaily">每日执行 (Daily - 推荐)</option>
+                <option value="hourly_12" data-i18n="optFreq12h">每 12 小时 (半天)</option>
+                <option value="hourly_6" data-i18n="optFreq6h">每 6 小时</option>
+                <option value="hourly_4" data-i18n="optFreq4h">每 4 小时</option>
+                <option value="hourly_2" data-i18n="optFreq2h">每 2 小时</option>
+                <option value="hourly_1" data-i18n="optFreqHourly">每 1 小时 (Hourly)</option>
+                <option value="interval_2d" data-i18n="optFreq2d">每 2 天执行一次</option>
+                <option value="interval_3d" data-i18n="optFreq3d">每 3 天执行一次</option>
+                <option value="weekly" data-i18n="optFreqWeekly">每周执行 (Weekly)</option>
+                <option value="monthly" data-i18n="optFreqMonthly">每月执行 (Monthly)</option>
+                <option value="cron" data-i18n="optFreqCron">自定义 Cron 表达式 (Advanced)</option>
+              </select>
+            </div>
+            <div class="form-group" id="group_backup_time">
+              <label id="lbl_backup_time" data-i18n="lblBackupSchedule">每日备份时间</label>
               <input type="time" id="f_backup_schedule" class="form-input" value="03:00" />
+            </div>
+            <div class="form-group hidden" id="group_backup_weekday">
+              <label data-i18n="lblWeekday">执行星期</label>
+              <select id="f_backup_weekday" class="form-input">
+                <option value="0" data-i18n="weekdaySun">星期日</option>
+                <option value="1" data-i18n="weekdayMon">星期一</option>
+                <option value="2" data-i18n="weekdayTue">星期二</option>
+                <option value="3" data-i18n="weekdayWed">星期三</option>
+                <option value="4" data-i18n="weekdayThu">星期四</option>
+                <option value="5" data-i18n="weekdayFri">星期五</option>
+                <option value="6" data-i18n="weekdaySat">星期六</option>
+              </select>
+            </div>
+            <div class="form-group hidden" id="group_backup_monthday">
+              <label data-i18n="lblMonthday">执行日期</label>
+              <select id="f_backup_monthday" class="form-input">
+                <option value="1">每月 1 日</option>
+                <option value="5">每月 5 日</option>
+                <option value="10">每月 10 日</option>
+                <option value="15">每月 15 日</option>
+                <option value="20">每月 20 日</option>
+                <option value="25">每月 25 日</option>
+                <option value="28">每月 28 日</option>
+              </select>
+            </div>
+            <div class="form-group hidden" id="group_backup_cron">
+              <label data-i18n="lblCronExpression">Cron 表达式 (分 时 日 月 周)</label>
+              <input type="text" id="f_backup_cron" class="form-input" placeholder="0 3 * * *" />
             </div>
             <div class="form-group">
               <label data-i18n="lblBackupRetention">保留备份数量</label>
@@ -896,7 +940,7 @@
   <div id="dropZone" style="display:none;" aria-hidden="true"></div>
   <select id="sortSelect" style="display:none;" aria-hidden="true"></select>
 
-  <script src="/assets/i18n.js?v=1.1.4"></script>
-  <script src="/assets/console.js?v=1.1.4"></script>
+  <script src="/assets/i18n.js?v=1.1.5"></script>
+  <script src="/assets/console.js?v=1.1.5"></script>
 </body>
 </html>

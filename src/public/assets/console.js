@@ -236,14 +236,25 @@ document.addEventListener('keydown', (event) => {
   }
 });
 
-function switchTab(tabId, btnEl) {
+function switchTab(tabId, btnEl, updateHistory = true) {
   maskSecrets();
   document.querySelectorAll('main > section').forEach(s => s.classList.add('hidden'));
   const target = document.getElementById('tab-' + tabId);
   if (target) target.classList.remove('hidden');
+
   document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
-  if (btnEl) btnEl.classList.add('active');
+  const activeBtn = btnEl || document.querySelector(`.nav-item[onclick*="'${tabId}'"]`);
+  if (activeBtn) activeBtn.classList.add('active');
+
   setMobileNav(false);
+
+  if (updateHistory) {
+    try {
+      history.replaceState(null, '', '#' + tabId);
+      localStorage.setItem('fms_active_tab', tabId);
+    } catch {}
+  }
+
   if (tabId === 'status') {
     loadServerMetrics(false);
   } else if (tabId === 'settings' || tabId === 'media' || tabId === 'integration' || tabId === 'security' || tabId === 'maintenance' || tabId === 'platform') {
@@ -305,6 +316,29 @@ async function initApp() {
       if (appView) appView.classList.remove('hidden');
       loadImages();
       loadShares();
+
+      // Restore active tab from URL hash or localStorage so refresh never loses the current page
+      let initialTab = '';
+      const hashTab = (window.location.hash || '').replace(/^#/, '').trim();
+      const validTabs = ['image-host', 'future-files', 'media', 'integration', 'status', 'settings', 'security', 'maintenance'];
+      if (validTabs.includes(hashTab)) {
+        initialTab = hashTab;
+      } else {
+        const savedTab = localStorage.getItem('fms_active_tab');
+        if (validTabs.includes(savedTab)) {
+          initialTab = savedTab;
+        }
+      }
+
+      if (initialTab && initialTab !== 'image-host') {
+        const navBtn = document.querySelector(`.nav-item[onclick*="'${initialTab}'"]`);
+        switchTab(initialTab, navBtn, false);
+      } else {
+        try {
+          history.replaceState(null, '', '#image-host');
+          localStorage.setItem('fms_active_tab', 'image-host');
+        } catch {}
+      }
     } else {
       if (loginView) loginView.classList.remove('hidden');
       if (appView) appView.classList.add('hidden');
@@ -1685,11 +1719,13 @@ function onBackupFrequencyChange() {
   const freq = document.getElementById('f_backup_frequency')?.value || 'daily';
   const groupTime = document.getElementById('group_backup_time');
   const groupWeekday = document.getElementById('group_backup_weekday');
+  const groupMonthday = document.getElementById('group_backup_monthday');
   const groupCron = document.getElementById('group_backup_cron');
   const lblTime = document.getElementById('lbl_backup_time');
 
   if (groupTime) groupTime.classList.remove('hidden');
   if (groupWeekday) groupWeekday.classList.add('hidden');
+  if (groupMonthday) groupMonthday.classList.add('hidden');
   if (groupCron) groupCron.classList.add('hidden');
 
   if (freq === 'cron') {
@@ -1698,9 +1734,12 @@ function onBackupFrequencyChange() {
   } else if (freq === 'weekly') {
     if (groupWeekday) groupWeekday.classList.remove('hidden');
     if (lblTime) lblTime.textContent = t('lblBackupTimeOfDay') || '执行时间';
-  } else if (freq === 'hourly') {
+  } else if (freq === 'monthly') {
+    if (groupMonthday) groupMonthday.classList.remove('hidden');
+    if (lblTime) lblTime.textContent = t('lblBackupTimeOfDay') || '执行时间';
+  } else if (freq === 'hourly_1' || freq === 'hourly') {
     if (lblTime) lblTime.textContent = t('lblBackupMinuteOfHour') || '整点执行时间 (:分)';
-  } else if (freq === 'every_6h' || freq === 'every_12h') {
+  } else if (['hourly_2', 'hourly_4', 'hourly_6', 'hourly_12', 'every_6h', 'every_12h', 'interval_2d', 'interval_3d'].includes(freq)) {
     if (lblTime) lblTime.textContent = t('lblBackupBaseTime') || '基准执行时间';
   } else {
     if (lblTime) lblTime.textContent = t('lblBackupSchedule') || '每日备份时间';
@@ -1740,6 +1779,9 @@ async function loadBackupStatus() {
 
     const elWeekday = document.getElementById('f_backup_weekday');
     if (elWeekday) elWeekday.value = String(cfg.weekday ?? 0);
+
+    const elMonthday = document.getElementById('f_backup_monthday');
+    if (elMonthday) elMonthday.value = String(cfg.monthday ?? 1);
 
     const elCron = document.getElementById('f_backup_cron');
     if (elCron) elCron.value = cfg.cron_expression || '';
@@ -1826,6 +1868,7 @@ async function saveBackupConfig() {
   const frequency = document.getElementById('f_backup_frequency')?.value || 'daily';
   const schedule = document.getElementById('f_backup_schedule')?.value || '03:00';
   const weekday = parseInt(document.getElementById('f_backup_weekday')?.value, 10) || 0;
+  const monthday = parseInt(document.getElementById('f_backup_monthday')?.value, 10) || 1;
   const cron_expression = document.getElementById('f_backup_cron')?.value.trim() || '';
   const retention = parseInt(document.getElementById('f_backup_retention')?.value, 10) || 7;
   const local_dir = document.getElementById('f_backup_local_dir')?.value.trim() || './data/backups';
@@ -1844,6 +1887,7 @@ async function saveBackupConfig() {
             frequency,
             schedule,
             weekday,
+            monthday,
             cron_expression,
             retention,
             local_dir,
@@ -1936,6 +1980,15 @@ async function testRcloneConnectivity() {
     alert('❌ Rclone 连通测试失败: ' + err.message);
   }
 }
+
+window.addEventListener('hashchange', () => {
+  const hashTab = (window.location.hash || '').replace(/^#/, '').trim();
+  const validTabs = ['image-host', 'future-files', 'media', 'integration', 'status', 'settings', 'security', 'maintenance'];
+  if (validTabs.includes(hashTab)) {
+    const navBtn = document.querySelector(`.nav-item[onclick*="'${hashTab}'"]`);
+    switchTab(hashTab, navBtn, false);
+  }
+});
 
 initApp();
 

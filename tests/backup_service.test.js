@@ -115,7 +115,19 @@ test('backup-scheduler supports daily, every_12h, every_6h, hourly, weekly, and 
   assert.equal(shouldTriggerBackup({ enabled: true, frequency: 'weekly', weekday: 0, schedule: '03:00' }, sunday).shouldTrigger, true);
   assert.equal(shouldTriggerBackup({ enabled: true, frequency: 'weekly', weekday: 0, schedule: '03:00' }, monday).shouldTrigger, false);
 
-  // 6. Cron
+  // 6. Monthly (e.g. 1st of month)
+  const m1 = new Date('2026-11-01T03:00:00');
+  const m2 = new Date('2026-11-02T03:00:00');
+  assert.equal(shouldTriggerBackup({ enabled: true, frequency: 'monthly', monthday: 1, schedule: '03:00' }, m1).shouldTrigger, true);
+  assert.equal(shouldTriggerBackup({ enabled: true, frequency: 'monthly', monthday: 1, schedule: '03:00' }, m2).shouldTrigger, false);
+
+  // 7. Interval 2 days / 3 days
+  const now = new Date('2026-11-11T03:00:00');
+  const daysEpoch = Math.floor(now.getTime() / 86400000);
+  const expected2d = (daysEpoch % 2 === 0);
+  assert.equal(shouldTriggerBackup({ enabled: true, frequency: 'interval_2d', schedule: '03:00' }, now).shouldTrigger, expected2d);
+
+  // 8. Cron
   const cronMatch = new Date('2026-11-11T02:30:00');
   const cronMismatch = new Date('2026-11-11T02:31:00');
   assert.equal(shouldTriggerBackup({ enabled: true, frequency: 'cron', cron_expression: '30 2 * * *' }, cronMatch).shouldTrigger, true);
