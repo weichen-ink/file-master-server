@@ -4,14 +4,30 @@ const crypto = require('node:crypto');
 const multer = require('multer');
 const { hashFileSha256, persistUniqueUpload, walkOriginalFiles, verifyOriginalFiles } = require('./asset-files');
 const { createTaskQueue } = require('../../core/task-queue');
+const { getProtectedMap, isItemLocked, setItemLockState } = require('./protection');
+const {
+  RAW_DIR,
+  CACHE_DIR,
+  getWebpCacheFilePath,
+  getLegacyWebpCacheFilePath,
+  getRawPreviewCacheFilePath,
+  hasSiblingWithSameBasename,
+  findRawFile
+} = require('./asset-paths');
+const {
+  pathToShaMap,
+  getShaIndex,
+  writeShaIndex,
+  updateShaIndex,
+  removeShaIndex,
+  getFileSha256,
+  findExistingBySha256
+} = require('./sha-index');
 const {
   ROOT_DIR,
-  STORAGE_DIR,
   TRASH_DIR,
   UPLOAD_TMP_DIR,
-  getConfig,
-  readJsonData,
-  writeJsonData
+  getConfig
 } = require('../../core/config');
 const { requireApiOrAdmin, createRateLimiter, getClientIp } = require('../../core/security');
 const { appendAuditLog } = require('../../core/audit');
@@ -35,40 +51,7 @@ const {
   invalidateProcessingCache
 } = require('./processor');
 
-const RAW_DIR = path.join(STORAGE_DIR, 'raw');
-const CACHE_DIR = path.join(STORAGE_DIR, 'cache');
 const mutateAssets = createTaskQueue(1);
-
-function getProtectedMap() {
-  const data = readJsonData('protected_files', {});
-  return data && typeof data === 'object' && !Array.isArray(data) ? data : {};
-}
-
-function isItemLocked(year, month, filename, protectedMap = null) {
-  const map = protectedMap || getProtectedMap();
-  const key = `${year}/${month}/${filename}`;
-  if (map[key] !== undefined) {
-    return Boolean(map[key]);
-  }
-  if (year === 'protected') return true;
-  return false;
-}
-
-function setItemLockState(year, month, filename, locked) {
-  const map = getProtectedMap();
-  const key = `${year}/${month}/${filename}`;
-  if (locked) {
-    map[key] = { lockedAt: Date.now() };
-  } else {
-    if (year === 'protected') {
-      map[key] = false;
-    } else {
-      delete map[key];
-    }
-  }
-  writeJsonData('protected_files', map);
-  return Boolean(locked);
-}
 
 function ensureDirs() {
   fs.mkdirSync(RAW_DIR, { recursive: true });
@@ -104,95 +87,6 @@ const acceptSingleUpload = (req, res, next) => {
   });
 };
 
-// Bounded LRU in-memory SHA-256 cache to avoid unbounded memory growth
-const MAX_SHA_CACHE_ENTRIES = 2000;
-const sha256Cache = new Map();
-let shaIndex = null;
-const pathToShaMap = new Map();
-
-function setBoundedShaCache(key, hash) {
-  if (sha256Cache.has(key)) {
-    sha256Cache.delete(key);
-  } else if (sha256Cache.size >= MAX_SHA_CACHE_ENTRIES) {
-    const oldestKey = sha256Cache.keys().next().value;
-    if (oldestKey !== undefined) {
-      sha256Cache.delete(oldestKey);
-    }
-  }
-  sha256Cache.set(key, hash);
-}
-
-function rebuildPathToShaMap(idx) {
-  pathToShaMap.clear();
-  for (const [sha, info] of Object.entries(idx || {})) {
-    if (info && info.year && info.month && info.filename) {
-      pathToShaMap.set(`${info.year}/${info.month}/${info.filename}`, {
-        sha256: sha,
-        baselineSha256: info.baselineSha256 || sha,
-        size: info.size,
-        mtimeMs: info.mtimeMs
-      });
-    }
-  }
-}
-
-function getShaIndex() {
-  if (!shaIndex) {
-    const saved = readJsonData('sha_index', {});
-    shaIndex = {};
-    if (saved.version === 2 && saved.files && typeof saved.files === 'object') {
-      for (const [rel, info] of Object.entries(saved.files)) {
-        const [year, month, filename, extra] = rel.split('/');
-        if (!extra && isValidYearSeg(year) && isValidMonthSeg(month) && filename &&
-          /^[a-f0-9]{64}$/.test(info?.sha256)) {
-          updateShaIndex(info.sha256, { year, month, filename, size: info.size,
-            mtimeMs: info.mtimeMs, baselineSha256: info.baselineSha256 || info.sha256 }, false);
-        }
-      }
-    } else {
-      shaIndex = saved;
-      rebuildPathToShaMap(shaIndex);
-    }
-  }
-  return shaIndex;
-}
-
-function writeShaIndex() {
-  writeJsonData('sha_index', { version: 2, files: Object.fromEntries(pathToShaMap) });
-}
-
-function updateShaIndex(sha256, info, flush = true) {
-  if (!sha256 || !info) return false;
-  const idx = getShaIndex();
-  const rel = `${info.year}/${info.month}/${info.filename}`;
-  const previousPath = pathToShaMap.get(rel);
-  if (previousPath?.sha256 && previousPath.sha256 !== sha256) {
-    removeShaIndex(previousPath.sha256, rel, false);
-  }
-  const prev = idx[sha256];
-  const sameEntry =
-    prev &&
-    prev.year === info.year &&
-    prev.month === info.month &&
-    prev.filename === info.filename &&
-    prev.size === info.size &&
-    prev.mtimeMs === info.mtimeMs;
-  if (sameEntry) {
-    return false;
-  }
-  idx[sha256] = info;
-  pathToShaMap.set(rel, {
-    sha256,
-    baselineSha256: previousPath?.baselineSha256 || previousPath?.sha256 || info.baselineSha256 || sha256,
-    size: info.size,
-    mtimeMs: info.mtimeMs
-  });
-  if (flush) {
-    writeShaIndex();
-  }
-  return true;
-}
-
 let cachedScanData = null;
 let cachedScanTime = 0;
 let cachedScanCfgKey = '';
@@ -206,52 +100,6 @@ function invalidateScanCache() {
   scanGeneration++;
   cachedScanData = null;
   cachedScanTime = 0;
-}
-
-function removeShaIndex(sha256, relKey = null, flush = true) {
-  const idx = getShaIndex();
-  const entry = idx[sha256];
-  const canonical = entry ? `${entry.year}/${entry.month}/${entry.filename}` : null;
-  pathToShaMap.delete(relKey || canonical);
-  if (entry && (!relKey || canonical === relKey)) {
-    delete idx[sha256];
-    for (const [rel, info] of pathToShaMap) {
-      if (info.sha256 !== sha256) continue;
-      const [year, month, filename] = rel.split('/');
-      idx[sha256] = { year, month, filename, size: info.size, mtimeMs: info.mtimeMs };
-      break;
-    }
-  }
-  if (flush) writeShaIndex();
-}
-
-/**
- * Computes SHA-256 with an asynchronous stream; consults validated metadata caches first.
- */
-async function getFileSha256(fullPath, stat, relKey = null) {
-  const cacheKey = `${fullPath}:${stat.size}:${stat.mtimeMs}`;
-  if (sha256Cache.has(cacheKey)) {
-    const hit = sha256Cache.get(cacheKey);
-    setBoundedShaCache(cacheKey, hit);
-    return hit;
-  }
-
-  if (relKey) {
-    getShaIndex();
-    const indexed = pathToShaMap.get(relKey);
-    if (indexed && indexed.sha256) {
-      if (
-        indexed.size === stat.size && indexed.mtimeMs === stat.mtimeMs
-      ) {
-        setBoundedShaCache(cacheKey, indexed.sha256);
-        return indexed.sha256;
-      }
-    }
-  }
-
-  const digest = await hashFileSha256(fullPath);
-  setBoundedShaCache(cacheKey, digest);
-  return digest;
 }
 
 async function moveFileToTrash(source, target, expectedSha256) {
@@ -274,115 +122,6 @@ async function moveFileToTrash(source, target, expectedSha256) {
       throw copyErr;
     }
   }
-}
-
-/**
- * Index entries are hints. Verify bytes without erasing missing/corrupt baselines.
- */
-async function findExistingBySha256(targetSha256) {
-  const idx = getShaIndex();
-  const entry = idx[targetSha256];
-  const candidates = new Set();
-  if (entry) candidates.add(`${entry.year}/${entry.month}/${entry.filename}`);
-  for (const [rel, info] of pathToShaMap) {
-    if (info.sha256 === targetSha256) candidates.add(rel);
-  }
-  for (const rel of candidates) {
-    const actual = await hashFileSha256(path.join(RAW_DIR, rel)).catch((err) => {
-      if (err.code === 'ENOENT') return null;
-      throw err;
-    });
-    if (actual === targetSha256) {
-      const [year, month, filename] = rel.split('/');
-      return { year, month, filename };
-    }
-  }
-  return null;
-}
-
-/**
- * Resolves cache file paths keyed by full raw filename (e.g., photo.jpg.webp vs photo.png.webp)
- * so same-basename files with different extensions never collide in the cache.
- */
-function getWebpCacheFilePath(year, month, rawFilename, wmVariant = null) {
-  if (wmVariant && ['image', 'text', 'tile'].includes(wmVariant)) {
-    return path.join(CACHE_DIR, year, month, `${rawFilename}.wm_${wmVariant}.webp`);
-  }
-  if (wmVariant === 'clean' || wmVariant === 'none') {
-    return path.join(CACHE_DIR, year, month, `${rawFilename}.clean.webp`);
-  }
-  return path.join(CACHE_DIR, year, month, `${rawFilename}.webp`);
-}
-
-function getLegacyWebpCacheFilePath(year, month, rawFilename) {
-  const baseName = path.parse(rawFilename).name;
-  return path.join(CACHE_DIR, year, month, `${baseName}.webp`);
-}
-
-function getRawPreviewCacheFilePath(year, month, rawFilename) {
-  return path.join(CACHE_DIR, year, month, `${rawFilename}.raw_preview.jpg`);
-}
-
-/**
- * Checks whether multiple allowed files in the given month directory share the same basename.
- */
-function hasSiblingWithSameBasename(year, month, filename, filesList = null) {
-  const monthDir = path.join(RAW_DIR, year, month);
-  const files = filesList || (fs.existsSync(monthDir) ? fs.readdirSync(monthDir) : []);
-  const targetBase = path.parse(filename).name.replace(/[\s_]+/g, '_');
-  let count = 0;
-  for (const f of files) {
-    if (!isAllowedAttachmentFile(f)) continue;
-    const fBase = path.parse(f).name.replace(/[\s_]+/g, '_');
-    if (fBase === targetBase) {
-      count += 1;
-      if (count > 1 || f !== filename) return true;
-    }
-  }
-  return false;
-}
-
-/**
- * Resolves raw file path from requested filename (supports exact name, <rawFilename>.webp, or <baseName>.webp).
- */
-function findRawFile(year, month, requestedFilename, requireSameExt = false) {
-  const monthDir = path.join(RAW_DIR, year, month);
-  if (!fs.existsSync(monthDir)) return null;
-
-  const exactPath = path.join(monthDir, requestedFilename);
-  if (fs.existsSync(exactPath)) return exactPath;
-
-  const files = fs.readdirSync(monthDir);
-
-  // If requesting "<rawFilename>.webp" (e.g. "photo.png.webp"), check exact stripped name first
-  if (!requireSameExt && requestedFilename.toLowerCase().endsWith('.webp')) {
-    const strippedRawName = requestedFilename.slice(0, -5);
-    const strippedExactPath = path.join(monthDir, strippedRawName);
-    if (fs.existsSync(strippedExactPath) && isAllowedAttachmentFile(strippedRawName)) {
-      return strippedExactPath;
-    }
-    const normStripped = strippedRawName.replace(/[\s_]+/g, '_');
-    for (const f of files) {
-      if (!isAllowedAttachmentFile(f)) continue;
-      if (f.replace(/[\s_]+/g, '_') === normStripped) {
-        return path.join(monthDir, f);
-      }
-    }
-  }
-
-  const parsed = path.parse(requestedFilename);
-  const normReqBase = parsed.name.replace(/[\s_]+/g, '_');
-  const reqExt = parsed.ext.toLowerCase();
-
-  for (const f of files) {
-    if (!isAllowedAttachmentFile(f)) continue;
-    const fp = path.parse(f);
-    if (requireSameExt && fp.ext.toLowerCase() !== reqExt) continue;
-    if (fp.name === parsed.name || fp.name.replace(/[\s_]+/g, '_') === normReqBase) {
-      return path.join(monthDir, f);
-    }
-  }
-  return null;
 }
 
 /**
