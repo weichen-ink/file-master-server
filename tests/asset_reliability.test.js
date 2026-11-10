@@ -97,3 +97,25 @@ test('Full integrity check rereads bytes, preserves baselines, and reports missi
     await assert.rejects(verifyOriginalFiles(dir, expected, { signal: controller.signal }), { name: 'AbortError' });
   } finally { await fs.rm(dir, { recursive: true, force: true }); }
 });
+
+test('Uploads fall back to an exclusive copy when hard links are unsupported', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'fm-nolink-'));
+  const realLink = fs.link;
+  fs.link = async () => { throw Object.assign(new Error('not supported'), { code: 'EPERM' }); };
+  try {
+    const bytes = Buffer.from('fallback-bytes');
+    const sha = digest(bytes);
+    await fs.writeFile(path.join(dir, 'a.png'), 'existing');
+    const first = await persistUniqueUpload({ buffer: bytes }, dir, 'a.png', sha);
+    assert.notEqual(first.filename, 'a.png');
+    assert.equal(first.deduplicated, false);
+    const again = await persistUniqueUpload({ buffer: bytes }, dir, 'a.png', sha);
+    assert.equal(again.deduplicated, true);
+    assert.equal(await fs.readFile(path.join(dir, 'a.png'), 'utf8'), 'existing');
+    assert.equal(await hashFileSha256(path.join(dir, first.filename)), sha);
+    assert.ok(!(await fs.readdir(dir)).some((name) => name.endsWith('.tmp')));
+  } finally {
+    fs.link = realLink;
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});

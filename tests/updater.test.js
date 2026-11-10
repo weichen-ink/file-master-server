@@ -95,11 +95,16 @@ test('Updater: preserves, backs up, and restores dual watermark files with error
 
   // Test failure reporting on invalid write path (e.g. write to a directory path)
   const failMap = new Map();
-  failMap.set(__dirname, Buffer.from('cannot-write-directory'));
-  const failRes = restoreWatermarkFiles(failMap);
-  assert.strictEqual(failRes.success, false);
-  assert.strictEqual(failRes.failed.length, 1);
-  assert.strictEqual(failRes.failed[0].file, __dirname);
+  const failDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fm-wm-faildir-'));
+  failMap.set(failDir, Buffer.from('cannot-write-directory'));
+  try {
+    const failRes = restoreWatermarkFiles(failMap);
+    assert.strictEqual(failRes.success, false);
+    assert.strictEqual(failRes.failed.length, 1);
+    assert.strictEqual(failRes.failed[0].file, failDir);
+  } finally {
+    fs.rmSync(failDir, { recursive: true, force: true });
+  }
 });
 
 test('Updater: persistent watermark disk backup survives reset or process restart', () => {

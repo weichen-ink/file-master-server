@@ -69,6 +69,28 @@ async function verifyOriginalFiles(directory, expected, { signal, onProgress = (
   return result;
 }
 
+// Filesystems that cannot hard-link (some Docker volumes, SMB/NFS, exFAT).
+const LINK_UNSUPPORTED = new Set(['EPERM', 'ENOTSUP', 'EOPNOTSUPP', 'EXDEV', 'EMLINK', 'ENOSYS']);
+
+/**
+ * Atomically publish `staged` at `target` without overwriting. Prefers a hard link
+ * (atomic, fails with EEXIST); falls back to an exclusive copy when links are unsupported.
+ */
+async function publishExclusive(staged, target) {
+  try {
+    await fs.promises.link(staged, target);
+  } catch (err) {
+    if (!LINK_UNSUPPORTED.has(err.code)) throw err;
+    try {
+      await fs.promises.copyFile(staged, target, fs.constants.COPYFILE_EXCL);
+    } catch (copyErr) {
+      // Never leave a partially written public file behind.
+      if (copyErr.code !== 'EEXIST') await fs.promises.unlink(target).catch(() => {});
+      throw copyErr;
+    }
+  }
+}
+
 /** Publish a complete file exclusively; existing names are never overwritten. */
 async function persistUniqueUpload(file, directory, desiredName, sha256, disambiguate = false) {
   await fs.promises.mkdir(directory, { recursive: true });
@@ -84,8 +106,7 @@ async function persistUniqueUpload(file, directory, desiredName, sha256, disambi
       const filename = `${base}${suffix}${ext}`;
       const target = path.join(directory, filename);
       try {
-        // Linking a fully written file is atomic and fails if the name exists.
-        await fs.promises.link(staged, target);
+        await publishExclusive(staged, target);
         return { filename, deduplicated: false, stat: await fs.promises.stat(target) };
       } catch (err) {
         if (err.code !== 'EEXIST') throw err;
@@ -99,4 +120,4 @@ async function persistUniqueUpload(file, directory, desiredName, sha256, disambi
   }
 }
 
-module.exports = { hashFileSha256, persistUniqueUpload, walkOriginalFiles, verifyOriginalFiles };
+module.exports = { hashFileSha256, publishExclusive, persistUniqueUpload, walkOriginalFiles, verifyOriginalFiles };
