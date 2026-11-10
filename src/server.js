@@ -130,6 +130,8 @@ app.get('/api/platform/version', (req, res) => {
       watermark: true,
       shaDeduplication: true,
       protectedLocks: true,
+      thumbnails: true,
+      integrityCheck: true,
       hotUpdate: true
     }
   });
@@ -276,9 +278,13 @@ app.post('/api/platform/totp-generate', requireAdmin, (req, res) => {
   res.json({ secret, otpauthUri });
 });
 
-app.get('/api/platform/metrics', requireAdmin, (req, res) => {
+app.get('/api/platform/metrics', requireAdmin, async (req, res) => {
   const revealSecrets = req.query.reveal === '1' || req.query.reveal === 'true';
-  res.json(collectRuntimeMetrics(revealSecrets));
+  try {
+    res.json(await collectRuntimeMetrics(revealSecrets));
+  } catch (err) {
+    res.status(500).json({ error: 'Unable to collect metrics: ' + err.message });
+  }
 });
 
 app.get('/api/platform/config', requireAdmin, (req, res) => {

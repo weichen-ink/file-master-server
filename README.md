@@ -152,11 +152,15 @@ image_host:
 | `GET` | `/api/image/probe` | Instant upload SHA-256 probe check | API Token / Session |
 | `POST` | `/api/image/upload` | Upload file (multipart streaming `file`) | API Token / Session |
 | `GET` | `/:rawSecret/:year/:month/:file` | Fetch lossless original file | Public |
+| `GET` | `/:rawSecret/:year/:month/:file?thumbnail=1` | Bounded WebP thumbnail for processable images | Secret original URL |
 | `GET` | `/pub/:year/:month/:file` | Fetch optimized WebP (supports dynamic `?wm=image`, `?wm=text`, `?wm=tile`) | Public |
 | `GET` | `/api/modules/image-host/list` | Fetch all assets and storage metrics | API Token / Session |
 | `POST` | `/api/modules/image-host/lock` | Toggle asset deletion lock | API Token / Session |
 | `DELETE` | `/api/modules/image-host/item/:y/:m/:f` | Soft-delete file to `storage/trash/` | API Token / Session |
 | `POST` | `/api/modules/image-host/cache/clear` | Purge WebP derivative cache | API Token / Session |
+| `POST/GET/DELETE` | `/api/modules/image-host/integrity` | Start, inspect, or cancel original-file verification | API Token / Session |
+
+For large batches, the console supports cancellation, retries of unfinished uploads, 60-item gallery pages, and downloadable original-file verification reports. Deploy one server process per writable storage directory. See [batch processing and scale](docs/SCALABILITY.md) for recovery, index compatibility, integrity semantics, and reproducible checks.
 
 ---
 
@@ -181,6 +185,10 @@ image_host:
 * **🚀 SHA-256 毫秒秒传探针**: 提供 `/api/image/probe` 接口，客户端本地比对哈希，已有文件 0 流量秒传复用。
 * **🛡️ 企业级多层安全防御**: `scrypt` 密码哈希、连续失败 IP 封禁、两步验证（TOTP 2FA）、Header API 凭证校验。
 * **🖼️ 原图与 WebP 双轨分发**: 笔记内保留原始无损文件，公开博客分发使用 Sharp 动态转码与智能水印。
+
+### 批处理与完整校验
+
+千张级图片使用单进程文件存储与轻量索引；同一份可写目录只运行一个服务实例。网页支持停止上传、重试未完成项、每页 60 项的缩略图库，以及原文件 SHA-256 完整校验和报告下载。恢复清单、索引兼容性、备份要求及验证边界见[批处理与规模说明](docs/SCALABILITY.md)。
 
 ### 📄 许可证
 [MIT License](LICENSE)

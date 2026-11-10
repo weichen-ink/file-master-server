@@ -3,6 +3,45 @@ let currentModalItem = null;
 let selectedFolder = 'all';
 let isOptimizationEnabled = true;
 const collapsedYears = new Set();
+const GALLERY_PAGE_SIZE = 60;
+let galleryPage = 0;
+let galleryFilterKey = '';
+let uploadController = null;
+let failedUploads = [];
+let integrityReport = null;
+let integrityPoll = null;
+
+function changeGalleryPage(delta) {
+  galleryPage = Math.max(0, galleryPage + delta);
+  renderGallery();
+}
+
+function waitForRetry(ms, signal) {
+  return new Promise((resolve, reject) => {
+    const cancel = () => { clearTimeout(timer); reject(new DOMException('Cancelled', 'AbortError')); };
+    const timer = setTimeout(() => { signal?.removeEventListener('abort', cancel); resolve(); }, ms);
+    if (signal?.aborted) cancel();
+    else signal?.addEventListener('abort', cancel, { once: true });
+  });
+}
+
+async function fetchWithRetry(url, options = {}) {
+  for (let attempt = 0; ; attempt++) {
+    if (options.signal?.aborted) throw new DOMException('Cancelled', 'AbortError');
+    let response;
+    try {
+      response = await fetch(url, options);
+      if (attempt >= 4 || ![429, 500, 502, 503, 504].includes(response.status)) return response;
+    } catch (err) {
+      if (options.signal?.aborted || attempt >= 4) throw err;
+    }
+    const retryAfter = response?.headers.get('Retry-After');
+    const delay = retryAfter && Number.isFinite(Number(retryAfter)) ? Number(retryAfter) * 1000
+      : retryAfter && Number.isFinite(Date.parse(retryAfter)) ? Math.max(0, Date.parse(retryAfter) - Date.now())
+      : 1000 * (2 ** attempt) + Math.random() * 250;
+    await waitForRetry(Math.min(120000, Math.max(250, delay)), options.signal);
+  }
+}
 
 function showToast(msg) {
   const tEl = document.getElementById('toast');
@@ -704,6 +743,8 @@ function renderFolderTree() {
 function renderGallery() {
   const q = document.getElementById('searchInput').value.trim().toLowerCase();
   const grid = document.getElementById('galleryGrid');
+  const filterKey = `${selectedFolder}:${q}`;
+  if (filterKey !== galleryFilterKey) { galleryPage = 0; galleryFilterKey = filterKey; }
 
   const filtered = allImages.filter(item => {
     if (selectedFolder !== 'all') {
@@ -727,13 +768,19 @@ function renderGallery() {
     bcEl.textContent = selectedFolder;
   }
   stEl.textContent = t('folderStatsHint', { count: filtered.length, bytes: formatBytes(filteredBytes) });
+  const pages = Math.max(1, Math.ceil(filtered.length / GALLERY_PAGE_SIZE));
+  galleryPage = Math.min(galleryPage, pages - 1);
+  const pagination = document.getElementById('galleryPagination');
+  if (pagination) pagination.innerHTML = `<button class="btn btn-outline" onclick="changeGalleryPage(-1)" ${galleryPage === 0 ? 'disabled' : ''}>${escapeHtml(t('pagePrevious'))}</button>
+    <span>${escapeHtml(t('pageCount', { current: galleryPage + 1, total: pages }))}</span>
+    <button class="btn btn-outline" onclick="changeGalleryPage(1)" ${galleryPage + 1 === pages ? 'disabled' : ''}>${escapeHtml(t('pageNext'))}</button>`;
 
   if (filtered.length === 0) {
     grid.innerHTML = `<div style="grid-column:1/-1; text-align:center; padding:56px 20px; color:var(--muted); background:var(--panel); border:1px solid var(--border); border-radius:12px;">${t('noMatchingAssets')}</div>`;
     return;
   }
 
-  grid.innerHTML = filtered.map((item) => {
+  grid.innerHTML = filtered.slice(galleryPage * GALLERY_PAGE_SIZE, (galleryPage + 1) * GALLERY_PAGE_SIZE).map((item) => {
     const isImg = item.isImage !== false;
     const iconMap = {
       pdf: t('catPdf'),
@@ -752,7 +799,7 @@ function renderGallery() {
 
     const thumbHtml = isImg
       ? `<div class="img-thumb-wrap" onclick="openPreview(${jsArg(item.year)}, ${jsArg(item.month)}, ${jsArg(item.filename)})">
-           <img src="${escapeHtml(item.rawPreviewPath)}" loading="lazy" alt="${escapeHtml(item.filename)}" />
+           <img src="${escapeHtml(item.thumbnailUrl || item.rawPreviewPath)}" loading="lazy" alt="${escapeHtml(item.filename)}" />
            ${lockBadgeHtml}
            <span class="img-tag">${item.year}/${item.month}</span>
          </div>`
@@ -820,25 +867,88 @@ function renderGallery() {
 }
 
 async function uploadFiles(files) {
-  if (!files || !files.length) return;
-  showToast(`⏳ ${t('uploading', { count: files.length })}`);
-  for (const file of files) {
-    const fd = new FormData();
-    fd.append('file', file);
-    const headers = { 'X-File-Name': encodeURIComponent(file.name) };
-    const res = await fetch('/api/image/upload', {
-      method: 'POST',
-      headers,
-      body: fd
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      alert(t('errorUpload', { error: err.error || res.statusText }));
+  if (!files?.length || uploadController) return;
+  const selected = Array.from(files);
+  const controller = uploadController = new AbortController();
+  failedUploads = [];
+  let succeeded = 0;
+  document.getElementById('uploadProgress').classList.remove('hidden');
+  document.getElementById('cancelUpload').classList.remove('hidden');
+  document.getElementById('retryUploads').classList.add('hidden');
+  try {
+    for (let i = 0; i < selected.length; i++) {
+      if (controller.signal.aborted) { failedUploads.push(...selected.slice(i)); break; }
+      const file = selected[i];
+      document.getElementById('uploadStatus').textContent = t('uploadItem', { current: i + 1, total: selected.length, name: file.name });
+      try {
+        const fd = new FormData();
+        fd.append('file', file);
+        const res = await fetchWithRetry('/api/image/upload', { method: 'POST',
+          headers: { 'X-File-Name': encodeURIComponent(file.name) }, body: fd, signal: controller.signal });
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
+        succeeded++;
+      } catch (err) {
+        failedUploads.push(file);
+        if (!controller.signal.aborted) console.warn('Upload failed:', file.name, err.message);
+      }
     }
+  } finally {
+    uploadController = null;
+    document.getElementById('fileInput').value = '';
+    document.getElementById('cancelUpload').classList.add('hidden');
+    document.getElementById('retryUploads').classList.toggle('hidden', failedUploads.length === 0);
+    const summary = t('uploadSummary', { success: succeeded, remaining: failedUploads.length });
+    document.getElementById('uploadStatus').textContent = summary;
+    showToast(summary);
+    try { await loadImages(); }
+    catch (err) { showToast(t('errorGeneric', { error: err.message })); }
   }
-  document.getElementById('fileInput').value = '';
-  showToast('✅ ' + t('uploadSuccess'));
-  loadImages();
+}
+
+function cancelUploads() { uploadController?.abort(); }
+function retryFailedUploads() { return uploadFiles(failedUploads); }
+
+async function startIntegrityCheck() {
+  try {
+    const res = await fetch('/api/modules/image-host/integrity', { method: 'POST' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    document.getElementById('integrityProgress').classList.remove('hidden');
+    document.getElementById('downloadIntegrity').classList.add('hidden');
+    clearTimeout(integrityPoll);
+    await pollIntegrityCheck();
+  } catch (err) { showToast(t('errorGeneric', { error: err.message })); }
+}
+
+async function pollIntegrityCheck() {
+  try {
+    const res = await fetch('/api/modules/image-host/integrity');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    integrityReport = await res.json();
+    const { state, checked, matched, issues } = integrityReport;
+    document.getElementById('integrityStatus').textContent = t('integritySummary', {
+      state: t(`integrity_${state}`), checked, matched, issues: issues.length
+    }) + (integrityReport.error ? `: ${integrityReport.error}` : '');
+    document.getElementById('cancelIntegrity').classList.toggle('hidden', state !== 'running');
+    document.getElementById('downloadIntegrity').classList.toggle('hidden', state === 'running');
+    if (state === 'running') integrityPoll = setTimeout(pollIntegrityCheck, 1000);
+  } catch (err) { showToast(t('errorGeneric', { error: err.message })); }
+}
+
+async function cancelIntegrityCheck() {
+  try {
+    const res = await fetch('/api/modules/image-host/integrity', { method: 'DELETE' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  } catch (err) { showToast(t('errorGeneric', { error: err.message })); }
+}
+
+function downloadIntegrityReport() {
+  if (!integrityReport) return;
+  const url = URL.createObjectURL(new Blob([JSON.stringify(integrityReport, null, 2)], { type: 'application/json' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `file-master-integrity-${Date.now()}.json`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 async function toggleLockImage(year, month, filename, locked) {

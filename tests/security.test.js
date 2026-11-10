@@ -108,16 +108,16 @@ test('Security: sliding-window rate limiter blocks excessive requests with 429',
   assert.strictEqual(blockedRes.statusCode, 429, 'Blocked request must return HTTP 429');
 });
 
-test('ImageHost: scanAllImages caches results in memory and invalidates on invalidateScanCache()', () => {
+test('ImageHost: scanAllImages caches results in memory and invalidates on invalidateScanCache()', async () => {
   const { scanAllImages, invalidateScanCache } = require(path.join(serverRoot, 'src/modules/image-host'));
   const cfg = getConfig();
   invalidateScanCache();
-  const firstScan = scanAllImages(cfg);
-  const secondScan = scanAllImages(cfg);
+  const firstScan = await scanAllImages(cfg);
+  const secondScan = await scanAllImages(cfg);
   assert.strictEqual(firstScan, secondScan, 'Repeated scan within TTL must return cached object reference');
 
   invalidateScanCache();
-  const thirdScan = scanAllImages(cfg);
+  const thirdScan = await scanAllImages(cfg);
   assert.notStrictEqual(firstScan, thirdScan, 'Scan after invalidateScanCache() must re-compute');
 });
 

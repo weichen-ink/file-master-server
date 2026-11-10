@@ -1,13 +1,50 @@
 const fs = require('node:fs');
 const path = require('node:path');
-const os = require('node:os');
+const crypto = require('node:crypto');
 const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
 const sharp = require('sharp');
 const { ROOT_DIR } = require('../../core/config');
 const { NEEDS_TRANSCODE_EXTS, isPathWithin } = require('../../core/file-security');
+const { createTaskQueue } = require('../../core/task-queue');
 
 const execFileAsync = promisify(execFile);
+const scheduleImage = createTaskQueue(2);
+const imageJobs = new Map();
+let cacheGeneration = 0;
+
+function invalidateProcessingCache() {
+  cacheGeneration++;
+}
+
+function runImageCacheJob(rawPath, cachePath, build, generation = cacheGeneration) {
+  const key = `${generation}:${cachePath}`;
+  if (imageJobs.has(key)) return imageJobs.get(key);
+  const job = scheduleImage(async () => {
+    const assertCurrent = () => {
+      if (generation !== cacheGeneration) {
+        throw Object.assign(new Error('Image settings changed; retry this request'), { status: 503 });
+      }
+    };
+    assertCurrent();
+    const rawStat = await fs.promises.stat(rawPath);
+    const cached = await fs.promises.stat(cachePath).catch(() => null);
+    assertCurrent();
+    if (cached && cached.size > 0 && cached.mtimeMs >= rawStat.mtimeMs) return cachePath;
+    await fs.promises.mkdir(path.dirname(cachePath), { recursive: true });
+    const temp = `${cachePath}.${crypto.randomUUID()}.tmp`;
+    try {
+      await build(temp);
+      assertCurrent();
+      fs.renameSync(temp, cachePath);
+      return cachePath;
+    } finally {
+      await fs.promises.unlink(temp).catch(() => {});
+    }
+  }).finally(() => imageJobs.delete(key));
+  imageJobs.set(key, job);
+  return job;
+}
 
 /**
  * Transcodes HEIC/HEIF/TIFF originals into high-quality JPEG previews for browser rendering and sharp watermarking.
@@ -16,7 +53,12 @@ const execFileAsync = promisify(execFile);
  *   2. Linux CLI decoders: heif-convert (libheif-examples) -> ffmpeg
  *   3. macOS fallback: /usr/bin/sips (only attempted when process.platform === 'darwin')
  */
-async function ensureTranscodedPreviewJpeg(rawFilePath, previewCachePath) {
+function ensureTranscodedPreviewJpeg(rawFilePath, previewCachePath) {
+  return runImageCacheJob(rawFilePath, previewCachePath,
+    (temp) => transcodePreviewJpeg(rawFilePath, temp));
+}
+
+async function transcodePreviewJpeg(rawFilePath, previewCachePath) {
   if (fs.existsSync(previewCachePath)) {
     const rawStat = fs.statSync(rawFilePath);
     const cacheStat = fs.statSync(previewCachePath);
@@ -345,6 +387,7 @@ async function buildWatermarkOverlay(imgCfg, targetWidth, targetHeight, basePipe
  * Reads original image -> resizes -> applies watermark -> compresses to WebP -> atomically writes cache.
  */
 async function processAndCacheImage(rawFilePath, cacheFilePath, imgCfg) {
+  const generation = cacheGeneration;
   const ext = path.extname(rawFilePath).toLowerCase();
   let inputPathForSharp = rawFilePath;
 
@@ -354,17 +397,20 @@ async function processAndCacheImage(rawFilePath, cacheFilePath, imgCfg) {
     inputPathForSharp = await ensureTranscodedPreviewJpeg(rawFilePath, previewJpegPath);
   }
 
+  return runImageCacheJob(rawFilePath, cacheFilePath,
+    (temp) => processImage(inputPathForSharp, temp, imgCfg), generation);
+}
+
+async function processImage(inputPathForSharp, cacheFilePath, imgCfg) {
   const image = sharp(inputPathForSharp, { animated: true });
   const meta = await image.metadata();
 
   // Handle animated images (GIF/animated WebP) directly to preserve frame sequences
   if (meta.pages && meta.pages > 1) {
     fs.mkdirSync(path.dirname(cacheFilePath), { recursive: true });
-    const tmpPath = `${cacheFilePath}.tmp`;
     await image
       .webp({ quality: Number(imgCfg.webp_quality) || 82 })
-      .toFile(tmpPath);
-    fs.renameSync(tmpPath, cacheFilePath);
+      .toFile(cacheFilePath);
     return cacheFilePath;
   }
 
@@ -386,17 +432,27 @@ async function processAndCacheImage(rawFilePath, cacheFilePath, imgCfg) {
   }
 
   fs.mkdirSync(path.dirname(cacheFilePath), { recursive: true });
-  const tmpPath = `${cacheFilePath}.tmp`;
   await pipeline
     .webp({ quality: Math.min(100, Math.max(10, Number(imgCfg.webp_quality) || 82)) })
-    .toFile(tmpPath);
-  fs.renameSync(tmpPath, cacheFilePath);
+    .toFile(cacheFilePath);
   return cacheFilePath;
+}
+
+async function ensureThumbnail(rawPath, cachePath) {
+  let input = rawPath;
+  if (NEEDS_TRANSCODE_EXTS.has(path.extname(rawPath).toLowerCase())) {
+    input = await ensureTranscodedPreviewJpeg(rawPath, `${cachePath}.preview.jpg`);
+  }
+  return runImageCacheJob(rawPath, cachePath, (temp) => sharp(input, { animated: false })
+    .rotate().resize({ width: 320, height: 240, fit: 'inside', withoutEnlargement: true })
+    .webp({ quality: 72 }).toFile(temp));
 }
 
 module.exports = {
   NEEDS_TRANSCODE_EXTS,
   ensureTranscodedPreviewJpeg,
   ensureDefaultWatermark,
-  processAndCacheImage
+  processAndCacheImage,
+  ensureThumbnail,
+  invalidateProcessingCache
 };

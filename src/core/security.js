@@ -379,7 +379,9 @@ function createRateLimiter({ windowMs = 60 * 1000, max = 30, message = 'Too many
     const recent = record.filter((ts) => now - ts < windowMs);
     if (recent.length >= max) {
       hits.set(ip, recent);
-      return res.status(429).json({ error: message });
+      const retryAfter = Math.max(1, Math.ceil((recent[0] + windowMs - now) / 1000));
+      res.setHeader?.('Retry-After', String(retryAfter));
+      return res.status(429).json({ error: message, retryAfter });
     }
     recent.push(now);
     hits.set(ip, recent);

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>FileMaster Server Console</title>
-  <link rel="stylesheet" href="/assets/console.css?v=3.5" />
+  <link rel="stylesheet" href="/assets/console.css?v=1.0.1" />
 </head>
 <body>
 
@@ -104,9 +104,21 @@
           </div>
           <div class="header-actions">
             <button id="btnRebuildCache" class="btn btn-outline" onclick="clearWatermarkCache()" data-i18n="btnClearWatermarkCache">🔄 重建水印缓存</button>
+            <button class="btn btn-outline" onclick="startIntegrityCheck()" data-i18n="btnIntegrity">校验原文件</button>
             <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()" data-i18n="btnUploadFiles">+ 上传文件</button>
             <input type="file" id="fileInput" multiple class="hidden" onchange="uploadFiles(this.files)" />
           </div>
+        </div>
+
+        <div id="uploadProgress" class="hidden" role="status">
+          <span id="uploadStatus"></span>
+          <button id="cancelUpload" class="btn btn-outline" onclick="cancelUploads()" data-i18n="btnCancelTask">停止上传</button>
+          <button id="retryUploads" class="btn btn-outline hidden" onclick="retryFailedUploads()" data-i18n="btnRetryFailed">重试未完成项</button>
+        </div>
+        <div id="integrityProgress" class="hidden" role="status">
+          <span id="integrityStatus"></span>
+          <button id="cancelIntegrity" class="btn btn-outline" onclick="cancelIntegrityCheck()" data-i18n="btnCancelCheck">停止校验</button>
+          <button id="downloadIntegrity" class="btn btn-outline hidden" onclick="downloadIntegrityReport()" data-i18n="btnDownloadCheck">下载校验报告</button>
         </div>
 
         <div class="stats-row">
@@ -156,6 +168,7 @@
             </div>
 
             <div id="galleryGrid" class="gallery-grid"></div>
+            <div id="galleryPagination" class="toolbar"></div>
           </div>
         </div>
       </section>
@@ -724,7 +737,7 @@
 
   <div id="toast" class="toast hidden"></div>
 
-  <script src="/assets/i18n.js?v=3.5"></script>
-  <script src="/assets/console.js?v=3.5"></script>
+  <script src="/assets/i18n.js?v=1.0.1"></script>
+  <script src="/assets/console.js?v=1.0.1"></script>
 </body>
 </html>

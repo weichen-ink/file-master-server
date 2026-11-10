@@ -1,6 +1,23 @@
 // ================= Bilingual Internationalization (zh-CN / en) =================
 const I18N = {
   zh: {
+    pagePrevious: "上一页",
+    pageNext: "下一页",
+    pageCount: "第 {current} / {total} 页",
+    btnIntegrity: "校验原文件",
+    btnCancelTask: "停止上传",
+    btnRetryFailed: "重试未完成项",
+    btnCancelCheck: "停止校验",
+    btnDownloadCheck: "下载校验报告",
+    uploadItem: "上传 {current}/{total}：{name}",
+    uploadSummary: "上传成功 {success} 个，未完成 {remaining} 个",
+    integritySummary: "{state}：已检查 {checked} 个，相符 {matched} 个，异常 {issues} 项",
+    integrity_idle: "尚未开始",
+    integrity_running: "正在校验",
+    integrity_completed: "校验完成",
+    integrity_cancelled: "已停止校验",
+    integrity_failed: "校验失败",
+    errorGeneric: "操作失败：{error}",
     // 侧边栏与导航
     navSecWorkspace: "文件管理",
     navAssets: "服务器文件",
@@ -331,6 +348,23 @@ const I18N = {
     restartingServer: "正在重启服务..."
   },
   en: {
+    pagePrevious: "Previous",
+    pageNext: "Next",
+    pageCount: "Page {current} of {total}",
+    btnIntegrity: "Verify originals",
+    btnCancelTask: "Stop uploading",
+    btnRetryFailed: "Retry unfinished files",
+    btnCancelCheck: "Stop verification",
+    btnDownloadCheck: "Download report",
+    uploadItem: "Uploading {current}/{total}: {name}",
+    uploadSummary: "Uploaded {success}; unfinished {remaining}",
+    integritySummary: "{state}: checked {checked}, matched {matched}, issues {issues}",
+    integrity_idle: "Not started",
+    integrity_running: "Verifying",
+    integrity_completed: "Verification complete",
+    integrity_cancelled: "Verification stopped",
+    integrity_failed: "Verification failed",
+    errorGeneric: "Operation failed: {error}",
     // Sidebar & Navigation
     navSecWorkspace: "Files",
     navAssets: "Server files",

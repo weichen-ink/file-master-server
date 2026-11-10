@@ -3,6 +3,10 @@
 See root `CHANGELOG.md` for full ecosystem release notes.
 
 ## [1.0.1] - 2026-11-10
+- Publish uploads atomically without overwriting name collisions; verify full content hashes before deduplication.
+- Coalesce image generation with bounded concurrency, invalidate stale jobs, and serve gallery thumbnails.
+- Scan catalogs asynchronously with per-directory metadata aggregation and preserve integrity baselines across index upgrades.
+- Add cancellable original-file verification with reports, gallery pagination, and upload retries for transient failures.
 - Validate prepared configuration before cache invalidation and persist TOTP changes atomically.
 - Verify watermark backup integrity and preserve reliable update recovery.
 - Establish the pre-upgrade baseline for the batch reliability and scalability improvements.

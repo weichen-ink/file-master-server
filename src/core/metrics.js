@@ -26,16 +26,19 @@ function getDiskUsage(dirPath) {
 /**
  * Recursively sums total file sizes in a directory.
  */
-function getDirSize(dirPath) {
+async function getDirSize(dirPath) {
   if (!fs.existsSync(dirPath)) return 0;
   let total = 0;
-  const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+  const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
   for (const entry of entries) {
     const fullPath = path.join(dirPath, entry.name);
     if (entry.isDirectory()) {
-      total += getDirSize(fullPath);
+      total += await getDirSize(fullPath);
     } else if (entry.isFile()) {
-      total += fs.statSync(fullPath).size;
+      total += (await fs.promises.stat(fullPath).catch((err) => {
+        if (err.code === 'ENOENT') return { size: 0 };
+        throw err;
+      })).size;
     }
   }
   return total;
@@ -44,7 +47,7 @@ function getDirSize(dirPath) {
 /**
  * Collects runtime host metrics, process memory, and site storage stats.
  */
-function collectRuntimeMetrics(revealSecrets = false) {
+async function collectRuntimeMetrics(revealSecrets = false) {
   const cfg = getConfig();
   const cpus = os.cpus() || [];
   const cpuCount = cpus.length || 1;
@@ -69,8 +72,8 @@ function collectRuntimeMetrics(revealSecrets = false) {
 
   const disk = getDiskUsage(ROOT_DIR);
   const procMem = process.memoryUsage();
-  const imgData = scanAllImages(cfg);
-  const dataDirBytes = getDirSize(DATA_DIR);
+  const imgData = await scanAllImages(cfg);
+  const dataDirBytes = await getDirSize(DATA_DIR);
 
   return {
     timestamp: Date.now(),

@@ -11,6 +11,8 @@ storage/raw/*
 !storage/raw/.gitkeep
 storage/cache/*
 !storage/cache/.gitkeep
+storage/trash/
+storage/tmp/
 
 # Configuration (keep example committed, ignore local secrets)
 config.yaml

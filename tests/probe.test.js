@@ -4,7 +4,7 @@ const crypto = require('node:crypto');
 const express = require('express');
 const { registerImageHostModule } = require('../src/modules/image-host');
 
-test('Instant Upload Probe: /api/image/probe checks existing SHA-256 without payload', () => {
+test('Instant Upload Probe: /api/image/probe checks existing SHA-256 without payload', async () => {
   const app = express();
   registerImageHostModule(app);
 
@@ -30,7 +30,7 @@ test('Instant Upload Probe: /api/image/probe checks existing SHA-256 without pay
       return this;
     }
   };
-  handleProbe({ query: { sha256: 'invalid' } }, mockRes1);
+  await handleProbe({ query: { sha256: 'invalid' } }, mockRes1);
   assert.strictEqual(statusCode, 400, 'Invalid sha256 parameter should return 400');
 
   // 2. Non-existent valid 64-char hex SHA-256 returns exists: false
@@ -47,7 +47,7 @@ test('Instant Upload Probe: /api/image/probe checks existing SHA-256 without pay
       return this;
     }
   };
-  handleProbe({ query: { sha256: fakeSha } }, mockRes2);
+  await handleProbe({ query: { sha256: fakeSha } }, mockRes2);
   assert.strictEqual(mockRes2Code, 200);
   assert.strictEqual(mockRes2Json?.exists, false, 'Non-existent sha256 should return exists: false');
 });
