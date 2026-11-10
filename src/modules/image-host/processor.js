@@ -148,7 +148,7 @@ async function ensureDefaultWatermark(watermarkFilePath, text = '© FileMaster',
         .txt { fill: ${txtFill}; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 32px; font-weight: 700; }
       </style>
       <rect x="4" y="8" width="352" height="64" class="bg" />
-      <text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" class="txt">${escapeXml(text)}</text>
+      <text x="50%" y="40" dy="0.35em" dominant-baseline="central" text-anchor="middle" class="txt">${escapeXml(text)}</text>
     </svg>
   `;
   await sharp(Buffer.from(svg)).png().toFile(watermarkFilePath);
@@ -226,16 +226,16 @@ async function buildWatermarkOverlay(imgCfg, targetWidth, targetHeight, basePipe
 
   // Mode 1: PNG image watermark
   if (type === 'image') {
-    const requestedWmPath = path.resolve(ROOT_DIR, imgCfg.watermark_image || './watermark.png');
+    const requestedWmPath = path.resolve(ROOT_DIR, imgCfg.watermark_image || './wm-light.png');
     const wmPathLight = isPathWithin(requestedWmPath, ROOT_DIR)
       ? requestedWmPath
-      : path.resolve(ROOT_DIR, './watermark.png');
+      : path.resolve(ROOT_DIR, './wm-light.png');
     await ensureDefaultWatermark(wmPathLight, imgCfg.watermark_text || '© FileMaster', false);
 
-    const requestedDarkPath = path.resolve(ROOT_DIR, imgCfg.watermark_image_dark || './watermark-dark.png');
+    const requestedDarkPath = path.resolve(ROOT_DIR, imgCfg.watermark_image_dark || './wm-dark.png');
     const wmPathDark = isPathWithin(requestedDarkPath, ROOT_DIR)
       ? requestedDarkPath
-      : path.resolve(ROOT_DIR, './watermark-dark.png');
+      : path.resolve(ROOT_DIR, './wm-dark.png');
     await ensureDefaultWatermark(wmPathDark, imgCfg.watermark_text || '© FileMaster', true);
 
     const wmTargetWidth = Math.max(60, Math.round(targetWidth * scale));
@@ -324,7 +324,7 @@ async function buildWatermarkOverlay(imgCfg, targetWidth, targetHeight, basePipe
     const svgTile = `
       <svg width="${tileW}" height="${tileH}" xmlns="http://www.w3.org/2000/svg">
         <g transform="rotate(-28 ${tileW / 2} ${tileH / 2})" opacity="${opacity}">
-          <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle"
+          <text x="50%" y="50%" dy="0.35em" dominant-baseline="central" text-anchor="middle"
                 fill="${textColor}" font-family="${fontFamily}" font-weight="bold" font-size="${fontSize}"
                 style="filter: drop-shadow(1px 1px 2px ${shadowColor});">${text}</text>
         </g>
@@ -373,7 +373,7 @@ async function buildWatermarkOverlay(imgCfg, targetWidth, targetHeight, basePipe
   const fontFamily = resolveFontFamily(imgCfg.watermark_font);
   const svgText = `
     <svg width="${svgW}" height="${svgH}" xmlns="http://www.w3.org/2000/svg">
-      <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle"
+      <text x="50%" y="50%" dy="0.35em" dominant-baseline="central" text-anchor="middle"
             fill="${textColor}" fill-opacity="${opacity}"
             font-family="${fontFamily}"
             font-weight="700" font-size="${fontSize}"

@@ -32,21 +32,33 @@ function createUpdateBackup({ rootDir: ROOT_DIR, dataDir: DATA_DIR, configPath: 
     if (fs.existsSync(pendingFile)) fs.unlinkSync(pendingFile);
   }
 
-  function getWatermarkFilesToPreserve() {
-    const candidates = new Set(['watermark.png', 'watermark-dark.png']);
+  function getConfiguredWatermarks() {
+    const configured = [];
     try {
       const cfg = getConfig();
       const wmImg = cfg.image_host?.watermark_image;
       if (wmImg) {
         const rel = path.relative(ROOT_DIR, path.resolve(ROOT_DIR, wmImg));
-        if (!rel.startsWith('..') && !path.isAbsolute(rel)) candidates.add(rel);
+        if (!rel.startsWith('..') && !path.isAbsolute(rel)) configured.push(rel);
       }
       const wmDark = cfg.image_host?.watermark_image_dark;
       if (wmDark) {
         const rel = path.relative(ROOT_DIR, path.resolve(ROOT_DIR, wmDark));
-        if (!rel.startsWith('..') && !path.isAbsolute(rel)) candidates.add(rel);
+        if (!rel.startsWith('..') && !path.isAbsolute(rel)) configured.push(rel);
       }
     } catch {}
+    if (!configured.length) {
+      configured.push('wm-light.png', 'wm-dark.png');
+    }
+    return configured;
+  }
+
+  function getWatermarkFilesToPreserve() {
+    const candidates = new Set(getConfiguredWatermarks());
+    candidates.add('wm-light.png');
+    candidates.add('wm-dark.png');
+    candidates.add('watermark.png');
+    candidates.add('watermark-dark.png');
     return [...candidates];
   }
 
@@ -129,14 +141,14 @@ function createUpdateBackup({ rootDir: ROOT_DIR, dataDir: DATA_DIR, configPath: 
       }
     } else {
       // Backups made before manifests existed contain only the watermark files.
-      const filesToPreserve = getWatermarkFilesToPreserve();
+      // No manifest means we cannot infer that an absent optional file was ever
+      // backed up. New default filenames must not invalidate an older snapshot.
+      const filesToPreserve = getWatermarkFilesToPreserve().filter((rel) =>
+        fs.existsSync(path.join(sourceBackupDir, rel.replace(/[/\\]/g, '_'))));
+      if (!filesToPreserve.length) failed.push({ file: sourceBackupDir, error: 'Legacy watermark backup files missing' });
       for (const rel of filesToPreserve) {
         const full = path.join(targetRootDir, rel);
         const diskTarget = path.join(sourceBackupDir, rel.replace(/[/\\]/g, '_'));
-        if (!fs.existsSync(diskTarget)) {
-          failed.push({ file: full, error: 'Legacy backup file missing' });
-          continue;
-        }
         try {
           fs.mkdirSync(path.dirname(full), { recursive: true });
           fs.writeFileSync(full, fs.readFileSync(diskTarget));

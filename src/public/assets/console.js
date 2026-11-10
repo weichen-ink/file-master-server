@@ -440,12 +440,12 @@ function fillConfigForm(cfg, rawYaml) {
   document.getElementById('f_watermark_scale').value = img.watermark_scale ?? 0.16;
   document.getElementById('f_watermark_margin').value = img.watermark_margin ?? 24;
   document.getElementById('f_watermark_min_width').value = img.watermark_min_width ?? 320;
-  const wmImg = img.watermark_image || './watermark.png';
+  const wmImg = img.watermark_image || './wm-light.png';
   document.getElementById('f_watermark_image').value = wmImg;
   const dualLightEl = document.getElementById('f_watermark_image_dual');
   if (dualLightEl) dualLightEl.value = wmImg;
   if (document.getElementById('f_watermark_image_dark')) {
-    document.getElementById('f_watermark_image_dark').value = img.watermark_image_dark || './watermark-dark.png';
+    document.getElementById('f_watermark_image_dark').value = img.watermark_image_dark || './wm-dark.png';
   }
   const isAutoContrast = img.watermark_auto_contrast !== false;
   if (document.getElementById('f_watermark_auto_contrast')) {
@@ -499,9 +499,9 @@ async function saveConfigForm() {
         (document.getElementById('f_watermark_auto_contrast')?.value === 'true'
           ? (document.getElementById('f_watermark_image_dual')?.value || document.getElementById('f_watermark_image')?.value)
           : document.getElementById('f_watermark_image')?.value)
-        || './watermark.png'
+        || './wm-light.png'
       ).trim(),
-      watermark_image_dark: (document.getElementById('f_watermark_image_dark')?.value || './watermark-dark.png').trim(),
+      watermark_image_dark: (document.getElementById('f_watermark_image_dark')?.value || './wm-dark.png').trim(),
       watermark_auto_contrast: document.getElementById('f_watermark_auto_contrast')?.value === 'true',
       watermark_font: document.getElementById('f_watermark_font')?.value || 'system',
       watermark_text: document.getElementById('f_watermark_text')?.value || '',

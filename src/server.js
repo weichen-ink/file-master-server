@@ -436,7 +436,7 @@ app.get('/api/platform/backup/download', requireAdmin, (req, res) => {
   const tmpArchivePath = path.join(UPLOAD_TMP_DIR, `${Date.now()}_${crypto.randomBytes(6).toString('hex')}.tar.gz`);
 
   const targets = [];
-  const backupCandidates = new Set(['config.yaml', 'config.example.yaml', 'watermark.png', 'watermark-dark.png', 'data']);
+  const backupCandidates = new Set(['config.yaml', 'config.example.yaml', 'wm-light.png', 'wm-dark.png', 'watermark.png', 'watermark-dark.png', 'data']);
   try {
     const cfg = getConfig();
     if (cfg.image_host?.watermark_image) {
@@ -646,4 +646,7 @@ function startServer(port, retriesLeft = 6) {
   });
 }
 
-startServer(PORT);
+// Importing the app allows integration tests to exercise real HTTP middleware on
+// an ephemeral loopback port. CLI startup keeps the existing behavior.
+if (require.main === module) startServer(PORT);
+module.exports = { app };

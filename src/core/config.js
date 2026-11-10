@@ -57,8 +57,8 @@ image_host:
   watermark_scale: 0.16
   watermark_margin: 24
   watermark_min_width: 320
-  watermark_image: ./watermark.png
-  watermark_image_dark: ./watermark-dark.png
+  watermark_image: ./wm-light.png
+  watermark_image_dark: ./wm-dark.png
   watermark_auto_contrast: true
   watermark_text: "© FileMaster"
   watermark_color: "#ffffff"
@@ -79,7 +79,7 @@ function getTemplateDefaults() {
   return cachedTemplateDefaults;
 }
 
-function validateWatermarkImagePath(wmImage, defaultVal = './watermark.png') {
+function validateWatermarkImagePath(wmImage, defaultVal = './wm-light.png') {
   const rel = String(wmImage || defaultVal).trim() || defaultVal;
   const resolved = path.resolve(ROOT_DIR, rel);
   if (!isPathWithin(resolved, ROOT_DIR)) {
@@ -92,20 +92,20 @@ function normalizeParsedConfig(parsed = {}, needsSetup = false) {
   const defaults = getTemplateDefaults();
   const defImg = defaults.image_host || {};
   const img = parsed.image_host || {};
-  const rawWatermarkImg = img.watermark_image || defImg.watermark_image || './watermark.png';
-  let safeWatermarkImg = './watermark.png';
+  const rawWatermarkImg = img.watermark_image || defImg.watermark_image || './wm-light.png';
+  let safeWatermarkImg = './wm-light.png';
   try {
-    safeWatermarkImg = validateWatermarkImagePath(rawWatermarkImg, './watermark.png');
+    safeWatermarkImg = validateWatermarkImagePath(rawWatermarkImg, './wm-light.png');
   } catch {
-    safeWatermarkImg = './watermark.png';
+    safeWatermarkImg = './wm-light.png';
   }
 
-  const rawWatermarkDark = img.watermark_image_dark || defImg.watermark_image_dark || './watermark-dark.png';
-  let safeWatermarkDark = './watermark-dark.png';
+  const rawWatermarkDark = img.watermark_image_dark || defImg.watermark_image_dark || './wm-dark.png';
+  let safeWatermarkDark = './wm-dark.png';
   try {
-    safeWatermarkDark = validateWatermarkImagePath(rawWatermarkDark, './watermark-dark.png');
+    safeWatermarkDark = validateWatermarkImagePath(rawWatermarkDark, './wm-dark.png');
   } catch {
-    safeWatermarkDark = './watermark-dark.png';
+    safeWatermarkDark = './wm-dark.png';
   }
 
   return {
@@ -352,11 +352,11 @@ function prepareRawConfigYaml(rawText, { clearTotp = false } = {}) {
 
   // 5. Validate watermark_image path boundary
   if (parsed.image_host && parsed.image_host.watermark_image !== undefined) {
-    const safeWm = validateWatermarkImagePath(parsed.image_host.watermark_image, './watermark.png');
+    const safeWm = validateWatermarkImagePath(parsed.image_host.watermark_image, './wm-light.png');
     doc.setIn(['image_host', 'watermark_image'], safeWm);
   }
   if (parsed.image_host && parsed.image_host.watermark_image_dark !== undefined) {
-    const safeWmDark = validateWatermarkImagePath(parsed.image_host.watermark_image_dark, './watermark-dark.png');
+    const safeWmDark = validateWatermarkImagePath(parsed.image_host.watermark_image_dark, './wm-dark.png');
     doc.setIn(['image_host', 'watermark_image_dark'], safeWmDark);
   }
 

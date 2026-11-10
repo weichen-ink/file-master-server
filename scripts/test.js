@@ -14,8 +14,9 @@ async function worker() {
     const file = files.shift();
     const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'fm-test-'));
     try {
-      for (const name of ['src', 'tests', 'scripts', 'package.json', 'config.example.yaml']) {
-        fs.cpSync(path.join(root, name), path.join(fixture, name), { recursive: true });
+      for (const name of ['src', 'tests', 'scripts', 'package.json', 'config.example.yaml', 'wm-light.png', 'wm-dark.png', 'watermark.png', 'watermark-dark.png']) {
+        const p = path.join(root, name);
+        if (fs.existsSync(p)) fs.cpSync(p, path.join(fixture, name), { recursive: true });
       }
       fs.symlinkSync(path.join(root, 'node_modules'), path.join(fixture, 'node_modules'), 'junction');
       const { stdout } = await run(process.execPath, ['--test', '--test-reporter=tap', path.join(fixture, 'tests', file)], {

@@ -60,8 +60,8 @@ test('Updater: preserves, backs up, and restores dual watermark files with error
   const os = require('os');
 
   const files = getWatermarkFilesToPreserve();
-  assert.ok(files.includes('watermark.png'), 'Must include default light watermark');
-  assert.ok(files.includes('watermark-dark.png'), 'Must include default dark watermark');
+  assert.ok(files.includes('wm-light.png') || files.includes('watermark.png'), 'Must include default light watermark');
+  assert.ok(files.includes('wm-dark.png') || files.includes('watermark-dark.png'), 'Must include default dark watermark');
 
   const tempBackupDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fm-wm-test-'));
   const tempSourceDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fm-wm-src-'));
@@ -228,7 +228,10 @@ test('Updater: previous size-only manifests remain recoverable', () => {
     assert.equal(fs.existsSync(path.join(tempDir, 'outside.png')), false);
 
     fs.unlinkSync(path.join(backup, 'manifest.json'));
-    assert.equal(restoreWatermarkFiles(null, backup, target).success, false);
+    assert.equal(restoreWatermarkFiles(null, backup, target).success, true, 'new optional watermark names must not invalidate a legacy backup');
+    fs.unlinkSync(path.join(backup, 'watermark.png'));
+    assert.equal(restoreWatermarkFiles(null, backup, target).success, false, 'an empty legacy backup must fail');
+    fs.writeFileSync(path.join(backup, 'watermark.png'), 'legacy');
     fs.writeFileSync(path.join(backup, 'watermark-dark.png'), 'dark');
     assert.equal(restoreWatermarkFiles(null, backup, target).success, true);
   } finally {

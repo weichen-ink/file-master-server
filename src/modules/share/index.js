@@ -203,12 +203,16 @@ function registerShareModule(app) {
       return res.status(404).send('Underlying shared file no longer exists.');
     }
 
-    item.downloads = (item.downloads || 0) + 1;
-    map[shareId] = item;
-    if (item.maxDownloads > 0 && item.downloads >= item.maxDownloads) {
-      saveSharesMap(map);
-    } else {
-      scheduleSharesFlush();
+    // Express also routes HEAD through this handler; metadata checks must not
+    // consume a limited share before a client actually requests its body.
+    if (req.method !== 'HEAD') {
+      item.downloads = (item.downloads || 0) + 1;
+      map[shareId] = item;
+      if (item.maxDownloads > 0 && item.downloads >= item.maxDownloads) {
+        saveSharesMap(map);
+      } else {
+        scheduleSharesFlush();
+      }
     }
 
     const forceDownloadName = req.query.download === '1' ? path.basename(fullPath) : null;

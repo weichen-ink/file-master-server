@@ -16,10 +16,10 @@ function registerImageHostModule(app) {
   ensureDirs();
   warmShaIndexAsync();
   const initCfg = getConfig();
-  const requestedWmPath = path.resolve(ROOT_DIR, initCfg.image_host.watermark_image || './watermark.png');
+  const requestedWmPath = path.resolve(ROOT_DIR, initCfg.image_host.watermark_image || './wm-light.png');
   const wmPath = isPathWithin(requestedWmPath, ROOT_DIR)
     ? requestedWmPath
-    : path.resolve(ROOT_DIR, './watermark.png');
+    : path.resolve(ROOT_DIR, './wm-light.png');
   ensureDefaultWatermark(wmPath, initCfg.image_host.watermark_text).catch(() => {});
 
   // Registration order is preserved from the original module: API routes, then wildcard asset routes.

@@ -54,8 +54,8 @@ image_host:
   watermark_scale: 0.16 # Watermark width relative to target image (0.16 = 16%)
   watermark_margin: 24 # Margin padding in pixels
   watermark_min_width: 320 # Skip watermarking if image width is smaller than this value
-  watermark_image: ./watermark.png
-  watermark_image_dark: ./watermark-dark.png
+  watermark_image: ./wm-light.png
+  watermark_image_dark: ./wm-dark.png
   watermark_auto_contrast: true
   watermark_text: "© FileMaster"
   watermark_color: "#ffffff"

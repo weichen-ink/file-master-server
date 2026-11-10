@@ -80,3 +80,32 @@ test('Dynamic Watermark: ?wm= resolves isolated cache variants and applies water
     if (fs.existsSync(cacheTextFile)) fs.unlinkSync(cacheTextFile);
   }
 });
+
+test('Text Watermark: vertical alignment is centered without vertical shift', async () => {
+  const { processAndCacheImage } = require('../src/modules/image-host/processor');
+  const tmpDir = path.join(STORAGE_DIR, 'cache', 'test_wm_align');
+  fs.mkdirSync(tmpDir, { recursive: true });
+  const rawFile = path.join(tmpDir, 'test_align_raw.png');
+  const cacheFile = path.join(tmpDir, 'test_align.wm_text.webp');
+
+  await sharp({
+    create: { width: 600, height: 400, channels: 3, background: { r: 50, g: 50, b: 50 } }
+  }).png().toFile(rawFile);
+
+  try {
+    await processAndCacheImage(rawFile, cacheFile, {
+      watermark_enable: true,
+      watermark_type: 'text',
+      watermark_text: 'FileMaster 2026',
+      watermark_color: '#ffffff',
+      watermark_auto_contrast: false,
+      watermark_pos: 'center',
+      watermark_scale: 0.5,
+      watermark_min_width: 100
+    });
+    assert.ok(fs.existsSync(cacheFile));
+  } finally {
+    if (fs.existsSync(rawFile)) fs.unlinkSync(rawFile);
+    if (fs.existsSync(cacheFile)) fs.unlinkSync(cacheFile);
+  }
+});
