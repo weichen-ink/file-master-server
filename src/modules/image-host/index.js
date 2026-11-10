@@ -296,6 +296,9 @@ function getWebpCacheFilePath(year, month, rawFilename, wmVariant = null) {
   if (wmVariant && ['image', 'text', 'tile'].includes(wmVariant)) {
     return path.join(CACHE_DIR, year, month, `${rawFilename}.wm_${wmVariant}.webp`);
   }
+  if (wmVariant === 'clean' || wmVariant === 'none') {
+    return path.join(CACHE_DIR, year, month, `${rawFilename}.clean.webp`);
+  }
   return path.join(CACHE_DIR, year, month, `${rawFilename}.webp`);
 }
 
@@ -875,11 +878,13 @@ function registerImageHostModule(app) {
         ? rawWmParam
         : (cfg.image_host?.watermark_type || 'image');
 
+      const effectiveVariant = shouldWatermark ? activeWmType : 'clean';
+
       const cacheFilePath = getWebpCacheFilePath(
         year,
         month,
         rawBasenameWithExt,
-        isCustomVariant ? activeWmType : null
+        effectiveVariant
       );
 
       if (!fs.existsSync(cacheFilePath)) {
@@ -1036,7 +1041,14 @@ function registerImageHostModule(app) {
 
     // Safely clean up associated cache files without failing the delete response if unlink throws
     const hasRemainingSibling = hasSiblingWithSameBasename(year, month, filename);
-    const cacheTargets = [cacheFilePath, rawPreviewCachePath];
+    const cacheTargets = [
+      cacheFilePath,
+      getWebpCacheFilePath(year, month, filename, 'clean'),
+      getWebpCacheFilePath(year, month, filename, 'image'),
+      getWebpCacheFilePath(year, month, filename, 'text'),
+      getWebpCacheFilePath(year, month, filename, 'tile'),
+      rawPreviewCachePath
+    ];
     if (!hasRemainingSibling) {
       cacheTargets.push(legacyCacheFilePath, legacyPreviewCachePath);
     }

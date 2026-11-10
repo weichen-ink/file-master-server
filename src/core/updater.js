@@ -47,13 +47,21 @@ function backupWatermarkFiles() {
 }
 
 function restoreWatermarkFiles(backups) {
-  if (!backups || !(backups instanceof Map)) return;
+  if (!backups || !(backups instanceof Map)) return { success: true, failed: [] };
+  const failed = [];
   for (const [full, buf] of backups.entries()) {
     try {
       fs.mkdirSync(path.dirname(full), { recursive: true });
       fs.writeFileSync(full, buf);
-    } catch {}
+    } catch (err) {
+      console.error(`[FileMaster Updater] Failed to restore watermark file ${full}:`, err);
+      failed.push({ file: full, error: err.message });
+    }
   }
+  return {
+    success: failed.length === 0,
+    failed
+  };
 }
 
 let updateInProgress = false;
@@ -401,7 +409,12 @@ async function performHotUpdate(options = {}) {
     restoreAndMergeUserConfig(userRawYaml, upstreamRawYaml);
     logStep(`Restored and merged user config.yaml (all credentials & settings preserved)`);
 
-    restoreWatermarkFiles(watermarkBackups);
+    const wmRestore = restoreWatermarkFiles(watermarkBackups);
+    if (!wmRestore.success) {
+      const failedNames = wmRestore.failed.map((f) => path.basename(f.file)).join(', ');
+      throw new Error(`Failed to restore customized watermark files after update: ${failedNames}`);
+    }
+    logStep(`Restored customized watermark assets`);
 
     const newPkgHash = getFileSha256(PKG_PATH) + ':' + getFileSha256(PKG_LOCK_PATH);
     let depsUpdated = false;
@@ -509,5 +522,8 @@ module.exports = {
   readPackageVersion,
   getUpdateStatus,
   performHotUpdate,
-  restartServerProcess
+  restartServerProcess,
+  getWatermarkFilesToPreserve,
+  backupWatermarkFiles,
+  restoreWatermarkFiles
 };

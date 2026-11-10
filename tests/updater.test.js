@@ -48,3 +48,40 @@ test('Updater: validates git mirror URLs for safety', () => {
     OFFICIAL_UPSTREAM_REPO
   );
 });
+
+test('Updater: preserves, backs up, and restores dual watermark files with error tracking', () => {
+  const {
+    getWatermarkFilesToPreserve,
+    backupWatermarkFiles,
+    restoreWatermarkFiles
+  } = require('../src/core/updater');
+
+  const files = getWatermarkFilesToPreserve();
+  assert.ok(files.includes('watermark.png'), 'Must include default light watermark');
+  assert.ok(files.includes('watermark-dark.png'), 'Must include default dark watermark');
+
+  const backups = backupWatermarkFiles();
+  assert.ok(backups instanceof Map, 'backupWatermarkFiles returns Map');
+
+  // Test restoration reporting
+  const testMap = new Map();
+  const validPath = require('path').join(__dirname, 'test_wm_restore.tmp');
+  testMap.set(validPath, Buffer.from('test-wm-bytes'));
+
+  try {
+    const res = restoreWatermarkFiles(testMap);
+    assert.strictEqual(res.success, true);
+    assert.strictEqual(res.failed.length, 0);
+    assert.ok(require('fs').existsSync(validPath));
+  } finally {
+    if (require('fs').existsSync(validPath)) require('fs').unlinkSync(validPath);
+  }
+
+  // Test failure reporting on invalid write path (e.g. write to a directory path)
+  const failMap = new Map();
+  failMap.set(__dirname, Buffer.from('cannot-write-directory'));
+  const failRes = restoreWatermarkFiles(failMap);
+  assert.strictEqual(failRes.success, false);
+  assert.strictEqual(failRes.failed.length, 1);
+  assert.strictEqual(failRes.failed[0].file, __dirname);
+});
