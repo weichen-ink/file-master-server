@@ -3,6 +3,9 @@
 See root `CHANGELOG.md` for full ecosystem release notes.
 
 ## [1.0.1] - 2026-11-10
+- Require hard-link support for atomic upload publication; reject unsupported storage without exposing partial copies.
+- Run each server test file in a separate temporary project, allowing parallel execution without touching user data.
+- Separate update orchestration, backup/recovery, and Git operations; cover failure stages, offline Git updates, and process interruption.
 - Publish uploads atomically without overwriting name collisions; verify full content hashes before deduplication.
 - Coalesce image generation with bounded concurrency, invalidate stale jobs, and serve gallery thumbnails.
 - Scan catalogs asynchronously with per-directory metadata aggregation and preserve integrity baselines across index upgrades.

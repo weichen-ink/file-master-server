@@ -55,3 +55,11 @@ Full verification streams original bytes against persistent per-path baselines. 
 只有出现多进程写入、复杂查询或持久任务需求时，再评估 SQLite 或独立任务执行器。运行数据迁移到可配置的独立目录属于后续部署改进，本轮保持现有路径以兼容更新和备份流程。
 
 The scale fixtures validate metadata and algorithm behavior, not real-world throughput for large photos or mobile devices. Add a database or separate workers when concurrent writers or persistent job requirements justify them, rather than based on image count alone.
+
+## 更新器边界 / Updater boundaries
+
+`updater.js` 负责步骤顺序、互斥锁与失败处理；`update-backup.js` 负责备份格式和恢复；`update-git.js` 负责 Git、状态查询和命令执行。公开更新接口、磁盘备份布局和旧清单兼容性保持不变。测试为更新器提供独立目录及命令边界，覆盖成功、fetch/reset/恢复/依赖安装失败、并发请求与重置后进程退出；另有本地 Git 仓库集成测试，不访问 GitHub。
+
+失败处理保障配置和水印的恢复，不承诺把已经更新的源代码与依赖一并回退。依赖安装失败必须先排除安装错误，再重试更新；原文件完整性校验独立于更新恢复。
+
+The coordinator owns update ordering and its lock; backup/recovery and Git execution live in focused modules. Tests exercise offline Git and process interruption. Recovery protects user configuration and watermarks; it does not promise a transactional rollback of source code and installed dependencies.
