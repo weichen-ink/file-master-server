@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>File Master Server Console</title>
-  <link rel="stylesheet" href="/assets/console.css?v=1.0.2" />
+  <link rel="stylesheet" href="/assets/console.css?v=1.0.3" />
 </head>
 <body>
 
@@ -760,31 +760,37 @@
     <div class="modal-box preview-modal-box">
       <div class="modal-header preview-modal-header">
         <div class="preview-header-left">
+          <span class="preview-header-icon">🖼️</span>
           <strong id="modalTitle" class="preview-title-text" data-i18n="modalPreviewTitle">资产预览</strong>
         </div>
-        <div class="preview-mode-switch" id="previewModeGroup">
-          <button id="btnViewPub" class="mode-tab-btn active" type="button" onclick="setModalMode('pub')" data-i18n="btnViewPubText">👁️ 优化水印版</button>
-          <button id="btnViewRaw" class="mode-tab-btn" type="button" onclick="setModalMode('raw')" data-i18n="btnViewRawText">🔍 原始无损版</button>
+        <div class="preview-header-right">
+          <div class="preview-mode-switch" id="previewModeGroup">
+            <button id="btnViewPub" class="mode-tab-btn active" type="button" onclick="setModalMode('pub')" data-i18n="btnViewPubText">优化 WebP</button>
+            <button id="btnViewRaw" class="mode-tab-btn" type="button" onclick="setModalMode('raw')" data-i18n="btnViewRawText">原始素材</button>
+          </div>
+          <button class="preview-close-btn" onclick="closeModal()" title="关闭 (Esc)" aria-label="关闭">✕</button>
         </div>
-        <button class="preview-close-btn" onclick="closeModal()" title="关闭 (Esc)" data-i18n="closeBtn">✕</button>
       </div>
       <div class="modal-body preview-modal-body">
         <img id="modalImg" src="" alt="preview" />
       </div>
       <div class="preview-modal-footer">
-        <div class="preview-meta-chips" id="previewMetaChips">
-          <span class="meta-chip" id="previewChipRawSize">Raw 0 MB</span>
-          <span class="meta-chip" id="previewChipPubSize">WebP 0 MB</span>
-          <span class="meta-chip" id="previewChipHits">👁️ 0 次访问</span>
-          <span class="meta-chip" id="previewChipPath">2026/11</span>
+        <div class="preview-meta-group" id="previewMetaChips">
+          <span class="preview-meta-item" id="previewChipRawSize">Raw 0 MB</span>
+          <span class="preview-meta-sep" id="previewChipPubSep">·</span>
+          <span class="preview-meta-item" id="previewChipPubSize">WebP 0 MB</span>
+          <span class="preview-meta-sep">·</span>
+          <span class="preview-meta-item" id="previewChipHits">👁️ 0 访问</span>
+          <span class="preview-meta-sep">·</span>
+          <span class="preview-meta-item" id="previewChipPath">2026/11</span>
         </div>
-        <div class="preview-actions-row">
-          <button class="btn btn-primary" onclick="copyModalActiveLink()" id="btnModalCopyLink" data-i18n="btnCopyActiveLink">📋 复制链接</button>
-          <button class="btn btn-outline" onclick="copyModalMarkdown()" data-i18n="btnCopyActiveMd">📝 复制 Markdown</button>
-          <button class="btn btn-outline" onclick="downloadModalFile()" data-i18n="downloadRawBtn">⬇️ 下载原文件</button>
-          <button class="btn btn-outline" id="btnModalLock" onclick="toggleModalLock()">🔒 锁定保护</button>
-          <button class="btn btn-outline" onclick="shareModalFile()" data-i18n="shareBtn">🔗 分享</button>
-          <button class="btn btn-danger" id="btnModalDelete" onclick="deleteModalFile()" data-i18n="deleteBtn">🗑️ 移入回收站</button>
+        <div class="preview-actions-bar">
+          <button class="btn-inspector btn-inspector-primary" onclick="copyModalActiveLink()" id="btnModalCopyLink" data-i18n="btnCopyActiveLink">📋 复制链接</button>
+          <button class="btn-inspector btn-inspector-secondary" onclick="copyModalMarkdown()" data-i18n="btnCopyActiveMd">📝 Markdown</button>
+          <button class="btn-inspector btn-inspector-secondary" onclick="downloadModalFile()" data-i18n="downloadRawBtn">⬇️ 下载原件</button>
+          <button class="btn-inspector btn-inspector-secondary" id="btnModalLock" onclick="toggleModalLock()">🔒 保护</button>
+          <button class="btn-inspector btn-inspector-secondary" onclick="shareModalFile()" data-i18n="shareBtn">🔗 分享</button>
+          <button class="btn-inspector btn-inspector-danger" id="btnModalDelete" onclick="deleteModalFile()" data-i18n="deleteBtn">🗑️ 回收站</button>
         </div>
       </div>
     </div>
@@ -848,7 +854,7 @@
   <div id="dropZone" style="display:none;" aria-hidden="true"></div>
   <select id="sortSelect" style="display:none;" aria-hidden="true"></select>
 
-  <script src="/assets/i18n.js?v=1.0.2"></script>
-  <script src="/assets/console.js?v=1.0.2"></script>
+  <script src="/assets/i18n.js?v=1.0.3"></script>
+  <script src="/assets/console.js?v=1.0.3"></script>
 </body>
 </html>

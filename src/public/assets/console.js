@@ -858,44 +858,46 @@ function renderGallery() {
     const isLocked = Boolean(item.locked);
     const primaryUrl = (isOptimizationEnabled && item.isProcessableImage && item.pubUrl) ? item.pubUrl : item.rawUrl;
     const lockBadgeHtml = isLocked
-      ? `<span class="card-lock-badge" title="${t('lockedNotice', { filename: item.filename })}">🔒</span>`
+      ? `<span class="card-lock-pill" title="${t('lockedNotice', { filename: item.filename })}">🔒 ${t('protectedBtn') || '已保护'}</span>`
       : '';
 
     const thumbInner = isImg
       ? `<img src="${escapeHtml(item.thumbnailUrl || item.rawPreviewPath)}" loading="lazy" alt="${escapeHtml(item.filename)}" />`
       : `<div class="file-icon-placeholder">
-           <div style="font-size:32px;">📄</div>
+           <div style="font-size:36px; line-height:1;">📄</div>
            <div class="file-ext-label">${escapeHtml((item.ext || '').toUpperCase())}</div>
          </div>`;
 
-    const rightMetaHtml = !isImg
-      ? `<span class="meta-tag meta-direct">${t('tagDirectStream')}</span>`
+    const optLabel = !isImg
+      ? t('tagDirectStream')
       : isOptimizationEnabled
-        ? (item.hasCache ? `<span class="meta-tag meta-opt">WebP ${formatBytes(item.cacheSize)}</span>` : `<span class="meta-tag meta-ondemand">${t('tagOnDemand')}</span>`)
-        : `<span class="meta-tag meta-raw">${t('tagRawOnly')}</span>`;
+        ? (item.hasCache ? `WebP ${formatBytes(item.cacheSize)}` : t('tagOnDemand'))
+        : t('tagRawOnly');
+
+    const metaParts = [
+      `<span class="meta-part">${formatBytes(item.size)}</span>`,
+      `<span class="meta-part ${item.hasCache ? 'is-opt-cached' : ''}">${optLabel}</span>`
+    ];
+    if (item.hits) {
+      metaParts.push(`<span class="meta-part meta-hits-val" title="${escapeHtml(t('hitsCount', { hits: item.hits }))}">👁️ ${item.hits}</span>`);
+    }
 
     return `
-    <div class="img-card ${isLocked ? 'is-locked' : ''}">
-      <div class="img-thumb-wrap" onclick="openPreview(${jsArg(item.year)}, ${jsArg(item.month)}, ${jsArg(item.filename)})">
+    <div class="img-card ${isLocked ? 'is-locked' : ''}" onclick="openPreview(${jsArg(item.year)}, ${jsArg(item.month)}, ${jsArg(item.filename)})">
+      <div class="img-thumb-wrap">
         ${thumbInner}
         ${lockBadgeHtml}
-        <span class="img-tag">${item.year}/${item.month}</span>
-        <div class="thumb-hover-actions">
-          <button class="thumb-action-pill" onclick="event.stopPropagation(); copyText(${jsArg(primaryUrl)}, t('copyFileLink'))" title="${t('copyFileLink')}">📋 ${t('btnCopy')}</button>
-          <button class="thumb-action-pill" onclick="event.stopPropagation(); openPreview(${jsArg(item.year)}, ${jsArg(item.month)}, ${jsArg(item.filename)})" title="${t('modalPreviewTitle')}">🔍</button>
-        </div>
+        <button class="thumb-hover-copy" onclick="event.stopPropagation(); copyText(${jsArg(primaryUrl)}, t('copyFileLink'))" title="${t('copyFileLink')}">
+          <span>📋</span> <span class="hover-copy-text">${t('btnCopy')}</span>
+        </button>
       </div>
       <div class="img-body">
-        <div class="img-name" title="${escapeHtml(item.filename)}" onclick="openPreview(${jsArg(item.year)}, ${jsArg(item.month)}, ${jsArg(item.filename)})">${escapeHtml(item.filename)}</div>
-        <div class="img-meta">
-          <span class="meta-size">${formatBytes(item.size)}</span>
-          <span class="meta-hits" title="${escapeHtml(t('hitsCount', { hits: item.hits || 0 }))}">👁️ ${item.hits || 0}</span>
-          ${rightMetaHtml}
-        </div>
-        <div class="card-footer-action">
-          <button class="card-copy-btn" onclick="copyText(${jsArg(primaryUrl)}, t('copyFileLink'))">
-            📋 ${t('copyFileLink')}
-          </button>
+        <div class="img-name" title="${escapeHtml(item.filename)}">${escapeHtml(item.filename)}</div>
+        <div class="img-meta-row">
+          <div class="img-meta-left">
+            ${metaParts.join('<span class="meta-dot">·</span>')}
+          </div>
+          <span class="img-date-pill">${item.year}/${item.month}</span>
         </div>
       </div>
     </div>`;
@@ -1368,23 +1370,26 @@ function openPreview(year, month, filename) {
 
   const canShowOpt = isOptimizationEnabled && currentModalItem.isProcessableImage;
   const modeGroup = document.getElementById('previewModeGroup');
-  if (modeGroup) modeGroup.style.display = canShowOpt ? 'flex' : 'none';
+  if (modeGroup) modeGroup.style.display = canShowOpt ? 'inline-flex' : 'none';
 
   setModalMode(canShowOpt ? 'pub' : 'raw');
 
-  // Populate metadata chips
+  // Populate metadata
   const chipRaw = document.getElementById('previewChipRawSize');
-  if (chipRaw) chipRaw.textContent = `Raw: ${formatBytes(currentModalItem.size)}`;
+  if (chipRaw) chipRaw.textContent = `原文件 ${formatBytes(currentModalItem.size)}`;
 
   const chipPub = document.getElementById('previewChipPubSize');
+  const chipPubSep = document.getElementById('previewChipPubSep');
   if (chipPub) {
     if (canShowOpt) {
       chipPub.style.display = '';
+      if (chipPubSep) chipPubSep.style.display = '';
       chipPub.textContent = currentModalItem.hasCache
-        ? `WebP: ${formatBytes(currentModalItem.cacheSize)}`
-        : `WebP: ${t('tagOnDemand')}`;
+        ? `WebP ${formatBytes(currentModalItem.cacheSize)}`
+        : `WebP ${t('tagOnDemand')}`;
     } else {
       chipPub.style.display = 'none';
+      if (chipPubSep) chipPubSep.style.display = 'none';
     }
   }
 
@@ -1409,11 +1414,13 @@ function updateModalLockBtn() {
   if (!lockBtn || !currentModalItem) return;
   if (currentModalItem.locked) {
     lockBtn.innerHTML = `🔓 ${t('unlockBtn')}`;
-    lockBtn.style.borderColor = '#d99b46';
-    lockBtn.style.color = '#855000';
+    lockBtn.style.borderColor = '#fcd34d';
+    lockBtn.style.background = '#fffbeb';
+    lockBtn.style.color = '#b45309';
   } else {
     lockBtn.innerHTML = `🔒 ${t('lockBtn')}`;
     lockBtn.style.borderColor = '';
+    lockBtn.style.background = '';
     lockBtn.style.color = '';
   }
 }
