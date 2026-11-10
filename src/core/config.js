@@ -303,15 +303,20 @@ function redactConfigForClient(cfg, rawYaml, revealSecrets = false) {
 }
 
 /**
- * Validates and atomically saves raw config.yaml content, enforcing security invariants
+ * Prepares config.yaml content without writing it, enforcing security invariants
  * (password scrypt hashing, preserving existing secrets when blanked by redacted editor,
  * locking upstream_repo, and validating watermark_image path boundaries).
  */
-function saveRawConfigYaml(rawText) {
+function prepareRawConfigYaml(rawText, { clearTotp = false } = {}) {
   const doc = YAML.parseDocument(String(rawText));
+  if (doc.errors.length > 0) throw doc.errors[0];
   const parsed = doc.toJS();
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
     throw new Error('Invalid YAML format: root element must be a key-value object');
+  }
+  if (parsed.image_host !== undefined &&
+    (!parsed.image_host || typeof parsed.image_host !== 'object' || Array.isArray(parsed.image_host))) {
+    throw new Error('Invalid YAML format: image_host must be a key-value object');
   }
 
   const existingCfg = isConfigInitialized() ? getConfig() : null;
@@ -334,7 +339,9 @@ function saveRawConfigYaml(rawText) {
 
   // 3. Preserve existing totp_secret if submitted blank in raw mode unless explicitly cleared via form
   const rawTotp = parsed.totp_secret !== undefined ? String(parsed.totp_secret).trim() : '';
-  if (!rawTotp && existingCfg && existingCfg.totp_secret) {
+  if (clearTotp) {
+    doc.set('totp_secret', '');
+  } else if (!rawTotp && existingCfg && existingCfg.totp_secret) {
     doc.set('totp_secret', existingCfg.totp_secret);
   }
 
@@ -353,11 +360,22 @@ function saveRawConfigYaml(rawText) {
     doc.setIn(['image_host', 'watermark_image_dark'], safeWmDark);
   }
 
+  return {
+    yaml: doc.toString(),
+    config: normalizeParsedConfig(doc.toJS(), false)
+  };
+}
+
+function writePreparedConfig(prepared) {
   const tmpPath = `${CONFIG_PATH}.tmp`;
-  fs.writeFileSync(tmpPath, doc.toString(), 'utf8');
+  fs.writeFileSync(tmpPath, prepared.yaml, 'utf8');
   fs.renameSync(tmpPath, CONFIG_PATH);
   lastMtimeMs = 0;
   return getConfig();
+}
+
+function saveRawConfigYaml(rawText) {
+  return writePreparedConfig(prepareRawConfigYaml(rawText));
 }
 
 const IMAGE_PROCESSING_CONFIG_KEYS = [
@@ -383,7 +401,7 @@ const IMAGE_PROCESSING_CONFIG_KEYS = [
 /**
  * Updates specific config fields via AST nodes, preserving existing comments and structure.
  */
-function updateConfigPreservingComments(patch = {}) {
+function prepareConfigPatch(patch = {}) {
   const raw = getRawConfigYaml();
   const doc = YAML.parseDocument(raw);
 
@@ -445,18 +463,11 @@ function updateConfigPreservingComments(patch = {}) {
     }
   }
 
-  const tmpPath = `${CONFIG_PATH}.tmp`;
-  // Validate via saveRawConfigYaml unless clear_totp explicitly cleared totp_secret
-  const result = saveRawConfigYaml(doc.toString());
-  if (patch.clear_totp === true) {
-    const clearDoc = YAML.parseDocument(fs.readFileSync(CONFIG_PATH, 'utf8'));
-    clearDoc.set('totp_secret', '');
-    fs.writeFileSync(tmpPath, clearDoc.toString(), 'utf8');
-    fs.renameSync(tmpPath, CONFIG_PATH);
-    lastMtimeMs = 0;
-    return getConfig();
-  }
-  return result;
+  return prepareRawConfigYaml(doc.toString(), { clearTotp: patch.clear_totp === true });
+}
+
+function updateConfigPreservingComments(patch = {}) {
+  return writePreparedConfig(prepareConfigPatch(patch));
 }
 
 module.exports = {
@@ -475,6 +486,9 @@ module.exports = {
   getRawConfigYaml,
   redactConfigForClient,
   validateWatermarkImagePath,
+  prepareRawConfigYaml,
+  prepareConfigPatch,
+  writePreparedConfig,
   saveRawConfigYaml,
   updateConfigPreservingComments,
   IMAGE_PROCESSING_CONFIG_KEYS,

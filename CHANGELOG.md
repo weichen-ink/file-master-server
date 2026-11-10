@@ -2,6 +2,11 @@
 
 See root `CHANGELOG.md` for full ecosystem release notes.
 
+## [1.0.1] - 2026-11-10
+- Validate prepared configuration before cache invalidation and persist TOTP changes atomically.
+- Verify watermark backup integrity and preserve reliable update recovery.
+- Establish the pre-upgrade baseline for the batch reliability and scalability improvements.
+
 ## [0.1.5] - 2026-10-30
 - Require a startup setup token before first-time administrator initialization.
 - Set `Secure` on administrator cookies when requests arrive over HTTPS, and reject malformed CSRF origins.

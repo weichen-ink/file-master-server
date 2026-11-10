@@ -4,7 +4,6 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const os = require('node:os');
 const { execFile } = require('node:child_process');
-const YAML = require('yaml');
 const {
   ROOT_DIR,
   STORAGE_DIR,
@@ -14,12 +13,13 @@ const {
   getConfig,
   getRawConfigYaml,
   redactConfigForClient,
-  saveRawConfigYaml,
+  prepareRawConfigYaml,
+  prepareConfigPatch,
+  writePreparedConfig,
   updateConfigPreservingComments,
   IMAGE_PROCESSING_CONFIG_KEYS
 } = require('./core/config');
 const {
-  hashPassword,
   verifyPassword,
   getClientIp,
   checkIpBan,
@@ -298,26 +298,20 @@ app.put('/api/platform/config', requireAdmin, (req, res) => {
   const oldAdminPath = oldCfg.admin_path;
   const { mode, rawYaml, patch } = req.body || {};
 
-  let candidateImgCfg = {};
-  if (mode === 'raw') {
-    try {
-      const parsed = YAML.parse(rawYaml) || {};
-      candidateImgCfg = parsed.image_host || {};
-    } catch (parseErr) {
-      return res.status(400).json({ error: 'Invalid YAML syntax: ' + parseErr.message });
-    }
-  } else {
-    candidateImgCfg = { ...(oldCfg?.image_host || {}), ...(patch?.image_host || {}) };
+  let prepared;
+  try {
+    prepared = mode === 'raw'
+      ? prepareRawConfigYaml(rawYaml)
+      : prepareConfigPatch(patch || {});
+  } catch (err) {
+    return res.status(400).json({ error: 'Invalid configuration: ' + err.message });
   }
 
   const needsCachePurge = Boolean(
-    req.body.clearCache === true ||
-    shouldPurgeImageCache(oldCfg, { image_host: candidateImgCfg })
+    req.body?.clearCache === true ||
+    shouldPurgeImageCache(oldCfg, prepared.config)
   );
 
-  // If cache purge is required, perform it BEFORE writing new config to disk.
-  // If clearCacheDir fails (e.g. disk/permission failure), return HTTP 500 without modifying config.yaml,
-  // leaving the system in a clean, retriable state where a retry will still detect the config difference.
   if (needsCachePurge) {
     try {
       clearCacheDir();
@@ -327,19 +321,7 @@ app.put('/api/platform/config', requireAdmin, (req, res) => {
   }
 
   try {
-    let updatedCfg;
-    if (mode === 'raw') {
-      updatedCfg = saveRawConfigYaml(rawYaml);
-    } else {
-      const cleanPatch = { ...(patch || {}) };
-      // If password field is empty/unset, preserve existing password
-      if (!cleanPatch.password) {
-        delete cleanPatch.password;
-      } else if (!cleanPatch.password.startsWith('scrypt:')) {
-        cleanPatch.password = hashPassword(cleanPatch.password);
-      }
-      updatedCfg = updateConfigPreservingComments(cleanPatch);
-    }
+    const updatedCfg = writePreparedConfig(prepared);
 
     // Re-issue session cookie so password or admin path change doesn't break current session
     const newToken = createSessionToken(updatedCfg);
@@ -365,7 +347,7 @@ app.put('/api/platform/config', requireAdmin, (req, res) => {
       newAdminPath: updatedCfg.admin_path
     });
   } catch (err) {
-    res.status(400).json({ error: 'Failed to save configuration: ' + err.message });
+    res.status(500).json({ error: 'Failed to save configuration: ' + err.message });
   }
 });
 
