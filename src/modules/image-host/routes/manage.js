@@ -25,6 +25,7 @@ const { isItemLocked, setItemLockState } = require('../protection');
 const { scanAllImages, invalidateScanCache, clearCacheDir } = require('../catalog');
 const { serializeMutation } = require('../mutation-queue');
 const { moveFileToTrash } = require('../trash');
+const { removeAssetStats } = require('../stats');
 
 let integrityCheck = { state: 'idle', checked: 0, matched: 0, issues: [] };
 let integrityController = null;
@@ -142,6 +143,7 @@ function registerManageRoutes(app) {
     }
 
     // Explicit deletion retires the path even if its bytes changed or were already missing.
+    removeAssetStats(year, month, filename);
     getShaIndex();
     const relKey = `${year}/${month}/${filename}`;
     const indexedSha = pathToShaMap.get(relKey)?.sha256;

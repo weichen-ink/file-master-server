@@ -20,6 +20,7 @@ const {
 } = require('../asset-paths');
 const { invalidateScanCache } = require('../catalog');
 const { processAndCacheImage, ensureThumbnail, ensureTranscodedPreviewJpeg } = require('../processor');
+const { recordHit } = require('../stats');
 
 /** Public optimized-image route and secret-path raw file route. */
 function registerPublicRoutes(app) {
@@ -56,6 +57,7 @@ function registerPublicRoutes(app) {
       }
       if (!PROCESSABLE_IMAGE_EXTS.has(rawExt)) {
         res.setHeader('Cache-Control', 'public, max-age=604800');
+        if (req.method !== 'HEAD') recordHit(year, month, path.basename(rawFilePath));
         return res.sendFile(rawFilePath);
       }
 
@@ -93,6 +95,7 @@ function registerPublicRoutes(app) {
 
       res.setHeader('Content-Type', 'image/webp');
       res.setHeader('Cache-Control', 'public, max-age=604800');
+      if (req.method !== 'HEAD') recordHit(year, month, rawBasenameWithExt);
       return res.sendFile(cacheFilePath);
     } catch (err) {
       console.error('[FileMaster] Failed to serve public file:', err);
@@ -149,10 +152,12 @@ function registerPublicRoutes(app) {
         await ensureTranscodedPreviewJpeg(rawFilePath, previewCachePath);
         res.setHeader('Content-Type', 'image/jpeg');
         res.setHeader('Cache-Control', 'private, max-age=2592000');
+        if (req.method !== 'HEAD') recordHit(year, month, rawBasenameWithExt);
         return res.sendFile(previewCachePath);
       }
 
       res.setHeader('Cache-Control', 'private, max-age=2592000');
+      if (req.method !== 'HEAD') recordHit(year, month, path.basename(rawFilePath));
       return res.sendFile(rawFilePath);
     } catch (err) {
       console.error('[FileMaster] Failed to read raw preview:', err);

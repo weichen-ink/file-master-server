@@ -737,10 +737,19 @@ function renderFolderTree() {
   treeEl.innerHTML = html;
 }
 
+let gallerySortMode = 'time_desc';
+
+function changeGallerySort(mode) {
+  gallerySortMode = mode || 'time_desc';
+  galleryPage = 0;
+  renderGallery();
+}
+
 function renderGallery() {
   const q = document.getElementById('searchInput').value.trim().toLowerCase();
   const grid = document.getElementById('galleryGrid');
-  const filterKey = `${selectedFolder}:${q}`;
+  const sortMode = document.getElementById('sortSelect')?.value || gallerySortMode;
+  const filterKey = `${selectedFolder}:${q}:${sortMode}`;
   if (filterKey !== galleryFilterKey) { galleryPage = 0; galleryFilterKey = filterKey; }
 
   const filtered = allImages.filter(item => {
@@ -753,6 +762,16 @@ function renderGallery() {
     }
     if (q && !item.filename.toLowerCase().includes(q)) return false;
     return true;
+  });
+
+  filtered.sort((a, b) => {
+    if (sortMode === 'size_desc') return (b.size || 0) - (a.size || 0);
+    if (sortMode === 'size_asc') return (a.size || 0) - (b.size || 0);
+    if (sortMode === 'name_asc') return (a.filename || '').localeCompare(b.filename || '', undefined, { numeric: true, sensitivity: 'base' });
+    if (sortMode === 'name_desc') return (b.filename || '').localeCompare(a.filename || '', undefined, { numeric: true, sensitivity: 'base' });
+    if (sortMode === 'hits_desc') return ((b.hits || 0) - (a.hits || 0)) || ((b.createdAt || 0) - (a.createdAt || 0));
+    if (sortMode === 'time_asc') return (a.createdAt || 0) - (b.createdAt || 0);
+    return (b.createdAt || 0) - (a.createdAt || 0);
   });
 
   const filteredBytes = filtered.reduce((acc, cur) => acc + (cur.size || 0), 0);
@@ -831,6 +850,7 @@ function renderGallery() {
           <div class="img-name" title="${escapeHtml(item.filename)}">${escapeHtml(item.filename)}</div>
           <div class="img-meta">
             <span>Raw ${formatBytes(item.size)}</span>
+            <span title="${escapeHtml(t('hitsCount', { hits: item.hits || 0 }))}">👁️ ${item.hits || 0}</span>
             <span>${rightMetaHtml}</span>
           </div>
         </div>

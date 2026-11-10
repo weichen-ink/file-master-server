@@ -78,6 +78,14 @@ const I18N = {
 
     // 交互提示与按钮
     allAssets: "全部文件",
+    sortTimeDesc: "🕒 上传时间：最新优先",
+    sortTimeAsc: "🕒 上传时间：最早优先",
+    sortSizeDesc: "⬇️ 文件大小：从大到小",
+    sortSizeAsc: "⬆️ 文件大小：从小到大",
+    sortNameAsc: "🔤 文件名：A → Z",
+    sortNameDesc: "🔤 文件名：Z → A",
+    sortHitsDesc: "👁️ 访问热度：从高到低",
+    hitsCount: "{hits} 次访问",
     copied: "已复制 {label}",
     deleteConfirm: "将“{filename}”移入回收站？相关图片缓存也会清除。",
     lockedNotice: "“{filename}”已开启防删除保护。请先解除保护。",
@@ -454,6 +462,14 @@ const I18N = {
 
     // Prompts & Buttons
     allAssets: "All files",
+    sortTimeDesc: "🕒 Upload time: Newest first",
+    sortTimeAsc: "🕒 Upload time: Oldest first",
+    sortSizeDesc: "⬇️ File size: Largest first",
+    sortSizeAsc: "⬆️ File size: Smallest first",
+    sortNameAsc: "🔤 Filename: A → Z",
+    sortNameDesc: "🔤 Filename: Z → A",
+    sortHitsDesc: "👁️ Hits: Most viewed",
+    hitsCount: "{hits} views",
     copied: "Copied {label}",
     deleteConfirm: "Move \"{filename}\" to trash? Its image cache will also be cleared.",
     lockedNotice: "File '{filename}' is deletion-protected. Unlock it before deleting.",

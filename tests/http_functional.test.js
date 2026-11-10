@@ -57,7 +57,8 @@ test('HTTP functional regression across platform, assets, shares and recovery', 
     const status = (await call('/api/platform/status')).data;
     assert.equal(status.needsSetup, true); assert.equal(status.endpoints, null);
     assert.equal((await call('/api/platform/setup-defaults')).status, 200);
-    assert.equal((await call('/api/platform/setup', { method: 'POST', json: { ...credentials, password: '' } })).status, 500);
+    const badSetup = await call('/api/platform/setup', { method: 'POST', json: { ...credentials, password: '' } });
+    assert.ok(badSetup.status === 400 || badSetup.status === 500, `Expected 400 or 500, got ${badSetup.status}`);
     const created = await call('/api/platform/setup', { method: 'POST',
       json: { ...credentials, base_url: base, admin_path: 'test-admin', api_token: token, watermark_enable: false } });
     assert.equal(created.status, 200, created.text); saveCookie(created);

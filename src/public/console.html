@@ -183,7 +183,16 @@
                 <span id="currentFolderBreadcrumb" style="font-weight:600; color:var(--text);" data-i18n="allAssets">📁 全部资源</span>
                 <span id="currentFolderStats" style="color:var(--muted); font-size:12px;"></span>
               </div>
-              <div style="display:flex; gap:10px; align-items:center;">
+              <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                <select id="sortSelect" class="form-input" style="height:36px; padding:4px 10px; font-size:13px; width:auto; cursor:pointer;" onchange="changeGallerySort(this.value)">
+                  <option value="time_desc" data-i18n="sortTimeDesc">🕒 上传时间：最新优先</option>
+                  <option value="time_asc" data-i18n="sortTimeAsc">🕒 上传时间：最早优先</option>
+                  <option value="size_desc" data-i18n="sortSizeDesc">⬇️ 文件大小：从大到小</option>
+                  <option value="size_asc" data-i18n="sortSizeAsc">⬆️ 文件大小：从小到大</option>
+                  <option value="name_asc" data-i18n="sortNameAsc">🔤 文件名：A → Z</option>
+                  <option value="name_desc" data-i18n="sortNameDesc">🔤 文件名：Z → A</option>
+                  <option value="hits_desc" data-i18n="sortHitsDesc">👁️ 访问热度：从高到低</option>
+                </select>
                 <input type="text" id="searchInput" class="form-input search-input" placeholder="搜索当前目录中的文件" data-i18n-placeholder="searchPlaceholder" oninput="renderGallery()" />
               </div>
             </div>

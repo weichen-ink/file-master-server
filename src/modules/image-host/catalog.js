@@ -14,6 +14,7 @@ const {
   getRawPreviewCacheFilePath
 } = require('./asset-paths');
 const { updateShaIndex, writeShaIndex, getFileSha256 } = require('./sha-index');
+const { getAssetStats } = require('./stats');
 
 let cachedScanData = null;
 let cachedScanTime = 0;
@@ -147,6 +148,8 @@ async function collectImages(cfg) {
     }
     const locked = isItemLocked(year, month, file, protectedMap);
 
+    const assetStats = getAssetStats(year, month, file);
+
     list.push({
       filename: file,
       sha256,
@@ -161,6 +164,8 @@ async function collectImages(cfg) {
       cacheSize,
       hasCache,
       createdAt: stat.birthtimeMs || stat.mtimeMs,
+      hits: assetStats.hits || 0,
+      lastAccessedAt: assetStats.lastAccessedAt || null,
       rawUrl: assetMeta.rawUrl,
       pubUrl: assetMeta.pubUrl,
       rawPreviewPath: assetMeta.rawPreviewPath,
