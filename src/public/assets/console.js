@@ -283,6 +283,7 @@ async function initApp() {
   }
 
   if (data.authenticated) {
+    document.getElementById('storageWarning').classList.toggle('hidden', data.storageHealth?.atomicUploads === true);
     document.getElementById('loginView').classList.add('hidden');
     document.getElementById('appView').classList.remove('hidden');
     loadImages();
@@ -1166,6 +1167,7 @@ async function loadLocalUpdateStatus() {
     const res = await fetch('/api/platform/update/status');
     if (!res.ok) return;
     const st = await res.json();
+    if (st.dependenciesPending) appendUpdateLog(t('updateDependenciesPending'));
     document.getElementById('updVersionBadge').textContent = 'v' + (st.version || '0.1.0');
     const commitEl = document.getElementById('updLocalCommit');
     if (st.localShortCommit) {
@@ -1200,7 +1202,10 @@ async function checkRemoteUpdate() {
     }
 
     checkedEl.textContent = t('checkedAt', { time: new Date().toLocaleTimeString(currentLocale === 'zh' ? 'zh-CN' : 'en-US') });
-    if (st.hasUpdate) {
+    if (st.dependenciesPending) {
+      statusEl.textContent = t('updateDependenciesPending');
+      appendUpdateLog(t('updateDependenciesPending'), true);
+    } else if (st.hasUpdate) {
       statusEl.innerHTML = `<span style="color:var(--warn); font-weight:600;">${t('checkAvailable', { count: st.commitsBehind, commit: st.remoteShortCommit })}</span>`;
       if (st.incomingCommits && st.incomingCommits.length > 0) {
         appendUpdateLog(t('updateIncoming', { branch: st.upstreamBranch }) + '\n' + st.incomingCommits.map(c => '  • ' + c).join('\n'), true);
@@ -1273,6 +1278,7 @@ async function triggerHotUpdate() {
     await waitForServerReconnect();
   } catch (err) {
     appendUpdateLog(t('updateFailed', { error: err.message }));
+    await loadLocalUpdateStatus();
     alert(t('errorUpdate', { error: err.message }));
   } finally {
     btnPull.disabled = false;

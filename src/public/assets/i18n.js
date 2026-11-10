@@ -1,6 +1,8 @@
 // ================= Bilingual Internationalization (zh-CN / en) =================
 const I18N = {
   zh: {
+    storageWarning: "存储探测未通过：上传需要可写且支持硬链接的文件系统。请检查服务日志，修复权限或更换存储目录后重启。",
+    updateDependenciesPending: "上次更新的依赖安装未完成。即使已是最新提交，也请重新执行更新；完成前请勿手动重启。",
     pagePrevious: "上一页",
     pageNext: "下一页",
     pageCount: "第 {current} / {total} 页",
@@ -348,6 +350,8 @@ const I18N = {
     restartingServer: "正在重启服务..."
   },
   en: {
+    storageWarning: "Storage probe failed: uploads require writable storage with hard-link support. Check server logs, fix permissions or move storage, then restart.",
+    updateDependenciesPending: "Dependency installation from the previous update is unfinished. Run the update again even if the commit is current; avoid restarting until it completes.",
     pagePrevious: "Previous",
     pageNext: "Next",
     pageCount: "Page {current} of {total}",

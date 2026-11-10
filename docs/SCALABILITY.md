@@ -6,7 +6,7 @@ The supported deployment is one server process per writable storage directory. T
 
 ## 上传与迁移
 
-- 上传先写入完整的临时文件，再以硬链接原子发布，且不覆盖已有文件。存储必须支持同目录硬链接；不支持时返回 501 并保留已有文件，不回退到可能暴露半成品的复制。名称冲突始终比较完整 SHA-256，短哈希后缀只用于命名。
+- 上传先写入完整的临时文件，再以硬链接原子发布，且不覆盖已有文件。存储必须支持同目录硬链接；启动会在实际原文件目录中探测并向日志、管理后台报告，不支持时上传返回 501 并保留已有文件，不回退到可能暴露半成品的复制。名称冲突始终比较完整 SHA-256，短哈希后缀只用于命名。
 - 服务端将上传落盘、删除和锁状态修改串行处理。图片转换独立使用最多 2 个活动任务、128 个等待任务的队列；相同缓存目标合并为同一任务。缓存清理会使旧任务失效。
 - 上传限流保持每个 IP 每分钟 120 次。429 包含 `Retry-After`；插件和网页对 429、部分 5xx 和网络错误最多重试 4 次，不重试身份认证失败。
 - 插件逐文件传输，随后按受影响笔记集中修改最新正文。删除前重新读取引用，并核对本地附件内容；最终检查后笔记发生变化时保留本地文件。
@@ -14,7 +14,7 @@ The supported deployment is one server process per writable storage directory. T
 - 插件保存最近一次上传的恢复清单 `migration-pending.json`。失败、取消或重启后，在命令面板运行“恢复未完成上传”，检查所列文件后继续。服务器地址必须与原任务一致；再次上传由服务端 SHA 去重。开始另一项上传会替换此恢复清单。
 - 网页可停止上传并重试未完成项；浏览器刷新后需要重新选择文件。下载批次可在结果页重试，下载内容在写入前与原文件 SHA 比较。
 
-Storage must support same-directory hard links; unsupported storage returns 501 without exposing partial copies. Uploads publish complete files exclusively and deduplicate only by full SHA-256. Image generation has bounded concurrency and coalesces identical requests. Transfers retry transient failures, preserve current note edits, and verify originals before local deletion. Plugin upload recovery covers the most recent upload; browser retry state lasts until page reload. Cancellation finishes already successful transfers consistently.
+Storage must support same-directory hard links; startup probes the actual original-file directory and reports failures in logs and the admin console. Unsupported storage returns 501 without exposing partial copies. Uploads publish complete files exclusively and deduplicate only by full SHA-256. Image generation has bounded concurrency and coalesces identical requests. Transfers retry transient failures, preserve current note edits, and verify originals before local deletion. Plugin upload recovery covers the most recent upload; browser retry state lasts until page reload. Cancellation finishes already successful transfers consistently.
 
 ## 引用、列表与图库
 
@@ -60,6 +60,6 @@ The scale fixtures validate metadata and algorithm behavior, not real-world thro
 
 `updater.js` 负责步骤顺序、互斥锁与失败处理；`update-backup.js` 负责备份格式和恢复；`update-git.js` 负责 Git、状态查询和命令执行。公开更新接口、磁盘备份布局和旧清单兼容性保持不变。测试为更新器提供独立目录及命令边界，覆盖成功、fetch/reset/恢复/依赖安装失败、并发请求与重置后进程退出；另有本地 Git 仓库集成测试，不访问 GitHub。
 
-失败处理保障配置和水印的恢复，不承诺把已经更新的源代码与依赖一并回退。依赖安装失败必须先排除安装错误，再重试更新；原文件完整性校验独立于更新恢复。
+失败处理保障配置和水印的恢复，不承诺把已经更新的源代码与依赖一并回退。依赖安装失败会保留待完成标记与备份，并在更新状态中提示。排除错误后，即使目标提交相同，再次更新仍会执行依赖安装，全部成功才清除标记。启动恢复不运行 npm，且已恢复的用户文件不会反复被备份覆盖；原文件完整性校验独立于更新恢复。
 
-The coordinator owns update ordering and its lock; backup/recovery and Git execution live in focused modules. Tests exercise offline Git and process interruption. Recovery protects user configuration and watermarks; it does not promise a transactional rollback of source code and installed dependencies.
+The coordinator owns update ordering and its lock; backup/recovery and Git execution live in focused modules. Tests exercise offline Git and process interruption. Recovery protects user configuration and watermarks; it does not promise a transactional rollback of source code and installed dependencies. Failed or interrupted installation remains pending across restarts and forces installation on the next hot update, including the same commit. Startup recovery does not execute npm or overwrite already-restored user assets.

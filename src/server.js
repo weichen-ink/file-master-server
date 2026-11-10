@@ -46,7 +46,7 @@ const {
   recoverInterruptedUpdate
 } = require('./core/updater');
 const { appendAuditLog } = require('./core/audit');
-const { registerImageHostModule, clearCacheDir } = require('./modules/image-host');
+const { registerImageHostModule, clearCacheDir, getStorageHealth } = require('./modules/image-host');
 const { registerShareModule } = require('./modules/share');
 
 let httpServer = null;
@@ -146,6 +146,7 @@ app.get('/api/platform/status', (req, res) => {
     needsSetup,
     optimizationEnabled: cfg.image_host?.enable_optimization !== false,
     authenticated,
+    storageHealth: authenticated ? getStorageHealth() : null,
     username: authenticated ? cfg.username : null,
     totpEnabled: Boolean(cfg.totp_secret),
     endpoints: authenticated

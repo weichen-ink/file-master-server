@@ -1,18 +1,21 @@
 # Changelog (file-master-server)
 
-See root `CHANGELOG.md` for full ecosystem release notes.
-
 ## [1.0.1] - 2026-11-10
-- Require hard-link support for atomic upload publication; reject unsupported storage without exposing partial copies.
-- Run each server test file in a separate temporary project, allowing parallel execution without touching user data.
-- Separate update orchestration, backup/recovery, and Git operations; cover failure stages, offline Git updates, and process interruption.
-- Publish uploads atomically without overwriting name collisions; verify full content hashes before deduplication.
-- Coalesce image generation with bounded concurrency, invalidate stale jobs, and serve gallery thumbnails.
-- Scan catalogs asynchronously with per-directory metadata aggregation and preserve integrity baselines across index upgrades.
-- Add cancellable original-file verification with reports, gallery pagination, and upload retries for transient failures.
+
+### Storage and batch operations
+- Publish uploads atomically through exclusive hard links; compare full SHA-256 before deduplication and preserve existing name collisions.
+- Probe storage capabilities at startup and show failures in server logs and the authenticated asset manager.
+- Scan catalogs asynchronously, preserve per-file integrity baselines, and offer cancellable original-file verification with downloadable reports.
+- Add gallery pagination, thumbnails, bounded/coalesced image generation, and retries for transient upload failures.
+
+### Configuration and update recovery
 - Validate prepared configuration before cache invalidation and persist TOTP changes atomically.
-- Verify watermark backup integrity and preserve reliable update recovery.
-- Establish the pre-upgrade baseline for the batch reliability and scalability improvements.
+- Separate update orchestration, backup/recovery, and Git operations; verify watermark backup checksums.
+- Retain unfinished dependency installation across failures and process restarts, including retries against the same commit; only clean recovery state after completion.
+
+### Development
+- Run every server test file in its own temporary project through `npm test`.
+- Cover update failure stages, offline Git updates, interrupted processes, and the storage capability probe; document test and release workflows.
 
 ## [0.1.5] - 2026-10-30
 - Require a startup setup token before first-time administrator initialization.

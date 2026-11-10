@@ -18,9 +18,13 @@ function createUpdater({ rootDir = ROOT_DIR, config = defaultConfig, runCommand 
   const { getConfig, getRawConfigYaml, saveRawConfigYaml } = config;
   let updateInProgress = false;
   const backup = createUpdateBackup({ rootDir, dataDir: DATA_DIR, configPath: CONFIG_PATH, getConfig });
-  const { backupWatermarkFiles, restoreWatermarkFiles, UPDATE_PENDING_FILE } = backup;
+  const { backupWatermarkFiles, restoreWatermarkFiles, readPendingUpdate, writePendingUpdate, clearPendingUpdate } = backup;
   const git = createUpdateGit({ rootDir, getConfig, isUpdateInProgress: () => updateInProgress, runCommand });
-  const { runCmd, getFileSha256, readPackageVersion, getUpdateStatus, ensureGitInitialized } = git;
+  const { runCmd, getFileSha256, readPackageVersion, ensureGitInitialized } = git;
+
+  async function getUpdateStatus(options) {
+    return { ...await git.getUpdateStatus(options), dependenciesPending: Boolean(readPendingUpdate()?.dependenciesPending) };
+  }
 
   /**
    * Restores user's config.yaml while preserving any new default keys introduced in upstream config.yaml.
@@ -81,6 +85,7 @@ function createUpdater({ rootDir = ROOT_DIR, config = defaultConfig, runCommand 
     updateInProgress = true;
     let userRawYaml;
     let watermarkBackups;
+    let state;
 
     try {
       const logs = [];
@@ -90,6 +95,10 @@ function createUpdater({ rootDir = ROOT_DIR, config = defaultConfig, runCommand 
         console.log(`[HotUpdate] ${msg}`);
       };
 
+      const recovery = backup.recoverInterruptedUpdate();
+      if (!recovery.success) throw new Error(`Cannot update until user assets are recovered: ${recovery.error}`);
+      const previousInstallPending = Boolean(readPendingUpdate()?.dependenciesPending);
+
       // Back up user's config.yaml and all customized watermark files before touching git
       userRawYaml = getRawConfigYaml();
       watermarkBackups = backupWatermarkFiles();
@@ -98,7 +107,8 @@ function createUpdater({ rootDir = ROOT_DIR, config = defaultConfig, runCommand 
       fs.mkdirSync(DATA_DIR, { recursive: true });
       const cfgBackupPath = path.join(DATA_DIR, 'config.backup.yaml');
       fs.writeFileSync(cfgBackupPath, userRawYaml, 'utf8');
-      fs.writeFileSync(UPDATE_PENDING_FILE, 'pending', 'utf8');
+      state = { assetsRestored: false, dependenciesPending: previousInstallPending };
+      writePendingUpdate(state);
       logStep(`Backed up config.yaml to data/config.backup.yaml`);
 
       const beforeStatus = await getUpdateStatus({ fetchRemote: false });
@@ -112,7 +122,13 @@ function createUpdater({ rootDir = ROOT_DIR, config = defaultConfig, runCommand 
       const toCommit = targetHashOut || 'FETCH_HEAD';
 
       logStep(`Applying update (${fromCommit} -> ${toCommit})...`);
+      // Reset can change dependencies even if the process exits before hash comparison.
+      state.dependenciesPending = true;
+      writePendingUpdate(state);
       await runCmd('git', ['reset', '--hard', 'FETCH_HEAD'], 15000);
+      const newPkgHash = getFileSha256(PKG_PATH) + ':' + getFileSha256(PKG_LOCK_PATH);
+      state.dependenciesPending = previousInstallPending || oldPkgHash !== newPkgHash;
+      writePendingUpdate(state);
 
       // Read the newly pulled upstream config.example.yaml (or config.yaml) before restoring user's config
       const templatePath = fs.existsSync(EXAMPLE_CONFIG_PATH) ? EXAMPLE_CONFIG_PATH : CONFIG_PATH;
@@ -125,14 +141,13 @@ function createUpdater({ rootDir = ROOT_DIR, config = defaultConfig, runCommand 
         const failedNames = wmRestore.failed.map((f) => path.basename(f.file)).join(', ');
         throw new Error(`Failed to restore customized watermark files after update: ${failedNames}`);
       }
-      if (fs.existsSync(UPDATE_PENDING_FILE)) fs.unlinkSync(UPDATE_PENDING_FILE);
-      if (fs.existsSync(cfgBackupPath)) fs.unlinkSync(cfgBackupPath);
+      state.assetsRestored = true;
+      writePendingUpdate(state);
       logStep(`Restored customized watermark assets`);
 
-      const newPkgHash = getFileSha256(PKG_PATH) + ':' + getFileSha256(PKG_LOCK_PATH);
       let depsUpdated = false;
-      if (oldPkgHash !== newPkgHash) {
-        logStep(`Detected changes in package.json; running npm install --omit=dev --ignore-scripts...`);
+      if (state.dependenciesPending) {
+        logStep(`Changed or unfinished dependencies; running npm install --omit=dev --ignore-scripts...`);
         const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
         await runCmd(npmCmd, ['install', '--omit=dev', '--ignore-scripts'], 120000);
         depsUpdated = true;
@@ -141,6 +156,7 @@ function createUpdater({ rootDir = ROOT_DIR, config = defaultConfig, runCommand 
         logStep(`package.json unchanged; skipped npm install`);
       }
 
+      clearPendingUpdate();
       const newVersion = readPackageVersion();
       logStep(`Update complete (v${newVersion}, commit ${toCommit}). Scheduling service restart...`);
 
@@ -154,21 +170,24 @@ function createUpdater({ rootDir = ROOT_DIR, config = defaultConfig, runCommand 
         logs
       };
     } catch (err) {
-      // Always ensure user's config.yaml is intact even if git reset/fetch failed mid-way
+      // Restore only unfinished asset recovery. Never overwrite user edits on an install retry.
       try {
-        if (typeof userRawYaml === 'string') {
+        if (state && !state.assetsRestored) {
           saveRawConfigYaml(userRawYaml);
-        }
-        if (typeof watermarkBackups !== 'undefined') {
           const rollbackRes = restoreWatermarkFiles(watermarkBackups);
           if (rollbackRes.success) {
-            if (fs.existsSync(UPDATE_PENDING_FILE)) fs.unlinkSync(UPDATE_PENDING_FILE);
-            const cfgBackupPath = path.join(DATA_DIR, 'config.backup.yaml');
-            if (fs.existsSync(cfgBackupPath)) fs.unlinkSync(cfgBackupPath);
+            state.assetsRestored = true;
+            writePendingUpdate(state);
           }
         }
+        if (state?.assetsRestored && !state.dependenciesPending) {
+          clearPendingUpdate();
+        }
       } catch {
-        // Ignore secondary restore error; pending flag preserved for recoverInterruptedUpdate
+        // Keep durable state and backups if secondary restoration fails.
+      }
+      if (state?.dependenciesPending) {
+        console.warn('[HotUpdate] Dependencies may be incomplete; retry the hot update even if no newer commit is available.');
       }
       throw err;
     } finally {

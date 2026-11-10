@@ -7,6 +7,31 @@ function createUpdateBackup({ rootDir: ROOT_DIR, dataDir: DATA_DIR, configPath: 
   const WM_BACKUP_DIR = path.join(ROOT_DIR, 'backups', 'watermarks');
   const UPDATE_PENDING_FILE = path.join(DATA_DIR, 'update_pending_restore.flag');
 
+  // Replace the marker atomically so a crash cannot silently discard an install obligation.
+  function readPendingUpdate(pendingFile = UPDATE_PENDING_FILE) {
+    if (!fs.existsSync(pendingFile)) return null;
+    const raw = fs.readFileSync(pendingFile, 'utf8').trim();
+    // Pre-state-machine releases wrote these plain markers.
+    if (raw === 'pending' || raw === 'interrupted') return { assetsRestored: false, dependenciesPending: false };
+    const state = JSON.parse(raw);
+    if (typeof state.assetsRestored !== 'boolean' || typeof state.dependenciesPending !== 'boolean') {
+      throw new Error('Invalid pending update state; preserve backups and repair the marker before updating');
+    }
+    return state;
+  }
+
+  function writePendingUpdate(state, pendingFile = UPDATE_PENDING_FILE) {
+    fs.mkdirSync(path.dirname(pendingFile), { recursive: true });
+    fs.writeFileSync(`${pendingFile}.tmp`, JSON.stringify(state), 'utf8');
+    fs.renameSync(`${pendingFile}.tmp`, pendingFile);
+  }
+
+  function clearPendingUpdate(pendingFile = UPDATE_PENDING_FILE, cfgBackup = path.join(DATA_DIR, 'config.backup.yaml')) {
+    // Remove the marker last: cleanup failure must not claim completion.
+    if (fs.existsSync(cfgBackup)) fs.unlinkSync(cfgBackup);
+    if (fs.existsSync(pendingFile)) fs.unlinkSync(pendingFile);
+  }
+
   function getWatermarkFilesToPreserve() {
     const candidates = new Set(['watermark.png', 'watermark-dark.png']);
     try {
@@ -136,31 +161,35 @@ function createUpdateBackup({ rootDir: ROOT_DIR, dataDir: DATA_DIR, configPath: 
     const backupDir = options.backupDir || WM_BACKUP_DIR;
     const targetRootDir = options.targetRootDir || ROOT_DIR;
 
-    if (fs.existsSync(pendingFile)) {
-      console.log('[FileMaster Updater] Interrupted update detected, restoring configuration and watermarks from disk backups...');
-      try {
-        if (!fs.existsSync(cfgBackup)) {
-          throw new Error('Config backup missing in data/config.backup.yaml');
-        }
+    if (!fs.existsSync(pendingFile)) return { recovered: false, success: true };
+    try {
+      const state = readPendingUpdate(pendingFile);
+      if (!state.assetsRestored) {
+        console.log('[FileMaster Updater] Interrupted update detected, restoring configuration and watermarks from disk backups...');
+        if (!fs.existsSync(cfgBackup)) throw new Error('Config backup missing in data/config.backup.yaml');
         const wmRes = restoreWatermarkFiles(null, backupDir, targetRootDir);
         if (!wmRes.success) {
           const errs = wmRes.failed.map((f) => `${path.basename(f.file)}: ${f.error}`).join(', ');
           throw new Error(`Watermark restoration failed: ${errs}`);
         }
         fs.copyFileSync(cfgBackup, targetConfig);
-        fs.unlinkSync(pendingFile);
-        if (fs.existsSync(cfgBackup)) fs.unlinkSync(cfgBackup);
-        console.log('[FileMaster Updater] Successfully recovered from interrupted update.');
-        return { recovered: true, success: true };
-      } catch (err) {
-        console.error('[FileMaster Updater] Error during interrupted update recovery (flag preserved for retry):', err.message);
-        return { recovered: true, success: false, error: err.message };
+        state.assetsRestored = true;
+        writePendingUpdate(state, pendingFile);
       }
+      if (state.dependenciesPending) {
+        console.warn('[FileMaster Updater] User assets restored; dependencies may be incomplete. Retry the hot update to install dependencies before restarting.');
+      } else {
+        clearPendingUpdate(pendingFile, cfgBackup);
+        console.log('[FileMaster Updater] Successfully recovered from interrupted update.');
+      }
+      return { recovered: true, success: true, dependenciesPending: state.dependenciesPending };
+    } catch (err) {
+      console.error('[FileMaster Updater] Error during interrupted update recovery (flag preserved for retry):', err.message);
+      return { recovered: true, success: false, error: err.message };
     }
-    return { recovered: false, success: true };
   }
 
   return { getWatermarkFilesToPreserve, backupWatermarkFiles, restoreWatermarkFiles,
-    recoverInterruptedUpdate, WM_BACKUP_DIR, UPDATE_PENDING_FILE };
+    recoverInterruptedUpdate, readPendingUpdate, writePendingUpdate, clearPendingUpdate, WM_BACKUP_DIR, UPDATE_PENDING_FILE };
 }
 module.exports = { createUpdateBackup };

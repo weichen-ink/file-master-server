@@ -39,6 +39,7 @@ function createFixture(t) {
     calls.push([cmd, ...args]);
     if (cmd === 'git' && args[0] === faults.fail) throw new Error(`simulated ${faults.fail} failure`);
     if (cmd.startsWith('npm')) {
+      faults.duringInstall?.();
       if (faults.install) throw new Error('simulated dependency install failure');
       return { stdout: '', stderr: '' };
     }

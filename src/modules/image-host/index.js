@@ -1,4 +1,5 @@
 const path = require('node:path');
+const { checkStorageHealth, getStorageHealth } = require('./storage-health');
 const { ROOT_DIR, getConfig } = require('../../core/config');
 const { isPathWithin } = require('../../core/file-security');
 const { ensureDefaultWatermark } = require('./processor');
@@ -11,6 +12,7 @@ const { registerPublicRoutes } = require('./routes/public');
 const { registerManageRoutes } = require('./routes/manage');
 
 function registerImageHostModule(app) {
+  checkStorageHealth();
   ensureDirs();
   warmShaIndexAsync();
   const initCfg = getConfig();
@@ -27,6 +29,7 @@ function registerImageHostModule(app) {
 }
 
 module.exports = {
+  getStorageHealth,
   acceptSingleUpload,
   moveFileToTrash,
   registerImageHostModule,

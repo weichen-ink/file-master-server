@@ -49,13 +49,13 @@ test('Unchanged dependencies skip npm and concurrent requests share one update l
 });
 
 for (const command of ['fetch', 'reset']) {
-  test(`${command} failure restores original assets, cleans completed recovery and releases the lock`, async (t) => {
+  test(`${command} failure restores assets and preserves any uncertain install obligation`, async (t) => {
     const f = createFixture(t);
     f.faults.fail = command;
     await assert.rejects(f.updater.performHotUpdate(), new RegExp(`simulated ${command} failure`));
     assertAssets(f);
     assert.equal(f.read('config.yaml'), f.original);
-    assert.equal(f.pending(), false);
+    assert.equal(f.pending(), command === 'reset');
   });
 }
 
@@ -63,6 +63,10 @@ test('Dependency installation failure reports failure and preserves user assets 
   const f = createFixture(t);
   f.faults.changeDeps = true;
   f.faults.install = true;
+  f.faults.duringInstall = () => {
+    assert.equal(f.pending(), true);
+    assert.equal(fs.existsSync(path.join(f.rootDir, 'data/config.backup.yaml')), true);
+  };
   await assert.rejects(f.updater.performHotUpdate(), /dependency install failure/);
   assertAssets(f);
   assert.equal(JSON.parse(f.read('package.json')).version, '1.0.2');
@@ -117,7 +121,8 @@ test('A process exit immediately after reset leaves backups recoverable in a fre
   const fresh = openFixture(f.rootDir, async () => { throw new Error('recovery must not invoke git or npm'); });
   assert.equal(fresh.recoverInterruptedUpdate().success, true);
   assertAssets(f);
-  assert.equal(f.pending(), false);
+  assert.equal(f.pending(), true, 'a reset interrupted before hash comparison requires dependency installation');
+  assert.equal(fresh.recoverInterruptedUpdate().dependenciesPending, true);
 });
 
 test('Offline Git integration fetches a local upstream and restores tracked custom watermarks after reset', async (t) => {
@@ -142,4 +147,53 @@ test('Offline Git integration fetches a local upstream and restores tracked cust
   assert.equal(git(f.rootDir, ['rev-parse', 'HEAD']), git(upstream, ['rev-parse', 'HEAD']));
   assertAssets(f);
   assert.equal(updater.readPackageVersion(), '2.0.0');
+});
+
+
+test('Failed install survives restart and retries npm even when dependency hashes are unchanged', async (t) => {
+  const f = createFixture(t);
+  f.faults.changeDeps = true;
+  f.faults.install = true;
+  f.faults.duringInstall = () => {
+    assert.equal(f.pending(), true);
+    assert.equal(fs.existsSync(path.join(f.rootDir, 'data/config.backup.yaml')), true);
+  };
+  await assert.rejects(f.updater.performHotUpdate(), /dependency install failure/);
+  assert.equal(f.pending(), true);
+  assert.match(f.read('config.yaml'), /new_default: enabled/, 'install failure must not undo a successful config merge');
+  assert.equal((await f.updater.getUpdateStatus()).dependenciesPending, true);
+  const edited = f.read('config.yaml').replace('user-secret', 'new-secret');
+  f.write('config.yaml', edited);
+  const fresh = openFixture(f.rootDir, async () => ({ stdout: 'same', stderr: '' }));
+  assert.equal(fresh.recoverInterruptedUpdate().dependenciesPending, true);
+  assert.equal(f.read('config.yaml'), edited, 'restart must not overwrite post-recovery user edits');
+  assert.equal((await fresh.getUpdateStatus()).dependenciesPending, true);
+  f.faults.install = false;
+  const installsBefore = f.calls.filter(([cmd]) => cmd.startsWith('npm')).length;
+  assert.equal((await f.updater.performHotUpdate()).depsUpdated, true);
+  assert.equal(f.calls.filter(([cmd]) => cmd.startsWith('npm')).length, installsBefore + 1);
+  assert.equal(f.pending(), false);
+  assert.equal((await f.updater.getUpdateStatus()).dependenciesPending, false);
+  assert.match(f.read('config.yaml'), /new-secret/);
+});
+
+test('Unrecoverable assets block a new update before it overwrites the durable backups', async (t) => {
+  const f = createFixture(t);
+  fs.mkdirSync(path.join(f.rootDir, 'data'));
+  f.write('data/update_pending_restore.flag', 'pending');
+  await assert.rejects(f.updater.performHotUpdate(), /Cannot update until user assets are recovered/);
+  assert.equal(f.calls.length, 0);
+  assert.equal(f.pending(), true);
+  assert.equal(f.updater.isUpdateInProgress(), false);
+});
+
+
+test('Malformed update state blocks updates and preserves backup evidence', async (t) => {
+  const f = createFixture(t);
+  fs.mkdirSync(path.join(f.rootDir, 'data'));
+  f.write('data/config.backup.yaml', 'saved evidence');
+  f.write('data/update_pending_restore.flag', '{invalid');
+  await assert.rejects(f.updater.performHotUpdate(), /Cannot update until user assets are recovered/);
+  assert.equal(f.read('data/config.backup.yaml'), 'saved evidence');
+  assert.equal(f.calls.length, 0);
 });

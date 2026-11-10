@@ -68,8 +68,9 @@ Persistent data (`./storage` and `./data`) are mounted to your host automaticall
 
 - Run one server process per writable storage directory, including when using PM2 or Docker.
 - The filesystem and mount permissions must allow hard links within the upload directory. Uploads publish complete files through an exclusive hard link. Unsupported storage returns **HTTP 501**; copying directly to a public filename cannot provide the same atomic publication guarantee.
+- Startup probes exclusive hard links inside `storage/raw/`. A failed probe is reported in the server log and the authenticated asset manager before uploading. Fix mount permissions or move to a compatible filesystem, then restart. The probe is a startup snapshot; uploads still check each publication.
 - Stop writes or use a consistent snapshot when backing up `storage/raw/`, `data/` (including `sha_index.json`), `config.yaml`, and custom watermark files. Restore originals and their matching index together; deleting the index loses the existing integrity baselines.
-- Update recovery restores user configuration and watermarks. It does **not** guarantee rollback of updated source code and installed dependencies. If dependency installation fails, resolve the installation error before retrying the update.
+- Update recovery restores user configuration and watermarks. It does **not** guarantee rollback of updated source code and installed dependencies. If dependency installation fails, the pending state and backups remain. Resolve the error, then run the hot update again even when the commit is already current: installation will be retried. Startup recovery restores unfinished user assets without rerunning npm; it does not overwrite assets already restored. Avoid restarting until installation succeeds.
 
 See [batch processing and scale](docs/SCALABILITY.md) for recovery and verification details.
 
@@ -203,8 +204,15 @@ For large batches, the console supports cancellation, retries of unfinished uplo
 
 - 每份可写存储目录只运行一个服务进程，使用 PM2 或 Docker 时也需遵守。
 - 上传目录所在的文件系统及挂载权限必须允许同目录硬链接。上传通过独占硬链接一次性发布完整文件；不支持时返回 **HTTP 501**。直接复制到公开文件名无法提供相同的原子发布保证。
+- 启动时会在 `storage/raw/` 内探测硬链接和目标独占性；失败会在服务日志及登录后的资产管理页提前提示。请修复挂载权限或更换兼容的文件系统后重启。探测仅反映启动时的能力，实际上传仍逐次检查发布操作。
 - 备份时暂停写入或使用一致性快照，保存 `storage/raw/`、`data/`（包含 `sha_index.json`）、`config.yaml` 和自定义水印。恢复原图时同时恢复对应索引；删除索引会丢失已有完整性基准。
-- 更新恢复保障用户配置和水印的恢复，**不保证已更新的源代码和依赖整体回退**。依赖安装失败时，应先排除安装错误，再重试更新。
+- 更新恢复保障用户配置和水印的恢复，**不保证已更新的源代码和依赖整体回退**。依赖安装失败会保留待完成状态与备份；排除错误后，即使已是最新提交，也应重新执行热更新以重试安装。启动恢复只恢复尚未完成的用户配置和水印，不运行 npm，也不会反复覆盖已恢复后又被修改的文件。安装成功前请避免手动重启。
 
 ### 📄 许可证
 [MIT License](LICENSE)
+
+### Development and tests / 开发与测试
+
+Install development dependencies with `npm ci`, then run **`npm test`**. The runner copies each test file into a separate temporary project and cleans it up afterward. Do not run `node --test` directly in the working repository: it bypasses isolation, and configuration tests deliberately refuse to run there. See [CONTRIBUTING.md](CONTRIBUTING.md) for validation and release checks.
+
+使用 `npm ci` 安装开发依赖后，必须通过 **`npm test`** 运行测试。测试运行器为每个测试文件创建独立临时项目并自动清理。不要在工作仓库直接运行 `node --test`，它会绕过隔离，涉及配置的测试会主动拒绝执行。开发及发布检查见 [CONTRIBUTING.md](CONTRIBUTING.md)。
