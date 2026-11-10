@@ -45,6 +45,7 @@ image_host:
   raw_secret_path: raw # Path prefix for accessing original lossless files (/raw/YYYY/MM/file.ext)
   pub_secret_path: pub # Path prefix for accessing optimized WebP files (/pub/YYYY/MM/file.webp)
   enable_optimization: true # Enable automatic image optimization (/pub/YYYY/MM/file.webp): true | false
+  upload_rate_limit: 1200 # Maximum upload requests per minute per IP (default: 1200, 0 for unlimited)
   webp_quality: 82 # WebP compression quality for optimized files (/pub/*, 1-100)
   max_width: 1920 # Maximum width constraint for optimized images (0 for unlimited)
   watermark_enable: true # Enable dynamic watermarking: true | false

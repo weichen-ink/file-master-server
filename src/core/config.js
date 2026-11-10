@@ -48,6 +48,7 @@ image_host:
   raw_secret_path: raw
   pub_secret_path: pub
   enable_optimization: true
+  upload_rate_limit: 1200
   webp_quality: 82
   max_width: 1920
   watermark_enable: true
@@ -141,6 +142,7 @@ function normalizeParsedConfig(parsed = {}, needsSetup = false) {
           .trim()
           .replace(/^\/+|\/+$/g, '') || 'pub',
       enable_optimization: img.enable_optimization !== false,
+      upload_rate_limit: img.upload_rate_limit !== undefined ? Number(img.upload_rate_limit) : 1200,
       watermark_image: safeWatermarkImg,
       watermark_image_dark: safeWatermarkDark,
       watermark_auto_contrast: img.watermark_auto_contrast !== false

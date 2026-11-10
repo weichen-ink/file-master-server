@@ -363,11 +363,13 @@ function requireApiOrAdmin(req, res, next) {
 function createRateLimiter({ windowMs = 60 * 1000, max = 30, message = 'Too many requests, please slow down.' } = {}) {
   const hits = new Map();
   return (req, res, next) => {
+    const effectiveMax = typeof max === 'function' ? max(req) : max;
+    if (typeof effectiveMax === 'number' && effectiveMax <= 0) return next();
     const ip = getClientIp(req);
     const now = Date.now();
     const record = hits.get(ip) || [];
     const recent = record.filter((ts) => now - ts < windowMs);
-    if (recent.length >= max) {
+    if (recent.length >= effectiveMax) {
       hits.set(ip, recent);
       const retryAfter = Math.max(1, Math.ceil((recent[0] + windowMs - now) / 1000));
       res.setHeader?.('Retry-After', String(retryAfter));

@@ -130,7 +130,15 @@ function registerUploadRoutes(app) {
 
   const uploadRateLimiter = createRateLimiter({
     windowMs: 60 * 1000,
-    max: 120,
+    max: () => {
+      const cfg = getConfig();
+      const val = cfg.image_host?.upload_rate_limit;
+      if (val !== undefined) {
+        const num = Number(val);
+        return isNaN(num) ? 1200 : num;
+      }
+      return 1200;
+    },
     message: 'Upload rate limit exceeded. Please wait before uploading more files.'
   });
 
