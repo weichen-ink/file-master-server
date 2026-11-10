@@ -306,7 +306,7 @@ function shouldPurgeImageCache(oldCfg, newCfg) {
   return IMAGE_PROCESSING_CONFIG_KEYS.some((k) => o[k] !== n[k]);
 }
 
-app.put('/api/platform/config', requireAdmin, (req, res) => {
+const handleConfigUpdate = (req, res) => {
   const oldCfg = getConfig();
   const oldAdminPath = oldCfg.admin_path;
   const { mode, rawYaml, patch } = req.body || {};
@@ -362,7 +362,10 @@ app.put('/api/platform/config', requireAdmin, (req, res) => {
   } catch (err) {
     res.status(500).json({ error: 'Failed to save configuration: ' + err.message });
   }
-});
+};
+
+app.put('/api/platform/config', requireAdmin, handleConfigUpdate);
+app.post('/api/platform/config', requireAdmin, handleConfigUpdate);
 
 // ================= 1.5 Upstream Repository & Hot Update APIs =================
 app.get('/api/platform/update/status', requireAdmin, async (req, res) => {

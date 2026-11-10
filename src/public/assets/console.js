@@ -1752,7 +1752,7 @@ async function saveBackupConfig() {
 
   try {
     const res = await fetch('/api/platform/config', {
-      method: 'POST',
+      method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         mode: 'form',
@@ -1768,8 +1768,16 @@ async function saveBackupConfig() {
         }
       })
     });
+    if (!res.ok) {
+      const text = await res.text();
+      let errMsg = text;
+      try {
+        const errObj = JSON.parse(text);
+        if (errObj && errObj.error) errMsg = errObj.error;
+      } catch {}
+      throw new Error(errMsg);
+    }
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || '保存失败');
     showToast('💾 ' + t('toastConfigSaved'));
     await loadBackupStatus();
   } catch (err) {

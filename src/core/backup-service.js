@@ -419,3 +419,4 @@ module.exports = {
   resolveBackupDir,
   isBackupInProgress: () => backupInProgress
 };
+

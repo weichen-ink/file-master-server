@@ -76,3 +76,4 @@ test('performBackup executes full archive, applies local retention and records s
     fs.rmSync(tmpBackupDir, { recursive: true, force: true });
   }
 });
+
