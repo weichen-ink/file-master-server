@@ -64,6 +64,15 @@ Use HTTPS for access from other devices. Set `trust_proxy` to your trusted rever
 
 Persistent data (`./storage` and `./data`) are mounted to your host automatically.
 
+### Storage, backups, and update recovery
+
+- Run one server process per writable storage directory, including when using PM2 or Docker.
+- The filesystem and mount permissions must allow hard links within the upload directory. Uploads publish complete files through an exclusive hard link. Unsupported storage returns **HTTP 501**; copying directly to a public filename cannot provide the same atomic publication guarantee.
+- Stop writes or use a consistent snapshot when backing up `storage/raw/`, `data/` (including `sha_index.json`), `config.yaml`, and custom watermark files. Restore originals and their matching index together; deleting the index loses the existing integrity baselines.
+- Update recovery restores user configuration and watermarks. It does **not** guarantee rollback of updated source code and installed dependencies. If dependency installation fails, resolve the installation error before retrying the update.
+
+See [batch processing and scale](docs/SCALABILITY.md) for recovery and verification details.
+
 ---
 
 ### Option 2: Running with Node.js & PM2
@@ -189,6 +198,13 @@ For large batches, the console supports cancellation, retries of unfinished uplo
 ### 批处理与完整校验
 
 千张级图片使用单进程文件存储与轻量索引；同一份可写目录只运行一个服务实例。网页支持停止上传、重试未完成项、每页 60 项的缩略图库，以及原文件 SHA-256 完整校验和报告下载。恢复清单、索引兼容性、备份要求及验证边界见[批处理与规模说明](docs/SCALABILITY.md)。
+
+### 存储、备份与更新恢复要求
+
+- 每份可写存储目录只运行一个服务进程，使用 PM2 或 Docker 时也需遵守。
+- 上传目录所在的文件系统及挂载权限必须允许同目录硬链接。上传通过独占硬链接一次性发布完整文件；不支持时返回 **HTTP 501**。直接复制到公开文件名无法提供相同的原子发布保证。
+- 备份时暂停写入或使用一致性快照，保存 `storage/raw/`、`data/`（包含 `sha_index.json`）、`config.yaml` 和自定义水印。恢复原图时同时恢复对应索引；删除索引会丢失已有完整性基准。
+- 更新恢复保障用户配置和水印的恢复，**不保证已更新的源代码和依赖整体回退**。依赖安装失败时，应先排除安装错误，再重试更新。
 
 ### 📄 许可证
 [MIT License](LICENSE)
