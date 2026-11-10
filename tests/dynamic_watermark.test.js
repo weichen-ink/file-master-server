@@ -158,3 +158,53 @@ test('Watermark: smart resolution scaling handles 4K and portrait dimensions pro
     if (fs.existsSync(cache4kFile)) fs.unlinkSync(cache4kFile);
   }
 });
+
+test('Raw endpoint with ?wm= parameter serves optimized watermarked WebP', async () => {
+  const { registerPublicRoutes } = require('../src/modules/image-host/routes/public');
+  const tmpDir = path.join(STORAGE_DIR, 'raw', '2026', '11');
+  fs.mkdirSync(tmpDir, { recursive: true });
+  const rawPng = path.join(tmpDir, 'test_raw_wm.png');
+
+  await sharp({
+    create: { width: 500, height: 400, channels: 3, background: { r: 50, g: 150, b: 220 } }
+  }).png().toFile(rawPng);
+
+  let rawRouteHandler = null;
+  const mockApp = {
+    get(route, handler) {
+      if (route.includes(':rawSecretPath')) {
+        rawRouteHandler = handler;
+      }
+    }
+  };
+
+  registerPublicRoutes(mockApp);
+  assert.ok(rawRouteHandler, 'Raw route handler must be registered');
+
+  const headers = {};
+  let sentFile = null;
+  let status = 200;
+
+  const mockReq = {
+    method: 'GET',
+    params: { rawSecretPath: 'raw', year: '2026', month: '11', filename: 'test_raw_wm.png' },
+    query: { wm: 'text' },
+    headers: {}
+  };
+  const mockRes = {
+    setHeader(k, v) { headers[k] = v; },
+    status(s) { status = s; return this; },
+    sendFile(filePath) { sentFile = filePath; return this; }
+  };
+
+  try {
+    await rawRouteHandler(mockReq, mockRes, () => {});
+    assert.strictEqual(status, 200);
+    assert.strictEqual(headers['Content-Type'], 'image/webp');
+    assert.ok(sentFile && sentFile.endsWith('.wm_text.webp'), 'Must serve .wm_text.webp cache file');
+    assert.ok(fs.existsSync(sentFile), 'Served WebP cache file must exist');
+  } finally {
+    if (fs.existsSync(rawPng)) fs.unlinkSync(rawPng);
+    if (sentFile && fs.existsSync(sentFile)) fs.unlinkSync(sentFile);
+  }
+});

@@ -63,9 +63,11 @@ function registerPublicRoutes(app) {
       const rawWmParam = String(req.query.wm || req.query.watermark || '').toLowerCase().trim();
       const validWmTypes = ['image', 'text', 'tile'];
       const isCustomVariant = validWmTypes.includes(rawWmParam);
+      const isForceDefaultWm = rawWmParam === '1' || rawWmParam === 'true';
+      const isForceClean = rawWmParam === '0' || rawWmParam === 'false' || rawWmParam === 'clean' || rawWmParam === 'none';
 
       const globalWmEnabled = cfg.image_host?.watermark_enable !== false;
-      const shouldWatermark = isCustomVariant ? true : globalWmEnabled;
+      const shouldWatermark = isForceClean ? false : (isCustomVariant || isForceDefaultWm ? true : globalWmEnabled);
       const activeWmType = isCustomVariant
         ? rawWmParam
         : (cfg.image_host?.watermark_type || 'image');
@@ -125,6 +127,13 @@ function registerPublicRoutes(app) {
       setSecurityFileHeaders(res, rawFilePath);
 
       const ext = path.extname(rawFilePath).toLowerCase();
+
+      // If ?wm=... is requested and file is a processable image, serve watermarked WebP variant
+      const rawWmParam = String(req.query.wm || req.query.watermark || '').toLowerCase().trim();
+      if (rawWmParam && req.query.download !== '1' && req.query.raw !== '1' && PROCESSABLE_IMAGE_EXTS.has(ext)) {
+        return handleOptimizedPublicRequest(req, res, next);
+      }
+
       if (req.query.thumbnail === '1' && PROCESSABLE_IMAGE_EXTS.has(ext)) {
         const thumbnailPath = path.join(CACHE_DIR, year, month, `${path.basename(rawFilePath)}.thumb.webp`);
         const hadThumbnail = fs.existsSync(thumbnailPath);
