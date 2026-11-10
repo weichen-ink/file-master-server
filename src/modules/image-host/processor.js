@@ -208,9 +208,31 @@ function calcCoordinates(pos, mainW, mainH, wmW, wmH, margin) {
   }
 
   return {
-    left: Math.max(0, Math.round(left)),
-    top: Math.max(0, Math.round(top))
+    left: Math.max(0, Math.min(Math.max(0, mainW - wmW), Math.round(left))),
+    top: Math.max(0, Math.min(Math.max(0, mainH - wmH), Math.round(top)))
   };
+}
+
+/**
+ * Computes resolution-aware and aspect-ratio-aware layout metrics so that
+ * watermarks scale gracefully from standard 1080p up to 4K/8K images without
+ * becoming microscopic on high-res photos or cramped against image borders.
+ */
+function calcSmartWatermarkMetrics(targetWidth, targetHeight, userMargin = 24) {
+  const minDim = Math.min(targetWidth, targetHeight);
+  const maxDim = Math.max(targetWidth, targetHeight);
+  const isPortrait = targetHeight > targetWidth;
+
+  // Normalized visual dimension: balances narrow-width portrait images and ultrawide shots
+  const baseNorm = Math.max(minDim, Math.round(maxDim * 0.45));
+  // Scale factor relative to standard 1080p canvas (1080p = 1.0, 4K = ~2.0 - 2.5)
+  const resolutionScale = Math.max(0.65, Math.min(3.5, baseNorm / 1080));
+  // Dynamic margin: scales proportionally with resolution so 4K images don't look cramped
+  const dynamicMargin = Math.max(12, Math.round(userMargin * resolutionScale));
+  // Portrait compensation: prevents narrow mobile/camera portrait photos from having tiny watermarks
+  const portraitBoost = isPortrait ? Math.min(1.4, Math.pow(targetHeight / targetWidth, 0.4)) : 1.0;
+
+  return { minDim, maxDim, baseNorm, resolutionScale, dynamicMargin, portraitBoost };
 }
 
 /**
@@ -223,6 +245,12 @@ async function buildWatermarkOverlay(imgCfg, targetWidth, targetHeight, basePipe
   const margin = Number(imgCfg.watermark_margin) || 24;
   const pos = imgCfg.watermark_pos || 'bottom-right';
   const type = imgCfg.watermark_type || 'image';
+
+  const { minDim, baseNorm, resolutionScale, dynamicMargin, portraitBoost } = calcSmartWatermarkMetrics(
+    targetWidth,
+    targetHeight,
+    margin
+  );
 
   // Mode 1: PNG image watermark
   if (type === 'image') {
@@ -238,13 +266,27 @@ async function buildWatermarkOverlay(imgCfg, targetWidth, targetHeight, basePipe
       : path.resolve(ROOT_DIR, './wm-dark.png');
     await ensureDefaultWatermark(wmPathDark, imgCfg.watermark_text || '© FileMaster', true);
 
-    const wmTargetWidth = Math.max(60, Math.round(targetWidth * scale));
+    const effectiveScale = Math.min(0.4, scale * portraitBoost);
+    let wmTargetWidth = Math.round(targetWidth * effectiveScale);
+    const minPresenceWidth = Math.round(minDim * Math.max(0.18, scale * 1.15));
+    if (wmTargetWidth < minPresenceWidth) {
+      wmTargetWidth = minPresenceWidth;
+    }
+    wmTargetWidth = Math.min(Math.round(targetWidth * 0.65), Math.max(60, wmTargetWidth));
 
     let selectedWmPath = wmPathLight;
+    let wmAspect = 82 / 245; // default ratio based on custom logo
+    try {
+      const initialMeta = await sharp(wmPathLight).metadata();
+      if (initialMeta.width && initialMeta.height) {
+        wmAspect = initialMeta.height / initialMeta.width;
+      }
+    } catch {}
+
     if (imgCfg.watermark_auto_contrast !== false && basePipeline) {
       try {
-        const approxH = Math.round(wmTargetWidth * (80 / 360));
-        const { left: testLeft, top: testTop } = calcCoordinates(pos, targetWidth, targetHeight, wmTargetWidth, approxH, margin);
+        const approxH = Math.max(20, Math.round(wmTargetWidth * wmAspect));
+        const { left: testLeft, top: testTop } = calcCoordinates(pos, targetWidth, targetHeight, wmTargetWidth, approxH, dynamicMargin);
         const wmRegionW = Math.min(targetWidth - testLeft, wmTargetWidth);
         const wmRegionH = Math.min(targetHeight - testTop, approxH);
         if (wmRegionW > 0 && wmRegionH > 0) {
@@ -289,8 +331,8 @@ async function buildWatermarkOverlay(imgCfg, targetWidth, targetHeight, basePipe
       targetWidth,
       targetHeight,
       wmMeta.width || wmTargetWidth,
-      wmMeta.height || 40,
-      margin
+      wmMeta.height || Math.round(wmTargetWidth * wmAspect),
+      dynamicMargin
     );
     return { input: resizedBuffer, left, top };
   }
@@ -300,6 +342,12 @@ async function buildWatermarkOverlay(imgCfg, targetWidth, targetHeight, basePipe
     const text = escapeXml(imgCfg.watermark_text || '© FileMaster');
     let textColor = imgCfg.watermark_color || '#ffffff';
     let shadowColor = 'rgba(0,0,0,0.65)';
+
+    const fontSize = Math.max(16, Math.round(baseNorm * 0.026));
+    const tileW = Math.round(fontSize * Math.max(9, text.length * 0.85));
+    const tileH = Math.round(fontSize * 5.6);
+    const shadowOffset = Math.max(1, Math.round(resolutionScale * 1.2));
+    const shadowBlur = Math.max(2, Math.round(resolutionScale * 2.5));
 
     if (imgCfg.watermark_auto_contrast !== false && basePipeline) {
       try {
@@ -318,15 +366,12 @@ async function buildWatermarkOverlay(imgCfg, targetWidth, targetHeight, basePipe
     }
 
     const fontFamily = resolveFontFamily(imgCfg.watermark_font);
-    const fontSize = Math.max(16, Math.round(targetWidth * 0.025));
-    const tileW = fontSize * 10;
-    const tileH = fontSize * 6;
     const svgTile = `
       <svg width="${tileW}" height="${tileH}" xmlns="http://www.w3.org/2000/svg">
         <g transform="rotate(-28 ${tileW / 2} ${tileH / 2})" opacity="${opacity}">
           <text x="50%" y="50%" dy="0.35em" dominant-baseline="central" text-anchor="middle"
                 fill="${textColor}" font-family="${fontFamily}" font-weight="bold" font-size="${fontSize}"
-                style="filter: drop-shadow(1px 1px 2px ${shadowColor});">${text}</text>
+                style="filter: drop-shadow(${shadowOffset}px ${shadowOffset}px ${shadowBlur}px ${shadowColor});">${text}</text>
         </g>
       </svg>
     `;
@@ -335,15 +380,24 @@ async function buildWatermarkOverlay(imgCfg, targetWidth, targetHeight, basePipe
 
   // Mode 3: Corner text watermark
   const text = escapeXml(imgCfg.watermark_text || '© FileMaster');
-  const wmTargetWidth = Math.max(100, Math.round(targetWidth * scale));
-  const fontSize = Math.max(16, Math.round(wmTargetWidth / Math.max(4, text.length * 0.7)));
-  const svgW = Math.min(targetWidth - margin * 2, Math.max(wmTargetWidth, fontSize * text.length));
-  const svgH = Math.round(fontSize * 1.8);
-  const { left, top } = calcCoordinates(pos, targetWidth, targetHeight, svgW, svgH, margin);
+  const effectiveScale = Math.min(0.4, scale * portraitBoost);
+  const wmTargetWidth = Math.max(100, Math.round(targetWidth * effectiveScale));
+
+  // Minimum legible font size based on image resolution
+  const minLegibleFontSize = Math.max(14, Math.round(baseNorm * 0.024));
+  const calculatedFontSize = Math.round(wmTargetWidth / Math.max(4, text.length * 0.65));
+  const fontSize = Math.max(minLegibleFontSize, calculatedFontSize);
+
+  const charW = fontSize * 0.72;
+  const svgW = Math.min(targetWidth - dynamicMargin * 2, Math.max(wmTargetWidth, Math.round(charW * text.length + fontSize * 1.2)));
+  const svgH = Math.round(fontSize * 1.9);
+  const { left, top } = calcCoordinates(pos, targetWidth, targetHeight, svgW, svgH, dynamicMargin);
+
+  const shadowOffset = Math.max(1, Math.round(resolutionScale * 1.5));
+  const shadowBlur = Math.max(2, Math.round(resolutionScale * 2.8));
 
   let textColor = imgCfg.watermark_color || '#ffffff';
   let shadowColor = 'rgba(0,0,0,0.7)';
-  let shadowBlur = '3px';
 
   if (imgCfg.watermark_auto_contrast !== false && basePipeline) {
     try {
@@ -362,7 +416,6 @@ async function buildWatermarkOverlay(imgCfg, targetWidth, targetHeight, basePipe
         if (cornerLuma > 140) {
           textColor = imgCfg.watermark_color_dark || '#111827';
           shadowColor = 'rgba(255,255,255,0.85)';
-          shadowBlur = '2px';
         }
       }
     } catch {
@@ -377,7 +430,7 @@ async function buildWatermarkOverlay(imgCfg, targetWidth, targetHeight, basePipe
             fill="${textColor}" fill-opacity="${opacity}"
             font-family="${fontFamily}"
             font-weight="700" font-size="${fontSize}"
-            style="filter: drop-shadow(1px 2px ${shadowBlur} ${shadowColor});">${text}</text>
+            style="filter: drop-shadow(${shadowOffset}px ${shadowOffset}px ${shadowBlur}px ${shadowColor});">${text}</text>
     </svg>
   `;
   return { input: Buffer.from(svgText), left, top };
@@ -426,7 +479,8 @@ async function processImage(inputPathForSharp, cacheFilePath, imgCfg) {
   }
 
   const minWidthForWm = Number(imgCfg.watermark_min_width) || 320;
-  if (imgCfg.watermark_enable && targetWidth >= minWidthForWm) {
+  const hasSufficientSize = Math.max(targetWidth, targetHeight) >= minWidthForWm && Math.min(targetWidth, targetHeight) >= 120;
+  if (imgCfg.watermark_enable && hasSufficientSize) {
     const overlay = await buildWatermarkOverlay(imgCfg, targetWidth, targetHeight, pipeline);
     pipeline = pipeline.composite([overlay]);
   }

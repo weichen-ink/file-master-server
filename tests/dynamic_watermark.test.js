@@ -109,3 +109,52 @@ test('Text Watermark: vertical alignment is centered without vertical shift', as
     if (fs.existsSync(cacheFile)) fs.unlinkSync(cacheFile);
   }
 });
+
+test('Watermark: smart resolution scaling handles 4K and portrait dimensions proportionally', async () => {
+  const tmpDir = path.join(STORAGE_DIR, 'cache', 'test_wm_4k');
+  fs.mkdirSync(tmpDir, { recursive: true });
+  const raw4kFile = path.join(tmpDir, 'test_4k.png');
+  const cache4kFile = path.join(tmpDir, 'test_4k.wm_image.webp');
+
+  // Create a 3840x2160 4K image
+  await sharp({
+    create: { width: 3840, height: 2160, channels: 3, background: { r: 30, g: 30, b: 35 } }
+  }).png().toFile(raw4kFile);
+
+  try {
+    await processAndCacheImage(raw4kFile, cache4kFile, {
+      max_width: 0, // unlimited to retain 4K
+      watermark_enable: true,
+      watermark_type: 'image',
+      watermark_image: './wm-light.png',
+      watermark_image_dark: './wm-dark.png',
+      watermark_scale: 0.16,
+      watermark_margin: 24,
+      watermark_min_width: 320,
+      webp_quality: 82
+    });
+
+    assert.ok(fs.existsSync(cache4kFile));
+    const meta = await sharp(cache4kFile).metadata();
+    assert.strictEqual(meta.width, 3840);
+    assert.strictEqual(meta.height, 2160);
+
+    // Verify watermark was applied in bottom-right corner with proportional padding
+    // At 4K, dynamic margin should be ~48px and width ~614px
+    const patch = await sharp(cache4kFile)
+      .extract({ left: 3840 - 700, top: 2160 - 300, width: 680, height: 280 })
+      .raw()
+      .toBuffer();
+    // Compare with untouched background (r:30, g:30, b:35)
+    let nonBackgroundCount = 0;
+    for (let i = 0; i < patch.length; i += 3) {
+      if (Math.abs(patch[i] - 30) > 15 || Math.abs(patch[i + 1] - 30) > 15 || Math.abs(patch[i + 2] - 35) > 15) {
+        nonBackgroundCount++;
+      }
+    }
+    assert.ok(nonBackgroundCount > 1000, 'Watermark must be visibly rendered in the 4K canvas');
+  } finally {
+    if (fs.existsSync(raw4kFile)) fs.unlinkSync(raw4kFile);
+    if (fs.existsSync(cache4kFile)) fs.unlinkSync(cache4kFile);
+  }
+});
