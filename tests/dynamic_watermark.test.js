@@ -80,4 +80,3 @@ test('Dynamic Watermark: ?wm= resolves isolated cache variants and applies water
     if (fs.existsSync(cacheTextFile)) fs.unlinkSync(cacheTextFile);
   }
 });
-

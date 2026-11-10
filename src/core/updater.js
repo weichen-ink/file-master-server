@@ -17,6 +17,8 @@ const PKG_PATH = path.join(ROOT_DIR, 'package.json');
 const PKG_LOCK_PATH = path.join(ROOT_DIR, 'package-lock.json');
 const WATERMARK_PATH = path.join(ROOT_DIR, 'watermark.png');
 
+const WM_BACKUP_DIR = path.join(ROOT_DIR, 'backups', 'watermarks');
+
 function getWatermarkFilesToPreserve() {
   const candidates = new Set(['watermark.png', 'watermark-dark.png']);
   try {
@@ -37,27 +39,63 @@ function getWatermarkFilesToPreserve() {
 
 function backupWatermarkFiles() {
   const backups = new Map();
+  try {
+    fs.mkdirSync(WM_BACKUP_DIR, { recursive: true });
+  } catch {}
+
   for (const rel of getWatermarkFilesToPreserve()) {
     const full = path.join(ROOT_DIR, rel);
     if (fs.existsSync(full)) {
-      backups.set(full, fs.readFileSync(full));
+      try {
+        const content = fs.readFileSync(full);
+        backups.set(full, content);
+        const diskTarget = path.join(WM_BACKUP_DIR, rel.replace(/[/\\]/g, '_'));
+        fs.mkdirSync(path.dirname(diskTarget), { recursive: true });
+        fs.writeFileSync(diskTarget, content);
+      } catch (err) {
+        console.warn(`[Updater] Watermark backup warning for ${rel}:`, err.message);
+      }
     }
   }
   return backups;
 }
 
 function restoreWatermarkFiles(backups) {
-  if (!backups || !(backups instanceof Map)) return { success: true, failed: [] };
   const failed = [];
-  for (const [full, buf] of backups.entries()) {
-    try {
-      fs.mkdirSync(path.dirname(full), { recursive: true });
-      fs.writeFileSync(full, buf);
-    } catch (err) {
-      console.error(`[FileMaster Updater] Failed to restore watermark file ${full}:`, err);
-      failed.push({ file: full, error: err.message });
+  const restoredPaths = new Set();
+
+  if (backups instanceof Map) {
+    for (const [full, buf] of backups.entries()) {
+      try {
+        fs.mkdirSync(path.dirname(full), { recursive: true });
+        fs.writeFileSync(full, buf);
+        restoredPaths.add(full);
+      } catch (err) {
+        console.error(`[FileMaster Updater] Failed to restore watermark file ${full}:`, err);
+        failed.push({ file: full, error: err.message });
+      }
     }
   }
+
+  // Also check disk backups for any configured watermark files not already restored
+  const filesToPreserve = getWatermarkFilesToPreserve();
+  for (const rel of filesToPreserve) {
+    const full = path.join(ROOT_DIR, rel);
+    if (!restoredPaths.has(full)) {
+      const diskTarget = path.join(WM_BACKUP_DIR, rel.replace(/[/\\]/g, '_'));
+      if (fs.existsSync(diskTarget)) {
+        try {
+          fs.mkdirSync(path.dirname(full), { recursive: true });
+          fs.writeFileSync(full, fs.readFileSync(diskTarget));
+          restoredPaths.add(full);
+        } catch (err) {
+          console.error(`[FileMaster Updater] Failed to restore watermark file from disk ${full}:`, err);
+          failed.push({ file: full, error: err.message });
+        }
+      }
+    }
+  }
+
   return {
     success: failed.length === 0,
     failed
@@ -525,5 +563,6 @@ module.exports = {
   restartServerProcess,
   getWatermarkFilesToPreserve,
   backupWatermarkFiles,
-  restoreWatermarkFiles
+  restoreWatermarkFiles,
+  WM_BACKUP_DIR
 };

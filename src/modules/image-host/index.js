@@ -431,18 +431,29 @@ function scanAllImages(cfg, forceRefresh = false) {
         const primaryCacheFile = getWebpCacheFilePath(year, month, file);
         const legacyCacheFile = getLegacyWebpCacheFilePath(year, month, file);
         let activeCacheFile = null;
+        let assetCacheBytes = 0;
         if (assetMeta.isProcessableImage) {
-          if (fs.existsSync(primaryCacheFile)) {
-            activeCacheFile = primaryCacheFile;
-          } else if (!hasCollision && fs.existsSync(legacyCacheFile)) {
-            activeCacheFile = legacyCacheFile;
+          const candidateCacheFiles = [
+            primaryCacheFile,
+            getWebpCacheFilePath(year, month, file, 'clean'),
+            getWebpCacheFilePath(year, month, file, 'image'),
+            getWebpCacheFilePath(year, month, file, 'text'),
+            getWebpCacheFilePath(year, month, file, 'tile'),
+            ...(!hasCollision ? [legacyCacheFile] : [])
+          ];
+          for (const cPath of candidateCacheFiles) {
+            if (fs.existsSync(cPath)) {
+              if (!activeCacheFile) activeCacheFile = cPath;
+              try {
+                assetCacheBytes += fs.statSync(cPath).size;
+              } catch {}
+            }
           }
         }
         const hasCache = Boolean(activeCacheFile);
-        let cacheSize = 0;
+        const cacheSize = assetCacheBytes;
         if (hasCache) {
-          cacheSize = fs.statSync(activeCacheFile).size;
-          totalCacheBytes += cacheSize;
+          totalCacheBytes += assetCacheBytes;
         }
 
         const relKey = `${year}/${month}/${file}`;
@@ -1093,5 +1104,6 @@ module.exports = {
   scanAllImages,
   invalidateScanCache,
   getWebpCacheFilePath,
-  findRawFile
+  findRawFile,
+  clearCacheDir
 };

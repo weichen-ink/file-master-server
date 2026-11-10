@@ -85,3 +85,43 @@ test('Updater: preserves, backs up, and restores dual watermark files with error
   assert.strictEqual(failRes.failed.length, 1);
   assert.strictEqual(failRes.failed[0].file, __dirname);
 });
+
+test('Updater: persistent watermark disk backup survives reset or process restart', () => {
+  const {
+    backupWatermarkFiles,
+    restoreWatermarkFiles,
+    WM_BACKUP_DIR
+  } = require('../src/core/updater');
+  const fs = require('fs');
+  const path = require('path');
+
+  const rootDir = path.resolve(__dirname, '..');
+  const customWmPath = path.join(rootDir, 'watermark.png');
+  const originalBytes = fs.existsSync(customWmPath) ? fs.readFileSync(customWmPath) : null;
+
+  try {
+    const dummyBytes = Buffer.from('persistent-watermark-bytes-12345');
+    fs.writeFileSync(customWmPath, dummyBytes);
+
+    // 1. Back up watermarks
+    const backups = backupWatermarkFiles();
+    assert.ok(backups.has(customWmPath));
+
+    // Verify disk backup exists in WM_BACKUP_DIR
+    const diskBackup = path.join(WM_BACKUP_DIR, 'watermark.png');
+    assert.ok(fs.existsSync(diskBackup), 'Disk backup file must exist in backups/watermarks');
+    assert.deepStrictEqual(fs.readFileSync(diskBackup), dummyBytes);
+
+    // 2. Simulate git reset --hard wiping the file
+    fs.writeFileSync(customWmPath, Buffer.from('upstream-clobbered-bytes'));
+
+    // 3. Simulate process restart where in-memory Map is lost (pass null)
+    const restoreRes = restoreWatermarkFiles(null);
+    assert.strictEqual(restoreRes.success, true);
+    assert.deepStrictEqual(fs.readFileSync(customWmPath), dummyBytes, 'Watermark must be restored from disk backup');
+  } finally {
+    if (originalBytes) {
+      fs.writeFileSync(customWmPath, originalBytes);
+    }
+  }
+});
