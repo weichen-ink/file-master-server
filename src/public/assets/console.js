@@ -249,6 +249,10 @@ function switchTab(tabId, btnEl) {
   } else if (tabId === 'settings' || tabId === 'media' || tabId === 'integration' || tabId === 'security' || tabId === 'maintenance' || tabId === 'platform') {
     loadConfigForEdit();
     if (tabId === 'settings' || tabId === 'integration') loadServerMetrics(false);
+    if (tabId === 'maintenance') {
+      loadLocalUpdateStatus();
+      loadBackupStatus();
+    }
   } else if (tabId === 'future-files') {
     loadShares();
   }
@@ -1671,6 +1675,175 @@ async function triggerServerRestartOnly() {
   } finally {
     btnRestart.disabled = false;
     btnRestart.textContent = t('btnRestartOnly');
+  }
+}
+
+// ================= Automated Backup & Disaster Recovery Functions =================
+async function loadBackupStatus() {
+  try {
+    const res = await fetch('/api/platform/backup/status');
+    if (!res.ok) return;
+    const data = await res.json();
+    const cfg = data.config || {};
+    const last = data.lastBackup;
+
+    const elEnabled = document.getElementById('f_backup_enabled');
+    if (elEnabled) elEnabled.value = cfg.enabled ? 'true' : 'false';
+
+    const elSched = document.getElementById('f_backup_schedule');
+    if (elSched) elSched.value = cfg.schedule || '03:00';
+
+    const elRet = document.getElementById('f_backup_retention');
+    if (elRet) elRet.value = cfg.retention || 7;
+
+    const elLocal = document.getElementById('f_backup_local_dir');
+    if (elLocal) elLocal.value = cfg.local_dir || './data/backups';
+
+    const elRclone = document.getElementById('f_backup_rclone_target');
+    if (elRclone) elRclone.value = cfg.rclone_target || '';
+
+    const elBark = document.getElementById('f_backup_bark_url');
+    if (elBark && !elBark.dataset.edited) {
+      elBark.value = (rawConfigObj?.backup?.bark_url) || '';
+      elBark.oninput = () => { elBark.dataset.edited = '1'; };
+    }
+
+    // Render banner
+    const banner = document.getElementById('backupStatusBanner');
+    const iconEl = document.getElementById('backupBannerIcon');
+    const textEl = document.getElementById('backupBannerText');
+    if (banner && textEl) {
+      banner.className = 'status-banner';
+      if (!last) {
+        banner.classList.add('is-running');
+        iconEl.textContent = 'ℹ️';
+        textEl.textContent = '尚未执行过自动备份。配置完成后将在每日定时触发，或点击右上方「立即手动备份」。';
+      } else if (last.success) {
+        banner.classList.add('is-success');
+        iconEl.textContent = '✅';
+        const dateStr = new Date(last.completedAt).toLocaleString();
+        const rcloneStatus = last.rcloneTarget
+          ? (last.rcloneSuccess ? ` · ☁️ 已同步至 ${last.rcloneTarget}` : ` · ⚠️ 远端同步异常`)
+          : '';
+        textEl.textContent = `上次备份成功：${last.archiveFilename} (${last.archiveSizeFormatted}，耗时 ${last.durationSec}s)${rcloneStatus} · 时间: ${dateStr}`;
+      } else {
+        banner.classList.add('is-error');
+        iconEl.textContent = '❌';
+        textEl.textContent = `上次备份失败: ${last.error || '未知异常'} (时间: ${new Date(last.completedAt).toLocaleString()})`;
+      }
+    }
+
+    const summaryEl = document.getElementById('backupFilesSummary');
+    if (summaryEl) {
+      summaryEl.textContent = `本地备份目录 (${cfg.resolved_dir}) 已存储 ${data.localBackupsCount || 0} 份归档。`;
+    }
+  } catch (err) {
+    console.error('Failed to load backup status:', err);
+  }
+}
+
+async function saveBackupConfig() {
+  const enabled = document.getElementById('f_backup_enabled')?.value === 'true';
+  const schedule = document.getElementById('f_backup_schedule')?.value || '03:00';
+  const retention = parseInt(document.getElementById('f_backup_retention')?.value, 10) || 7;
+  const local_dir = document.getElementById('f_backup_local_dir')?.value.trim() || './data/backups';
+  const rclone_target = document.getElementById('f_backup_rclone_target')?.value.trim() || '';
+  const bark_url = document.getElementById('f_backup_bark_url')?.value.trim() || '';
+
+  try {
+    const res = await fetch('/api/platform/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mode: 'form',
+        patch: {
+          backup: {
+            enabled,
+            schedule,
+            retention,
+            local_dir,
+            rclone_target,
+            bark_url
+          }
+        }
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '保存失败');
+    showToast('💾 ' + t('toastConfigSaved'));
+    await loadBackupStatus();
+  } catch (err) {
+    alert('保存备份设置失败: ' + err.message);
+  }
+}
+
+async function triggerRunBackup() {
+  const btn = document.getElementById('btnManualBackup');
+  const logBox = document.getElementById('backupLogBox');
+  if (btn) btn.disabled = true;
+  if (logBox) {
+    logBox.classList.remove('hidden');
+    logBox.textContent = `[${new Date().toLocaleTimeString()}] 正在启动全量归档并同步，请稍候...\n`;
+  }
+
+  try {
+    const res = await fetch('/api/platform/backup/run', { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '备份执行失败');
+    if (logBox && Array.isArray(data.logs)) {
+      logBox.textContent = data.logs.join('\n');
+    }
+    showToast('✅ ' + t('backupSuccess'));
+    await loadBackupStatus();
+  } catch (err) {
+    if (logBox) {
+      logBox.textContent += `\n❌ 备份失败: ${err.message}`;
+    }
+    alert(t('backupFailed', { error: err.message }));
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function testBarkPush() {
+  const bark_url = document.getElementById('f_backup_bark_url')?.value.trim();
+  if (!bark_url) {
+    alert('请先输入 Bark 手机推送 URL');
+    return;
+  }
+  showToast('🔔 正在发送测试推送...');
+  try {
+    const res = await fetch('/api/platform/backup/test-bark', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bark_url })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '推送失败');
+    alert('✅ ' + (data.message || 'Bark 测试推送已成功送达手机！'));
+  } catch (err) {
+    alert('❌ Bark 推送测试失败: ' + err.message);
+  }
+}
+
+async function testRcloneConnectivity() {
+  const rclone_target = document.getElementById('f_backup_rclone_target')?.value.trim();
+  if (!rclone_target) {
+    alert('请先输入 Rclone / OneDrive 目标路径（例如 onedrive:FileMaster备份）');
+    return;
+  }
+  showToast('☁️ 正在测试远端连通性，请稍候...');
+  try {
+    const res = await fetch('/api/platform/backup/test-rclone', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rclone_target })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '连接失败');
+    alert('✅ ' + (data.message || '远程路径连通成功！'));
+  } catch (err) {
+    alert('❌ Rclone 连通测试失败: ' + err.message);
   }
 }
 

@@ -45,6 +45,13 @@ const {
   recoverInterruptedUpdate
 } = require('./core/updater');
 const { appendAuditLog } = require('./core/audit');
+const {
+  performBackup,
+  testBarkNotification,
+  testRcloneTarget,
+  getBackupStatus
+} = require('./core/backup-service');
+const { startBackupScheduler } = require('./core/backup-scheduler');
 const { registerImageHostModule, clearCacheDir, getStorageHealth } = require('./modules/image-host');
 const { registerShareModule } = require('./modules/share');
 
@@ -485,6 +492,44 @@ app.get('/api/platform/backup/download', requireAdmin, (req, res) => {
   });
 });
 
+// ================= 1.7 Automated Backup & Disaster Recovery APIs =================
+app.get('/api/platform/backup/status', requireAdmin, (req, res) => {
+  try {
+    res.json(getBackupStatus());
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/platform/backup/run', requireAdmin, async (req, res) => {
+  try {
+    const result = await performBackup({ manual: true });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/platform/backup/test-bark', requireAdmin, async (req, res) => {
+  try {
+    const url = req.body?.bark_url || getConfig().backup?.bark_url;
+    const result = await testBarkNotification(url);
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.post('/api/platform/backup/test-rclone', requireAdmin, async (req, res) => {
+  try {
+    const target = req.body?.rclone_target || getConfig().backup?.rclone_target;
+    const result = await testRcloneTarget(target);
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 // ================= 2. Mount Platform Modules =================
 // Module 1: Image Host & Asset Manager
 registerImageHostModule(app);
@@ -633,6 +678,10 @@ function startServer(port, retriesLeft = 6) {
       console.log(`  💡 提示: 按 Ctrl+C 可停止运行`);
       console.log(divider);
       console.log('');
+
+      if (isConfigInitialized()) {
+        startBackupScheduler();
+      }
     }
   });
 

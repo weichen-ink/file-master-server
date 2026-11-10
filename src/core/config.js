@@ -65,6 +65,13 @@ image_host:
   watermark_color: "#ffffff"
   watermark_color_dark: "#111827"
   watermark_font: system
+backup:
+  enabled: true
+  retention: 7
+  schedule: "03:00"
+  local_dir: "./data/backups"
+  rclone_target: ""
+  bark_url: ""
 `;
 }
 
@@ -146,6 +153,14 @@ function normalizeParsedConfig(parsed = {}, needsSetup = false) {
       watermark_image: safeWatermarkImg,
       watermark_image_dark: safeWatermarkDark,
       watermark_auto_contrast: img.watermark_auto_contrast !== false
+    },
+    backup: {
+      enabled: (parsed.backup?.enabled !== undefined) ? (parsed.backup.enabled !== false && parsed.backup.enabled !== 'false') : true,
+      retention: Math.max(1, Number(parsed.backup?.retention) || Number(defaults.backup?.retention) || 7),
+      schedule: String(parsed.backup?.schedule || defaults.backup?.schedule || '03:00').trim(),
+      local_dir: String(parsed.backup?.local_dir ?? defaults.backup?.local_dir ?? './data/backups').trim() || './data/backups',
+      rclone_target: String(parsed.backup?.rclone_target ?? defaults.backup?.rclone_target ?? '').trim(),
+      bark_url: String(parsed.backup?.bark_url ?? defaults.backup?.bark_url ?? '').trim()
     }
   };
 }
@@ -445,6 +460,28 @@ function prepareConfigPatch(patch = {}) {
     for (const k of imgKeys) {
       if (patch.image_host[k] !== undefined) {
         doc.setIn(['image_host', k], patch.image_host[k]);
+      }
+    }
+  }
+
+  if (patch.backup && typeof patch.backup === 'object') {
+    const backupKeys = [
+      'enabled',
+      'retention',
+      'schedule',
+      'local_dir',
+      'rclone_target',
+      'bark_url'
+    ];
+    for (const k of backupKeys) {
+      if (patch.backup[k] !== undefined) {
+        if (k === 'enabled') {
+          doc.setIn(['backup', k], patch.backup[k] !== false && patch.backup[k] !== 'false');
+        } else if (k === 'retention') {
+          doc.setIn(['backup', k], Math.max(1, Number(patch.backup[k]) || 7));
+        } else {
+          doc.setIn(['backup', k], String(patch.backup[k] || '').trim());
+        }
       }
     }
   }

@@ -40,14 +40,14 @@ function createUpdater({ rootDir = ROOT_DIR, config = defaultConfig, runCommand 
         if (userParsed[key] === undefined) {
           userDoc.set(key, val);
         } else if (
-          key === 'image_host' &&
+          (key === 'image_host' || key === 'backup') &&
           val &&
           typeof val === 'object' &&
-          typeof userParsed.image_host === 'object'
+          typeof userParsed[key] === 'object'
         ) {
           for (const [subKey, subVal] of Object.entries(val)) {
-            if (userParsed.image_host[subKey] === undefined) {
-              userDoc.setIn(['image_host', subKey], subVal);
+            if (userParsed[key][subKey] === undefined) {
+              userDoc.setIn([key, subKey], subVal);
             }
           }
         }
