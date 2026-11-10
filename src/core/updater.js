@@ -38,24 +38,31 @@ function getWatermarkFilesToPreserve() {
   return [...candidates];
 }
 
-function backupWatermarkFiles(targetBackupDir = WM_BACKUP_DIR) {
+function backupWatermarkFiles(targetBackupDir = WM_BACKUP_DIR, sourceRootDir = ROOT_DIR) {
   const backups = new Map();
   fs.mkdirSync(targetBackupDir, { recursive: true });
 
+  const backedUpManifest = [];
   for (const rel of getWatermarkFilesToPreserve()) {
-    const full = path.join(ROOT_DIR, rel);
+    const full = path.join(sourceRootDir, rel);
     if (fs.existsSync(full)) {
       const content = fs.readFileSync(full);
       backups.set(full, content);
       const diskTarget = path.join(targetBackupDir, rel.replace(/[/\\]/g, '_'));
       fs.mkdirSync(path.dirname(diskTarget), { recursive: true });
       fs.writeFileSync(diskTarget, content);
+      backedUpManifest.push({ rel, diskTarget, size: content.length });
     }
   }
+  fs.writeFileSync(
+    path.join(targetBackupDir, 'manifest.json'),
+    JSON.stringify(backedUpManifest, null, 2),
+    'utf8'
+  );
   return backups;
 }
 
-function restoreWatermarkFiles(backups = null, sourceBackupDir = WM_BACKUP_DIR) {
+function restoreWatermarkFiles(backups = null, sourceBackupDir = WM_BACKUP_DIR, targetRootDir = ROOT_DIR) {
   const failed = [];
   const restoredPaths = new Set();
 
@@ -72,20 +79,48 @@ function restoreWatermarkFiles(backups = null, sourceBackupDir = WM_BACKUP_DIR) 
     }
   }
 
-  // Also check disk backups for any configured watermark files not already restored
-  const filesToPreserve = getWatermarkFilesToPreserve();
-  for (const rel of filesToPreserve) {
-    const full = path.join(ROOT_DIR, rel);
-    if (!restoredPaths.has(full)) {
-      const diskTarget = path.join(sourceBackupDir, rel.replace(/[/\\]/g, '_'));
-      if (fs.existsSync(diskTarget)) {
-        try {
-          fs.mkdirSync(path.dirname(full), { recursive: true });
-          fs.writeFileSync(full, fs.readFileSync(diskTarget));
-          restoredPaths.add(full);
-        } catch (err) {
-          console.error(`[FileMaster Updater] Failed to restore watermark file from disk ${full}:`, err);
-          failed.push({ file: full, error: err.message });
+  // Read manifest from disk backup directory if available
+  const manifestPath = path.join(sourceBackupDir, 'manifest.json');
+  if (fs.existsSync(manifestPath)) {
+    try {
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+      if (Array.isArray(manifest)) {
+        for (const item of manifest) {
+          const targetFull = path.join(targetRootDir, item.rel);
+          if (!restoredPaths.has(targetFull)) {
+            if (fs.existsSync(item.diskTarget)) {
+              try {
+                fs.mkdirSync(path.dirname(targetFull), { recursive: true });
+                fs.writeFileSync(targetFull, fs.readFileSync(item.diskTarget));
+                restoredPaths.add(targetFull);
+              } catch (err) {
+                failed.push({ file: targetFull, error: err.message });
+              }
+            } else {
+              failed.push({ file: targetFull, error: 'Backup disk file missing: ' + item.diskTarget });
+            }
+          }
+        }
+      }
+    } catch (mErr) {
+      failed.push({ file: manifestPath, error: 'Failed to parse backup manifest: ' + mErr.message });
+    }
+  } else {
+    // Fallback for direct files in sourceBackupDir without manifest
+    const filesToPreserve = getWatermarkFilesToPreserve();
+    for (const rel of filesToPreserve) {
+      const full = path.join(targetRootDir, rel);
+      if (!restoredPaths.has(full)) {
+        const diskTarget = path.join(sourceBackupDir, rel.replace(/[/\\]/g, '_'));
+        if (fs.existsSync(diskTarget)) {
+          try {
+            fs.mkdirSync(path.dirname(full), { recursive: true });
+            fs.writeFileSync(full, fs.readFileSync(diskTarget));
+            restoredPaths.add(full);
+          } catch (err) {
+            console.error(`[FileMaster Updater] Failed to restore watermark file from disk ${full}:`, err);
+            failed.push({ file: full, error: err.message });
+          }
         }
       }
     }
@@ -93,25 +128,40 @@ function restoreWatermarkFiles(backups = null, sourceBackupDir = WM_BACKUP_DIR) 
 
   return {
     success: failed.length === 0,
-    failed
+    failed,
+    restoredCount: restoredPaths.size
   };
 }
 
-function recoverInterruptedUpdate() {
-  if (fs.existsSync(UPDATE_PENDING_FILE)) {
+function recoverInterruptedUpdate(options = {}) {
+  const pendingFile = options.pendingFile || UPDATE_PENDING_FILE;
+  const cfgBackup = options.configBackup || path.join(DATA_DIR, 'config.backup.yaml');
+  const targetConfig = options.configPath || CONFIG_PATH;
+  const backupDir = options.backupDir || WM_BACKUP_DIR;
+  const targetRootDir = options.targetRootDir || ROOT_DIR;
+
+  if (fs.existsSync(pendingFile)) {
     console.log('[FileMaster Updater] Interrupted update detected, restoring configuration and watermarks from disk backups...');
     try {
-      const cfgBackup = path.join(DATA_DIR, 'config.backup.yaml');
-      if (fs.existsSync(cfgBackup)) {
-        fs.copyFileSync(cfgBackup, CONFIG_PATH);
+      if (!fs.existsSync(cfgBackup)) {
+        throw new Error('Config backup missing in data/config.backup.yaml');
       }
-      restoreWatermarkFiles(null);
-      fs.unlinkSync(UPDATE_PENDING_FILE);
+      const wmRes = restoreWatermarkFiles(null, backupDir, targetRootDir);
+      if (!wmRes.success) {
+        const errs = wmRes.failed.map((f) => `${path.basename(f.file)}: ${f.error}`).join(', ');
+        throw new Error(`Watermark restoration failed: ${errs}`);
+      }
+      fs.copyFileSync(cfgBackup, targetConfig);
+      fs.unlinkSync(pendingFile);
+      if (fs.existsSync(cfgBackup)) fs.unlinkSync(cfgBackup);
       console.log('[FileMaster Updater] Successfully recovered from interrupted update.');
+      return { recovered: true, success: true };
     } catch (err) {
-      console.error('[FileMaster Updater] Error during interrupted update recovery:', err);
+      console.error('[FileMaster Updater] Error during interrupted update recovery (flag preserved for retry):', err.message);
+      return { recovered: true, success: false, error: err.message };
     }
   }
+  return { recovered: false, success: true };
 }
 
 let updateInProgress = false;
@@ -423,21 +473,25 @@ async function performHotUpdate(options = {}) {
   }
 
   updateInProgress = true;
-  const logs = [];
-  const logStep = (msg) => {
-    const entry = `[${new Date().toLocaleTimeString('en-US', { hour12: false })}] ${msg}`;
-    logs.push(entry);
-    console.log(`[HotUpdate] ${msg}`);
-  };
-
-  // Back up user's config.yaml and all customized watermark files before touching git
-  const userRawYaml = getRawConfigYaml();
-  const watermarkBackups = backupWatermarkFiles();
-  const oldPkgHash = getFileSha256(PKG_PATH) + ':' + getFileSha256(PKG_LOCK_PATH);
+  let userRawYaml;
+  let watermarkBackups;
 
   try {
+    const logs = [];
+    const logStep = (msg) => {
+      const entry = `[${new Date().toLocaleTimeString('en-US', { hour12: false })}] ${msg}`;
+      logs.push(entry);
+      console.log(`[HotUpdate] ${msg}`);
+    };
+
+    // Back up user's config.yaml and all customized watermark files before touching git
+    userRawYaml = getRawConfigYaml();
+    watermarkBackups = backupWatermarkFiles();
+    const oldPkgHash = getFileSha256(PKG_PATH) + ':' + getFileSha256(PKG_LOCK_PATH);
+
     fs.mkdirSync(DATA_DIR, { recursive: true });
-    fs.writeFileSync(path.join(DATA_DIR, 'config.backup.yaml'), userRawYaml, 'utf8');
+    const cfgBackupPath = path.join(DATA_DIR, 'config.backup.yaml');
+    fs.writeFileSync(cfgBackupPath, userRawYaml, 'utf8');
     fs.writeFileSync(UPDATE_PENDING_FILE, 'pending', 'utf8');
     logStep(`Backed up config.yaml to data/config.backup.yaml`);
 
@@ -466,6 +520,7 @@ async function performHotUpdate(options = {}) {
       throw new Error(`Failed to restore customized watermark files after update: ${failedNames}`);
     }
     if (fs.existsSync(UPDATE_PENDING_FILE)) fs.unlinkSync(UPDATE_PENDING_FILE);
+    if (fs.existsSync(cfgBackupPath)) fs.unlinkSync(cfgBackupPath);
     logStep(`Restored customized watermark assets`);
 
     const newPkgHash = getFileSha256(PKG_PATH) + ':' + getFileSha256(PKG_LOCK_PATH);
@@ -495,11 +550,19 @@ async function performHotUpdate(options = {}) {
   } catch (err) {
     // Always ensure user's config.yaml is intact even if git reset/fetch failed mid-way
     try {
-      saveRawConfigYaml(userRawYaml);
-      restoreWatermarkFiles(watermarkBackups);
-      if (fs.existsSync(UPDATE_PENDING_FILE)) fs.unlinkSync(UPDATE_PENDING_FILE);
+      if (typeof userRawYaml === 'string') {
+        saveRawConfigYaml(userRawYaml);
+      }
+      if (typeof watermarkBackups !== 'undefined') {
+        const rollbackRes = restoreWatermarkFiles(watermarkBackups);
+        if (rollbackRes.success) {
+          if (fs.existsSync(UPDATE_PENDING_FILE)) fs.unlinkSync(UPDATE_PENDING_FILE);
+          const cfgBackupPath = path.join(DATA_DIR, 'config.backup.yaml');
+          if (fs.existsSync(cfgBackupPath)) fs.unlinkSync(cfgBackupPath);
+        }
+      }
     } catch {
-      // Ignore secondary restore error
+      // Ignore secondary restore error; pending flag preserved for recoverInterruptedUpdate
     }
     throw err;
   } finally {
@@ -580,5 +643,6 @@ module.exports = {
   backupWatermarkFiles,
   restoreWatermarkFiles,
   recoverInterruptedUpdate,
+  isUpdateInProgress: () => updateInProgress,
   WM_BACKUP_DIR
 };

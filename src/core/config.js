@@ -198,11 +198,20 @@ function initializeConfigFromSetup(setupData = {}) {
   return saveRawConfigYaml(doc.toString());
 }
 
+let configOverride = null;
+
+function setConfigOverride(override) {
+  configOverride = override;
+}
+
 /**
  * Dynamically loads and caches config.yaml from the root directory.
  * If config.yaml does not exist yet, returns uninitialized defaults for setup wizard mode.
  */
 function getConfig() {
+  if (configOverride) {
+    return configOverride;
+  }
   if (!fs.existsSync(CONFIG_PATH)) {
     const raw = getExampleConfigTemplate();
     const parsed = YAML.parse(raw) || {};
@@ -462,6 +471,7 @@ module.exports = {
   isConfigInitialized,
   initializeConfigFromSetup,
   getConfig,
+  setConfigOverride,
   getRawConfigYaml,
   redactConfigForClient,
   validateWatermarkImagePath,

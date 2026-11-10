@@ -55,26 +55,39 @@ test('Updater: preserves, backs up, and restores dual watermark files with error
     backupWatermarkFiles,
     restoreWatermarkFiles
   } = require('../src/core/updater');
+  const fs = require('fs');
+  const path = require('path');
+  const os = require('os');
 
   const files = getWatermarkFilesToPreserve();
   assert.ok(files.includes('watermark.png'), 'Must include default light watermark');
   assert.ok(files.includes('watermark-dark.png'), 'Must include default dark watermark');
 
-  const backups = backupWatermarkFiles();
-  assert.ok(backups instanceof Map, 'backupWatermarkFiles returns Map');
+  const tempBackupDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fm-wm-test-'));
+  const tempSourceDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fm-wm-src-'));
+  try {
+    fs.writeFileSync(path.join(tempSourceDir, 'watermark.png'), 'wm-bytes');
+    const backups = backupWatermarkFiles(tempBackupDir, tempSourceDir);
+    assert.ok(backups instanceof Map, 'backupWatermarkFiles returns Map');
+    assert.ok(backups.has(path.join(tempSourceDir, 'watermark.png')));
+    assert.ok(fs.existsSync(path.join(tempBackupDir, 'manifest.json')));
+  } finally {
+    fs.rmSync(tempBackupDir, { recursive: true, force: true });
+    fs.rmSync(tempSourceDir, { recursive: true, force: true });
+  }
 
   // Test restoration reporting
   const testMap = new Map();
-  const validPath = require('path').join(__dirname, 'test_wm_restore.tmp');
+  const validPath = path.join(os.tmpdir(), 'test_wm_restore.tmp');
   testMap.set(validPath, Buffer.from('test-wm-bytes'));
 
   try {
     const res = restoreWatermarkFiles(testMap);
     assert.strictEqual(res.success, true);
     assert.strictEqual(res.failed.length, 0);
-    assert.ok(require('fs').existsSync(validPath));
+    assert.ok(fs.existsSync(validPath));
   } finally {
-    if (require('fs').existsSync(validPath)) require('fs').unlinkSync(validPath);
+    if (fs.existsSync(validPath)) fs.unlinkSync(validPath);
   }
 
   // Test failure reporting on invalid write path (e.g. write to a directory path)
@@ -95,17 +108,16 @@ test('Updater: persistent watermark disk backup survives reset or process restar
   const path = require('path');
   const os = require('os');
 
-  const rootDir = path.resolve(__dirname, '..');
-  const customWmPath = path.join(rootDir, 'watermark.png');
-  const originalBytes = fs.existsSync(customWmPath) ? fs.readFileSync(customWmPath) : null;
+  const tempRootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fm-root-test-'));
+  const customWmPath = path.join(tempRootDir, 'watermark.png');
   const testBackupDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fm-wm-test-'));
 
   try {
     const dummyBytes = Buffer.from('persistent-watermark-bytes-12345');
     fs.writeFileSync(customWmPath, dummyBytes);
 
-    // 1. Back up watermarks to isolated test directory
-    const backups = backupWatermarkFiles(testBackupDir);
+    // 1. Back up watermarks to isolated test directory from tempRootDir
+    const backups = backupWatermarkFiles(testBackupDir, tempRootDir);
     assert.ok(backups.has(customWmPath));
 
     // Verify disk backup exists in testBackupDir
@@ -116,36 +128,102 @@ test('Updater: persistent watermark disk backup survives reset or process restar
     // 2. Simulate git reset --hard wiping the file
     fs.writeFileSync(customWmPath, Buffer.from('upstream-clobbered-bytes'));
 
-    // 3. Simulate process restart where in-memory Map is lost (pass null with isolated backup dir)
-    const restoreRes = restoreWatermarkFiles(null, testBackupDir);
+    // 3. Simulate process restart where in-memory Map is lost (pass null with isolated backup dir and target root)
+    const restoreRes = restoreWatermarkFiles(null, testBackupDir, tempRootDir);
     assert.strictEqual(restoreRes.success, true);
     assert.deepStrictEqual(fs.readFileSync(customWmPath), dummyBytes, 'Watermark must be restored from disk backup');
   } finally {
-    if (originalBytes) {
-      fs.writeFileSync(customWmPath, originalBytes);
-    }
     try {
+      fs.rmSync(tempRootDir, { recursive: true, force: true });
       fs.rmSync(testBackupDir, { recursive: true, force: true });
     } catch {}
   }
 });
 
-test('Updater: recoverInterruptedUpdate restores watermarks and clears pending flag', () => {
+test('Updater: recoverInterruptedUpdate preserves flag on failure and clears on complete recovery', () => {
   const {
     recoverInterruptedUpdate
   } = require('../src/core/updater');
-  const { DATA_DIR } = require('../src/core/config');
   const fs = require('fs');
   const path = require('path');
+  const os = require('os');
 
-  const flagPath = path.join(DATA_DIR, 'update_pending_restore.flag');
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.writeFileSync(flagPath, 'interrupted', 'utf8');
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fm-recover-test-'));
+  const pendingFile = path.join(tempDir, 'update_pending_restore.flag');
+  const configBackup = path.join(tempDir, 'config.backup.yaml');
+  const configPath = path.join(tempDir, 'config.yaml');
+  const backupDir = path.join(tempDir, 'wm-backup');
+  const targetRootDir = path.join(tempDir, 'root');
+  fs.mkdirSync(backupDir, { recursive: true });
+  fs.mkdirSync(targetRootDir, { recursive: true });
 
   try {
-    recoverInterruptedUpdate();
-    assert.strictEqual(fs.existsSync(flagPath), false, 'Pending flag must be cleared after recovery');
+    fs.writeFileSync(pendingFile, 'interrupted', 'utf8');
+
+    // Case 1: config backup is missing -> recovery fails, flag is preserved for retry
+    const res1 = recoverInterruptedUpdate({
+      pendingFile,
+      configBackup,
+      configPath,
+      backupDir,
+      targetRootDir
+    });
+    assert.strictEqual(res1.success, false);
+    assert.strictEqual(fs.existsSync(pendingFile), true, 'Flag must be preserved when config backup missing');
+
+    // Case 2: Watermark restoration fails -> recovery fails, flag is preserved
+    fs.writeFileSync(configBackup, 'port: 3000\n', 'utf8');
+    // Write manifest with a non-existent backup file to trigger wm failure
+    fs.writeFileSync(
+      path.join(backupDir, 'manifest.json'),
+      JSON.stringify([{ rel: 'watermark.png', diskTarget: path.join(backupDir, 'nonexistent.png') }]),
+      'utf8'
+    );
+    const res2 = recoverInterruptedUpdate({
+      pendingFile,
+      configBackup,
+      configPath,
+      backupDir,
+      targetRootDir
+    });
+    assert.strictEqual(res2.success, false);
+    assert.strictEqual(fs.existsSync(pendingFile), true, 'Flag must be preserved when wm restore fails');
+
+    // Case 3: Watermark backup file exists -> recovery succeeds, flag & backup cleared, config restored
+    fs.writeFileSync(path.join(backupDir, 'nonexistent.png'), 'wm-bytes');
+    const res3 = recoverInterruptedUpdate({
+      pendingFile,
+      configBackup,
+      configPath,
+      backupDir,
+      targetRootDir
+    });
+    assert.strictEqual(res3.success, true);
+    assert.strictEqual(fs.existsSync(pendingFile), false, 'Pending flag must be cleared on success');
+    assert.strictEqual(fs.existsSync(configBackup), false, 'Config backup must be removed on success');
+    assert.strictEqual(fs.readFileSync(configPath, 'utf8'), 'port: 3000\n');
+    assert.strictEqual(fs.readFileSync(path.join(targetRootDir, 'watermark.png'), 'utf8'), 'wm-bytes');
   } finally {
-    if (fs.existsSync(flagPath)) fs.unlinkSync(flagPath);
+    fs.rmSync(tempDir, { recursive: true, force: true });
   }
+});
+
+test('Updater: updateInProgress lock releases properly and is not permanently held on error', async () => {
+  const {
+    isUpdateInProgress,
+    performHotUpdate
+  } = require('../src/core/updater');
+
+  assert.strictEqual(isUpdateInProgress(), false, 'Lock must be false initially');
+
+  // Trigger error before or during update flow (invalid branch with characters that fail validation)
+  await assert.rejects(
+    async () => {
+      await performHotUpdate({ upstream_branch: 'invalid branch with space!' });
+    },
+    /Invalid upstream branch name format/
+  );
+
+  // Lock must be released
+  assert.strictEqual(isUpdateInProgress(), false, 'Lock must be false after failed update attempt');
 });

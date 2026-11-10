@@ -2,8 +2,7 @@
 node_modules/
 
 # Runtime data & backups
-data/*.json
-data/*.tmp
+data/*
 !data/.gitkeep
 backups/*
 

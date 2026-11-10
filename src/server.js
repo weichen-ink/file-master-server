@@ -4,6 +4,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const os = require('node:os');
 const { execFile } = require('node:child_process');
+const YAML = require('yaml');
 const {
   ROOT_DIR,
   STORAGE_DIR,
@@ -293,11 +294,39 @@ function shouldPurgeImageCache(oldCfg, newCfg) {
 }
 
 app.put('/api/platform/config', requireAdmin, (req, res) => {
-  try {
-    const oldCfg = getConfig();
-    const oldAdminPath = oldCfg.admin_path;
-    const { mode, rawYaml, patch } = req.body || {};
+  const oldCfg = getConfig();
+  const oldAdminPath = oldCfg.admin_path;
+  const { mode, rawYaml, patch } = req.body || {};
 
+  let candidateImgCfg = {};
+  if (mode === 'raw') {
+    try {
+      const parsed = YAML.parse(rawYaml) || {};
+      candidateImgCfg = parsed.image_host || {};
+    } catch (parseErr) {
+      return res.status(400).json({ error: 'Invalid YAML syntax: ' + parseErr.message });
+    }
+  } else {
+    candidateImgCfg = { ...(oldCfg?.image_host || {}), ...(patch?.image_host || {}) };
+  }
+
+  const needsCachePurge = Boolean(
+    req.body.clearCache === true ||
+    shouldPurgeImageCache(oldCfg, { image_host: candidateImgCfg })
+  );
+
+  // If cache purge is required, perform it BEFORE writing new config to disk.
+  // If clearCacheDir fails (e.g. disk/permission failure), return HTTP 500 without modifying config.yaml,
+  // leaving the system in a clean, retriable state where a retry will still detect the config difference.
+  if (needsCachePurge) {
+    try {
+      clearCacheDir();
+    } catch (cacheErr) {
+      return res.status(500).json({ error: 'Failed to clear WebP cache: ' + cacheErr.message });
+    }
+  }
+
+  try {
     let updatedCfg;
     if (mode === 'raw') {
       updatedCfg = saveRawConfigYaml(rawYaml);
@@ -310,10 +339,6 @@ app.put('/api/platform/config', requireAdmin, (req, res) => {
         cleanPatch.password = hashPassword(cleanPatch.password);
       }
       updatedCfg = updateConfigPreservingComments(cleanPatch);
-    }
-
-    if (shouldPurgeImageCache(oldCfg, updatedCfg)) {
-      clearCacheDir();
     }
 
     // Re-issue session cookie so password or admin path change doesn't break current session

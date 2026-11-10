@@ -41,20 +41,13 @@ test('Security: session token creation and explicit revocation', () => {
 
 test('Security: Token extraction rejects query string (?token=)', () => {
   const { requireApiOrAdmin } = require(path.join(serverRoot, 'src/core/security'));
-  const { CONFIG_PATH } = require(path.join(serverRoot, 'src/core/config'));
-  const fs = require('fs');
+  const { setConfigOverride } = require(path.join(serverRoot, 'src/core/config'));
 
-  const hadConfig = fs.existsSync(CONFIG_PATH);
-  const originalYaml = hadConfig ? fs.readFileSync(CONFIG_PATH, 'utf8') : null;
-  const currentToken = getConfig().api_token;
+  const effectiveToken = 'test-auth-token-12345';
+  const baseCfg = getConfig();
+  setConfigOverride({ ...baseCfg, api_token: effectiveToken });
 
   try {
-    if (!currentToken) {
-      fs.writeFileSync(CONFIG_PATH, 'api_token: "test-auth-token-12345"\nport: 3000\n', 'utf8');
-    }
-    const effectiveToken = getConfig().api_token;
-    assert.ok(effectiveToken, 'Test requires an effective api_token to verify authentication');
-
     let nextCalled = false;
     const mockReq = {
       headers: { cookie: '' },
@@ -81,11 +74,7 @@ test('Security: Token extraction rejects query string (?token=)', () => {
     requireApiOrAdmin(validReq, mockRes, () => { bearerSuccess = true; });
     assert.strictEqual(bearerSuccess, true, 'Bearer token in authorization header must succeed');
   } finally {
-    if (hadConfig) {
-      fs.writeFileSync(CONFIG_PATH, originalYaml, 'utf8');
-    } else if (fs.existsSync(CONFIG_PATH)) {
-      fs.unlinkSync(CONFIG_PATH);
-    }
+    setConfigOverride(null);
   }
 });
 
