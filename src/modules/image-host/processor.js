@@ -95,13 +95,15 @@ async function ensureTranscodedPreviewJpeg(rawFilePath, previewCachePath) {
 /**
  * Generates a default semi-transparent watermark PNG if none exists at watermark.png.
  */
-async function ensureDefaultWatermark(watermarkFilePath, text = '© FileMaster') {
+async function ensureDefaultWatermark(watermarkFilePath, text = '© FileMaster', isDark = false) {
   if (fs.existsSync(watermarkFilePath)) return;
+  const bgFill = isDark ? 'rgba(255, 255, 255, 0.55)' : 'rgba(0, 0, 0, 0.38)';
+  const txtFill = isDark ? '#111827' : '#ffffff';
   const svg = `
     <svg width="360" height="80" xmlns="http://www.w3.org/2000/svg">
       <style>
-        .bg { fill: rgba(0, 0, 0, 0.38); rx: 14px; ry: 14px; }
-        .txt { fill: #ffffff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 32px; font-weight: 700; }
+        .bg { fill: ${bgFill}; rx: 14px; ry: 14px; }
+        .txt { fill: ${txtFill}; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 32px; font-weight: 700; }
       </style>
       <rect x="4" y="8" width="352" height="64" class="bg" />
       <text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" class="txt">${escapeXml(text)}</text>
@@ -116,6 +118,19 @@ function escapeXml(str) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+const WEB_SAFE_FONTS = {
+  system: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+  pingfang: "'PingFang SC', 'Microsoft YaHei', 'Hiragino Sans GB', sans-serif",
+  arial: "Arial, Helvetica, 'Nimbus Sans L', sans-serif",
+  impact: "Impact, 'Arial Black', Charcoal, sans-serif",
+  georgia: "Georgia, 'Times New Roman', Times, serif",
+  courier: "'Courier New', Courier, Monaco, monospace"
+};
+
+function resolveFontFamily(fontKey) {
+  return escapeXml(WEB_SAFE_FONTS[fontKey] || WEB_SAFE_FONTS.system);
 }
 
 /**
@@ -158,8 +173,9 @@ function calcCoordinates(pos, mainW, mainH, wmW, wmH, margin) {
 
 /**
  * Generates the watermark overlay buffer supporting image, text, and tiled modes.
+ * For image mode, supports smart background luminance detection (light vs. dark watermark).
  */
-async function buildWatermarkOverlay(imgCfg, targetWidth, targetHeight) {
+async function buildWatermarkOverlay(imgCfg, targetWidth, targetHeight, basePipeline = null) {
   const opacity = Math.min(1, Math.max(0.05, Number(imgCfg.watermark_opacity) || 0.65));
   const scale = Math.min(0.8, Math.max(0.05, Number(imgCfg.watermark_scale) || 0.16));
   const margin = Number(imgCfg.watermark_margin) || 24;
@@ -169,13 +185,49 @@ async function buildWatermarkOverlay(imgCfg, targetWidth, targetHeight) {
   // Mode 1: PNG image watermark
   if (type === 'image') {
     const requestedWmPath = path.resolve(ROOT_DIR, imgCfg.watermark_image || './watermark.png');
-    const wmPath = isPathWithin(requestedWmPath, ROOT_DIR)
+    const wmPathLight = isPathWithin(requestedWmPath, ROOT_DIR)
       ? requestedWmPath
       : path.resolve(ROOT_DIR, './watermark.png');
-    await ensureDefaultWatermark(wmPath, imgCfg.watermark_text || '© FileMaster');
+    await ensureDefaultWatermark(wmPathLight, imgCfg.watermark_text || '© FileMaster', false);
+
+    const requestedDarkPath = path.resolve(ROOT_DIR, imgCfg.watermark_image_dark || './watermark-dark.png');
+    const wmPathDark = isPathWithin(requestedDarkPath, ROOT_DIR)
+      ? requestedDarkPath
+      : path.resolve(ROOT_DIR, './watermark-dark.png');
+    await ensureDefaultWatermark(wmPathDark, imgCfg.watermark_text || '© FileMaster', true);
 
     const wmTargetWidth = Math.max(60, Math.round(targetWidth * scale));
-    const resizedBuffer = await sharp(wmPath)
+
+    let selectedWmPath = wmPathLight;
+    if (imgCfg.watermark_auto_contrast !== false && basePipeline) {
+      try {
+        const approxH = Math.round(wmTargetWidth * (80 / 360));
+        const { left: testLeft, top: testTop } = calcCoordinates(pos, targetWidth, targetHeight, wmTargetWidth, approxH, margin);
+        const wmRegionW = Math.min(targetWidth - testLeft, wmTargetWidth);
+        const wmRegionH = Math.min(targetHeight - testTop, approxH);
+        if (wmRegionW > 0 && wmRegionH > 0) {
+          const { data: cornerData, info: cornerInfo } = await basePipeline.clone()
+            .flatten({ background: '#ffffff' })
+            .extract({ left: testLeft, top: testTop, width: wmRegionW, height: wmRegionH })
+            .raw()
+            .toBuffer({ resolveWithObject: true });
+
+          let sumLuma = 0;
+          const channels = cornerInfo.channels;
+          const pixelCount = cornerData.length / channels;
+          for (let i = 0; i < cornerData.length; i += channels) {
+            sumLuma += 0.2126 * cornerData[i] + 0.7152 * cornerData[i + 1] + 0.0722 * cornerData[i + 2];
+          }
+          const cornerLuma = sumLuma / pixelCount;
+          // Threshold 140 (same as weichen-astro): >140 bright background -> use dark watermark; <=140 -> use light watermark
+          selectedWmPath = cornerLuma > 140 ? wmPathDark : wmPathLight;
+        }
+      } catch {
+        selectedWmPath = wmPathLight;
+      }
+    }
+
+    const resizedBuffer = await sharp(selectedWmPath)
       .resize({ width: wmTargetWidth, withoutEnlargement: false })
       .ensureAlpha()
       .composite([
@@ -204,7 +256,26 @@ async function buildWatermarkOverlay(imgCfg, targetWidth, targetHeight) {
   // Mode 2: Repeating diagonal tiled watermark
   if (type === 'tile') {
     const text = escapeXml(imgCfg.watermark_text || '© FileMaster');
-    const color = imgCfg.watermark_color || '#ffffff';
+    let textColor = imgCfg.watermark_color || '#ffffff';
+    let shadowColor = 'rgba(0,0,0,0.65)';
+
+    if (imgCfg.watermark_auto_contrast !== false && basePipeline) {
+      try {
+        const stats = await basePipeline.clone().stats();
+        const ch = stats.channels;
+        if (ch && ch.length >= 3) {
+          const meanLuma = 0.2126 * ch[0].mean + 0.7152 * ch[1].mean + 0.0722 * ch[2].mean;
+          if (meanLuma > 140) {
+            textColor = imgCfg.watermark_color_dark || '#111827';
+            shadowColor = 'rgba(255,255,255,0.75)';
+          }
+        }
+      } catch {
+        // Fallback to default
+      }
+    }
+
+    const fontFamily = resolveFontFamily(imgCfg.watermark_font);
     const fontSize = Math.max(16, Math.round(targetWidth * 0.025));
     const tileW = fontSize * 10;
     const tileH = fontSize * 6;
@@ -212,8 +283,8 @@ async function buildWatermarkOverlay(imgCfg, targetWidth, targetHeight) {
       <svg width="${tileW}" height="${tileH}" xmlns="http://www.w3.org/2000/svg">
         <g transform="rotate(-28 ${tileW / 2} ${tileH / 2})" opacity="${opacity}">
           <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle"
-                fill="${color}" font-family="sans-serif" font-weight="bold" font-size="${fontSize}"
-                style="filter: drop-shadow(1px 1px 2px rgba(0,0,0,0.65));">${text}</text>
+                fill="${textColor}" font-family="${fontFamily}" font-weight="bold" font-size="${fontSize}"
+                style="filter: drop-shadow(1px 1px 2px ${shadowColor});">${text}</text>
         </g>
       </svg>
     `;
@@ -222,22 +293,51 @@ async function buildWatermarkOverlay(imgCfg, targetWidth, targetHeight) {
 
   // Mode 3: Corner text watermark
   const text = escapeXml(imgCfg.watermark_text || '© FileMaster');
-  const color = imgCfg.watermark_color || '#ffffff';
   const wmTargetWidth = Math.max(100, Math.round(targetWidth * scale));
   const fontSize = Math.max(16, Math.round(wmTargetWidth / Math.max(4, text.length * 0.7)));
   const svgW = Math.min(targetWidth - margin * 2, Math.max(wmTargetWidth, fontSize * text.length));
   const svgH = Math.round(fontSize * 1.8);
+  const { left, top } = calcCoordinates(pos, targetWidth, targetHeight, svgW, svgH, margin);
 
+  let textColor = imgCfg.watermark_color || '#ffffff';
+  let shadowColor = 'rgba(0,0,0,0.7)';
+  let shadowBlur = '3px';
+
+  if (imgCfg.watermark_auto_contrast !== false && basePipeline) {
+    try {
+      const stats = await basePipeline
+        .clone()
+        .extract({
+          left: Math.max(0, left),
+          top: Math.max(0, top),
+          width: Math.max(1, Math.min(targetWidth - left, svgW)),
+          height: Math.max(1, Math.min(targetHeight - top, svgH))
+        })
+        .stats();
+      const ch = stats.channels;
+      if (ch && ch.length >= 3) {
+        const cornerLuma = 0.2126 * ch[0].mean + 0.7152 * ch[1].mean + 0.0722 * ch[2].mean;
+        if (cornerLuma > 140) {
+          textColor = imgCfg.watermark_color_dark || '#111827';
+          shadowColor = 'rgba(255,255,255,0.85)';
+          shadowBlur = '2px';
+        }
+      }
+    } catch {
+      // Fallback to default
+    }
+  }
+
+  const fontFamily = resolveFontFamily(imgCfg.watermark_font);
   const svgText = `
     <svg width="${svgW}" height="${svgH}" xmlns="http://www.w3.org/2000/svg">
       <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle"
-            fill="${color}" fill-opacity="${opacity}"
-            font-family="-apple-system, BlinkMacSystemFont, sans-serif"
+            fill="${textColor}" fill-opacity="${opacity}"
+            font-family="${fontFamily}"
             font-weight="700" font-size="${fontSize}"
-            style="filter: drop-shadow(1px 2px 3px rgba(0,0,0,0.7));">${text}</text>
+            style="filter: drop-shadow(1px 2px ${shadowBlur} ${shadowColor});">${text}</text>
     </svg>
   `;
-  const { left, top } = calcCoordinates(pos, targetWidth, targetHeight, svgW, svgH, margin);
   return { input: Buffer.from(svgText), left, top };
 }
 
@@ -281,7 +381,7 @@ async function processAndCacheImage(rawFilePath, cacheFilePath, imgCfg) {
 
   const minWidthForWm = Number(imgCfg.watermark_min_width) || 320;
   if (imgCfg.watermark_enable && targetWidth >= minWidthForWm) {
-    const overlay = await buildWatermarkOverlay(imgCfg, targetWidth, targetHeight);
+    const overlay = await buildWatermarkOverlay(imgCfg, targetWidth, targetHeight, pipeline);
     pipeline = pipeline.composite([overlay]);
   }
 

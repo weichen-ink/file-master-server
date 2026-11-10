@@ -63,11 +63,17 @@ test('Setup Wizard & Image Optimization: uninitialized mode, setup flow, and opt
       'Repeated setup calls must be rejected'
     );
 
-    // 5. Toggling enable_optimization via settings update
+    // 5. Toggling enable_optimization & watermark adaptive dark image via settings update
     const updatedCfg = updateConfigPreservingComments({
-      image_host: { enable_optimization: true }
+      image_host: {
+        enable_optimization: true,
+        watermark_image_dark: './custom-dark.png',
+        watermark_auto_contrast: false
+      }
     });
     assert.strictEqual(updatedCfg.image_host.enable_optimization, true, 'Should toggle enable_optimization to true');
+    assert.strictEqual(updatedCfg.image_host.watermark_image_dark, './custom-dark.png', 'Should update watermark_image_dark');
+    assert.strictEqual(updatedCfg.image_host.watermark_auto_contrast, false, 'Should update watermark_auto_contrast');
   } finally {
     if (fs.existsSync(CONFIG_PATH)) {
       fs.unlinkSync(CONFIG_PATH);

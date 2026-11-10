@@ -292,7 +292,10 @@ function findExistingBySha256(targetSha256) {
  * Resolves cache file paths keyed by full raw filename (e.g., photo.jpg.webp vs photo.png.webp)
  * so same-basename files with different extensions never collide in the cache.
  */
-function getWebpCacheFilePath(year, month, rawFilename) {
+function getWebpCacheFilePath(year, month, rawFilename, wmVariant = null) {
+  if (wmVariant && ['image', 'text', 'tile'].includes(wmVariant)) {
+    return path.join(CACHE_DIR, year, month, `${rawFilename}.wm_${wmVariant}.webp`);
+  }
   return path.join(CACHE_DIR, year, month, `${rawFilename}.webp`);
 }
 
@@ -862,10 +865,27 @@ function registerImageHostModule(app) {
       }
 
       const rawBasenameWithExt = path.basename(rawFilePath);
-      const cacheFilePath = getWebpCacheFilePath(year, month, rawBasenameWithExt);
+      const rawWmParam = String(req.query.wm || req.query.watermark || '').toLowerCase().trim();
+      const validWmTypes = ['image', 'text', 'tile'];
+      const activeWmType = validWmTypes.includes(rawWmParam)
+        ? rawWmParam
+        : (cfg.image_host?.watermark_type || 'image');
+
+      const isCustomVariant = validWmTypes.includes(rawWmParam);
+      const cacheFilePath = getWebpCacheFilePath(
+        year,
+        month,
+        rawBasenameWithExt,
+        isCustomVariant ? activeWmType : null
+      );
 
       if (!fs.existsSync(cacheFilePath)) {
-        await processAndCacheImage(rawFilePath, cacheFilePath, cfg.image_host);
+        const effectiveImgCfg = {
+          ...cfg.image_host,
+          watermark_enable: true,
+          watermark_type: activeWmType
+        };
+        await processAndCacheImage(rawFilePath, cacheFilePath, effectiveImgCfg);
         invalidateScanCache();
       }
 

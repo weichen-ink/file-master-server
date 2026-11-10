@@ -3,7 +3,7 @@
 # =====================================================================
 
 # ----------------- 1. Core Settings -----------------
-site_name: FileMaster Server
+site_name: File Master Server
 port: 3000
 base_url: http://localhost:3000
 
@@ -55,6 +55,10 @@ image_host:
   watermark_margin: 24 # Margin padding in pixels
   watermark_min_width: 320 # Skip watermarking if image width is smaller than this value
   watermark_image: ./watermark.png
+  watermark_image_dark: ./watermark-dark.png
+  watermark_auto_contrast: true
   watermark_text: "© FileMaster"
   watermark_color: "#ffffff"
+  watermark_color_dark: "#111827"
+  watermark_font: system # Web safe font: system | pingfang | arial | impact | georgia | courier
 

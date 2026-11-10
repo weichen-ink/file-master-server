@@ -2,9 +2,11 @@ const express = require('express');
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const os = require('node:os');
 const { execFile } = require('node:child_process');
 const {
   ROOT_DIR,
+  STORAGE_DIR,
   UPLOAD_TMP_DIR,
   isConfigInitialized,
   initializeConfigFromSetup,
@@ -494,24 +496,100 @@ app.use((req, res) => {
 const initialCfg = getConfig();
 const PORT = process.env.PORT || initialCfg.port || 3000;
 
+function getNetworkAddress(port) {
+  try {
+    const interfaces = os.networkInterfaces();
+    let fallback = null;
+    for (const devName of Object.keys(interfaces)) {
+      const iface = interfaces[devName];
+      if (!iface) continue;
+      for (const alias of iface) {
+        if (alias.family === 'IPv4' && !alias.internal && alias.address) {
+          if (/^(en|eth|wlan|wl)\d+/i.test(devName)) {
+            return `http://${alias.address}:${port}`;
+          }
+          if (!fallback && !alias.address.startsWith('169.254.')) {
+            fallback = `http://${alias.address}:${port}`;
+          }
+        }
+      }
+    }
+    return fallback;
+  } catch {
+    return null;
+  }
+}
+
 function startServer(port, retriesLeft = 6) {
   const srv = app.listen(port, () => {
     httpServer = srv;
     const cfg = getConfig();
+    const version = readPackageVersion() || '1.0.0';
+    const netAddr = getNetworkAddress(port);
+    const divider = '  ──────────────────────────────────────────────────────────';
+
     if (!isConfigInitialized()) {
-      console.log('---------------------------------------------------------');
-      console.log(`✨ [Setup Wizard] No config.yaml found! Visit http://localhost:${port}/setup to initialize.`);
-      console.log(process.env.FILEMASTER_SETUP_TOKEN
-        ? '[Setup Wizard] Use FILEMASTER_SETUP_TOKEN from the server environment to initialize.'
-        : `[Setup Wizard] Initialization token for this server start: ${SETUP_TOKEN}`);
-      console.log('---------------------------------------------------------');
-    } else {
-      console.log(`🚀 ${cfg.site_name} is running!`);
-      console.log(`🔒 Admin Console: ${cfg.base_url}/${cfg.admin_path}`);
-      console.log(`🖼️ Raw Original Route: ${cfg.base_url}/${cfg.image_host.raw_secret_path}/YYYY/MM/filename.ext`);
-      if (cfg.image_host.enable_optimization !== false) {
-        console.log(`⚡ Optimized WebP Route: ${cfg.base_url}/${cfg.image_host.pub_secret_path || 'pub'}/YYYY/MM/filename.webp`);
+      console.log('');
+      console.log(divider);
+      console.log(`  🚀 File Master Server v${version}`);
+      console.log('');
+      console.log(`  ✨ [初始化向导] 尚未检测到 config.yaml，请访问以下地址完成初始化：`);
+      console.log(`  💻 Local:      http://localhost:${port}/setup`);
+      if (netAddr) {
+        console.log(`  🌐 Network:    ${netAddr}/setup`);
       }
+      console.log('');
+      console.log(process.env.FILEMASTER_SETUP_TOKEN
+        ? `  🔑 Token:      使用环境变量 FILEMASTER_SETUP_TOKEN`
+        : `  🔑 Token:      ${SETUP_TOKEN}`);
+      console.log('');
+      console.log(`  💡 提示: 按 Ctrl+C 可停止服务`);
+      console.log(divider);
+      console.log('');
+    } else {
+      const siteName = cfg.site_name || 'File Master Server';
+      const isCustomBase = cfg.base_url && !cfg.base_url.includes('localhost') && !cfg.base_url.includes('127.0.0.1');
+      const origin = isCustomBase ? cfg.base_url : `http://localhost:${port}`;
+      const adminUrl = `${origin}/${cfg.admin_path}`;
+      const uploadUrl = `${origin}/api/image/upload`;
+      const webpStatus = cfg.image_host?.enable_optimization !== false
+        ? `已开启 (质量: ${cfg.image_host?.webp_quality || 82}, 最大宽: ${cfg.image_host?.max_width || 1920}px)`
+        : '未开启';
+
+      const posMap = {
+        'bottom-right': '右下角',
+        'bottom-left': '左下角',
+        'top-right': '右上角',
+        'top-left': '左上角',
+        'center': '居中'
+      };
+      const watermarkStatus = cfg.image_host?.watermark_enable
+        ? `已启用 (${cfg.image_host?.watermark_type === 'image' ? '图片水印' : '文字水印'}, 位置: ${posMap[cfg.image_host?.watermark_pos] || cfg.image_host?.watermark_pos || '右下角'})`
+        : '未启用';
+
+      const relStorage = path.relative(process.cwd(), STORAGE_DIR) ? `./${path.relative(process.cwd(), STORAGE_DIR)}` : './storage';
+
+      console.log('');
+      console.log(divider);
+      console.log(`  🚀 ${siteName} v${version}`);
+      console.log('');
+      console.log(`  💻 Local:      http://localhost:${port}/`);
+      if (netAddr) {
+        console.log(`  🌐 Network:    ${netAddr}/`);
+      }
+      if (isCustomBase) {
+        console.log(`  🌍 Public:     ${cfg.base_url}/`);
+      }
+      console.log(`  🔐 Admin:      ${adminUrl}`);
+      console.log(`  📤 Upload:     ${uploadUrl}`);
+      console.log('');
+      console.log(`  📁 Storage:    ${relStorage}`);
+      console.log(`  ✨ WebP Opt:   ${webpStatus}`);
+      console.log(`  💧 Watermark:  ${watermarkStatus}`);
+      console.log('');
+      console.log(`  💡 提示: 按 Ctrl+C 可停止运行`);
+      console.log(divider);
+      console.log('');
     }
   });
 

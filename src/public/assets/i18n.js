@@ -5,8 +5,11 @@ const I18N = {
     navSecWorkspace: "文件管理",
     navAssets: "服务器文件",
     navShares: "分享链接",
+    navSecImageHost: "图床服务",
+    navMedia: "图片优化",
+    navIntegration: "客户端接入",
+    navSecSystem: "系统运维",
     navMonitoring: "运行状态",
-    navSecSystem: "系统管理",
     navSettings: "系统设置",
     navSecurity: "安全设置",
     navMaintenance: "系统维护",
@@ -20,6 +23,8 @@ const I18N = {
     btnHideSecret: "隐藏",
     langToggle: "🌐 English",
     brandSubtitle: "文件与图片服务",
+    mediaDesc: "配置 WebP 格式转换、画质、分辨率限制与图片/文字水印呈现样式。",
+    integrationDesc: "Obsidian 插件与第三方客户端接入参数、API 端点及配置说明。",
 
     // 隐蔽登录面板
     loginSub: "连续登录失败可能导致此 IP 被锁定 24 小时",
@@ -205,13 +210,42 @@ const I18N = {
     optPosTopRight: "右上角",
     optPosTopLeft: "左上角",
     optPosCenter: "居中",
-    lblWatermarkOpacity: "水印不透明度 (0.1 - 1.0)",
-    lblWatermarkScale: "水印缩放比例 (0.05 - 0.8)",
+    lblWatermarkOpacity: "不透明度 (0.1 - 1.0)",
+    lblWatermarkScale: "缩放比例 (相对于图片宽度)",
     lblWatermarkMargin: "边距留白 (像素)",
-    lblWatermarkMinWidth: "添加水印的最小图片宽度（像素）",
-    lblWatermarkImage: "水印图片相对路径",
-    lblWatermarkText: "水印文字内容",
-    lblWatermarkColor: "水印文字颜色",
+    lblWatermarkMinWidth: "最低生效图片宽度 (像素)",
+    lblWatermarkImage: "水印图片路径",
+    cardWebpTitle: "WebP 格式与尺寸优化",
+    cardWatermarkTitle: "水印设置",
+    secWatermarkContent: "水印内容",
+    secWatermarkLayout: "位置与排版",
+    cardWmGuideTitle: "动态 URL 水印参数",
+    cardWmGuideDesc: "在优化图片链接（pub 路径）后添加 ?wm= 参数即可按需动态调用对应水印形态。所有图片强制携带水印。",
+    lblWatermarkImageSingle: "水印图片路径",
+    lblWatermarkImageLight: "浅色水印 (深色图片使用)",
+    lblWatermarkImageDark: "深色水印 (浅色图片使用)",
+    lblWatermarkAutoContrast: "水印模式",
+    optAutoContrastOff: "标准单图 (始终使用同一张水印)",
+    optAutoContrastOn: "深浅自适应 (根据图片明暗切换)",
+    hintWatermarkDual: "自动采样水印落点区域的图片亮度，浅色图片配深色水印，深色图片配浅色水印。",
+    lblWmGuideDefault: "默认样式 (使用后台当前保存的设置)",
+    lblWmGuideImage: "PNG 图片水印 (支持深浅自适应)",
+    lblWmGuideText: "角落文字水印",
+    lblWmGuideTile: "全图平铺水印",
+    lblWatermarkText: "水印文字",
+    lblWatermarkColor: "固定文字颜色",
+    lblWatermarkFont: "字体族 (Web 安全字体)",
+    optFontSystem: "系统默认无衬线 (推荐)",
+    optFontPingfang: "苹方 / 微软雅黑 (中文优先)",
+    optFontArial: "Arial / Helvetica (通用经典)",
+    optFontImpact: "Impact (醒目粗体)",
+    optFontGeorgia: "Georgia (优雅衬线)",
+    optFontCourier: "Courier New (等宽代码)",
+    lblWatermarkTextColorMode: "文字颜色模式",
+    optTextContrastAuto: "深浅自适应 (根据图片明暗自动切换黑白)",
+    optTextContrastFixed: "标准固定色 (始终使用指定文字颜色)",
+    lblWatermarkColorLight: "浅色文字 (深色图片使用)",
+    lblWatermarkColorDark: "深色文字 (浅色图片使用)",
     lblAutoClearCache: "保存后清除旧缓存，让现有图片在下次访问时使用新设置",
     btnSaveConfig: "保存设置",
 
@@ -301,8 +335,11 @@ const I18N = {
     navSecWorkspace: "Files",
     navAssets: "Server files",
     navShares: "Share links",
-    navMonitoring: "Server status",
+    navSecImageHost: "Image Host",
+    navMedia: "Image Optimization",
+    navIntegration: "Client Integrations",
     navSecSystem: "System",
+    navMonitoring: "Server status",
     navSettings: "Settings",
     navSecurity: "Security",
     navMaintenance: "Maintenance",
@@ -316,6 +353,8 @@ const I18N = {
     btnHideSecret: "Hide",
     langToggle: "🌐 简体中文",
     brandSubtitle: "File and image server",
+    mediaDesc: "Configure WebP compression, image dimensions, and watermark styles.",
+    integrationDesc: "Connection parameters and API documentation for Obsidian and third-party tools.",
 
     // Login View
     loginSub: "Repeated failed sign-ins may lock this IP for 24 hours",
@@ -501,13 +540,42 @@ const I18N = {
     optPosTopRight: "Top-Right",
     optPosTopLeft: "Top-Left",
     optPosCenter: "Center",
-    lblWatermarkOpacity: "Watermark Opacity (0.1 - 1.0)",
-    lblWatermarkScale: "Watermark Scale (0.05 - 0.8)",
+    lblWatermarkOpacity: "Opacity (0.1 - 1.0)",
+    lblWatermarkScale: "Scale (relative to image width)",
     lblWatermarkMargin: "Edge Padding (px)",
     lblWatermarkMinWidth: "Minimum image width for watermark (px)",
     lblWatermarkImage: "Watermark Image Path",
-    lblWatermarkText: "Watermark Text Content",
-    lblWatermarkColor: "Watermark Text Color",
+    cardWebpTitle: "WebP Format & Dimensions",
+    cardWatermarkTitle: "Watermark Settings",
+    secWatermarkContent: "Watermark Content",
+    secWatermarkLayout: "Layout & Appearance",
+    cardWmGuideTitle: "Dynamic URL Watermark Parameters",
+    cardWmGuideDesc: "Append ?wm= parameter to public image URLs to dynamically switch watermark style. All images enforce watermarks.",
+    lblWatermarkImageSingle: "Watermark Image Path",
+    lblWatermarkImageLight: "Light Watermark (for dark images)",
+    lblWatermarkImageDark: "Dark Watermark (for light images)",
+    lblWatermarkAutoContrast: "Watermark Mode",
+    optAutoContrastOff: "Standard Single (always use same watermark)",
+    optAutoContrastOn: "Adaptive (auto switch by image brightness)",
+    hintWatermarkDual: "Automatically samples image luminance at watermark position to choose light or dark watermark.",
+    lblWmGuideDefault: "Default Style (no parameter, uses current configured style)",
+    lblWmGuideImage: "PNG Image Watermark (supports auto contrast)",
+    lblWmGuideText: "Corner Text Watermark",
+    lblWmGuideTile: "Tiled Watermark",
+    lblWatermarkText: "Watermark Text",
+    lblWatermarkColor: "Fixed Text Color",
+    lblWatermarkFont: "Font Family (Web Safe)",
+    optFontSystem: "System Sans-Serif (Recommended)",
+    optFontPingfang: "PingFang / Microsoft YaHei (CJK)",
+    optFontArial: "Arial / Helvetica (Universal)",
+    optFontImpact: "Impact (Bold Heavy)",
+    optFontGeorgia: "Georgia (Elegant Serif)",
+    optFontCourier: "Courier New (Monospace)",
+    lblWatermarkTextColorMode: "Text Color Mode",
+    optTextContrastAuto: "Adaptive (auto switch by image brightness)",
+    optTextContrastFixed: "Fixed Color (always use specified color)",
+    lblWatermarkColorLight: "Light Text (for dark images)",
+    lblWatermarkColorDark: "Dark Text (for light images)",
     lblAutoClearCache: "Clear old cache after saving so existing images use the new settings on next request",
     btnSaveConfig: "Save settings",
 
@@ -610,27 +678,39 @@ function applyLocaleToStaticDom() {
   document.querySelectorAll('[data-i18n]').forEach((el) => {
     const key = el.getAttribute('data-i18n');
     if (key) {
-      if (el.tagName === 'INPUT' && (el.type === 'button' || el.type === 'submit')) {
-        el.value = t(key);
-      } else {
-        el.textContent = t(key);
+      const translated = t(key);
+      if (translated && translated !== key) {
+        if (el.tagName === 'INPUT' && (el.type === 'button' || el.type === 'submit')) {
+          el.value = translated;
+        } else {
+          el.textContent = translated;
+        }
       }
     }
   });
 
   document.querySelectorAll('[data-i18n-placeholder]').forEach((el) => {
     const key = el.getAttribute('data-i18n-placeholder');
-    if (key) el.placeholder = t(key);
+    if (key) {
+      const translated = t(key);
+      if (translated && translated !== key) el.placeholder = translated;
+    }
   });
 
   document.querySelectorAll('[data-i18n-title]').forEach((el) => {
     const key = el.getAttribute('data-i18n-title');
-    if (key) el.title = t(key);
+    if (key) {
+      const translated = t(key);
+      if (translated && translated !== key) el.title = translated;
+    }
   });
 
   document.querySelectorAll('[data-i18n-aria-label]').forEach((el) => {
     const key = el.getAttribute('data-i18n-aria-label');
-    if (key) el.setAttribute('aria-label', t(key));
+    if (key) {
+      const translated = t(key);
+      if (translated && translated !== key) el.setAttribute('aria-label', translated);
+    }
   });
 
   const langBtn = document.getElementById('btnLangSwitch');

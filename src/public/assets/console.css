@@ -743,13 +743,13 @@ body {
   .toolbar > div:last-child, .search-input { width: 100%; }
   .kv-row { align-items: flex-start; flex-wrap: wrap; gap: 4px 12px; }
   .kv-val { max-width: 100%; text-align: left; overflow-wrap: anywhere; }
-  #subtab-settings-integration .kv-val { flex-wrap: wrap; justify-content: flex-start !important; }
-  #subtab-settings-integration code { max-width: 100%; overflow-wrap: anywhere; }
+  #tab-integration .kv-val, #subtab-settings-integration .kv-val { flex-wrap: wrap; justify-content: flex-start !important; }
+  #tab-integration code, #subtab-settings-integration code { max-width: 100%; overflow-wrap: anywhere; }
   .tab-pills { width: 100%; }
   .tab-pill { flex: 1 1 auto; padding: 7px 9px; }
   .modal-header { flex-wrap: wrap; gap: 12px; }
   .modal-header > div { flex-wrap: wrap; }
-  #tab-settings .stat-card, #tab-security .stat-card { max-width: none !important; }
+  #tab-settings .stat-card, #tab-media .stat-card, #tab-integration .stat-card, #tab-security .stat-card { max-width: none !important; }
   .share-panel { padding: 0; background: transparent; border: 0; }
   .share-table-wrap { overflow: visible; }
   .share-table, .share-table tbody, .share-table tr, .share-table td { display: block; width: 100%; }
