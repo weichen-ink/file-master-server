@@ -737,6 +737,31 @@
     </div>
   </div>
 
+  <!-- ================= 4. Share Creation Modal ================= -->
+  <div id="shareModal" class="modal-backdrop hidden" onclick="if(event.target===this) closeShareModal()">
+    <div class="modal-box" style="max-width: 440px;">
+      <div class="modal-header">
+        <strong style="font-size: 14px;" data-i18n="shareModalTitle">创建安全分享短链</strong>
+        <button class="btn btn-outline" style="padding: 5px 10px;" onclick="closeShareModal()" data-i18n="closeBtn">✕ 关闭</button>
+      </div>
+      <div style="padding: 20px;">
+        <div style="font-size: 13px; color: var(--muted); margin-bottom: 14px; word-break: break-all;" id="shareModalFilename"></div>
+        <div class="form-group">
+          <label data-i18n="shareExpiryLabel">有效时长 (小时，0 为不过期)</label>
+          <input type="number" id="shareExpiryInput" class="form-input" min="0" value="24" />
+        </div>
+        <div class="form-group">
+          <label data-i18n="shareMaxDlLabel">最大下载次数 (0 为不限制)</label>
+          <input type="number" id="shareMaxDlInput" class="form-input" min="0" value="0" />
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px;">
+          <button class="btn btn-outline" onclick="closeShareModal()" data-i18n="btnCancelTask">取消</button>
+          <button class="btn btn-primary" id="btnConfirmShare" onclick="submitCreateShare()" data-i18n="btnCreateShareConfirm">生成并复制短链</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div id="toast" class="toast hidden"></div>
 
   <script src="/assets/i18n.js?v=1.0.1"></script>

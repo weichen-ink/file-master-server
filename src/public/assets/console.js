@@ -1010,30 +1010,59 @@ async function clearWatermarkCache() {
   }
 }
 
-async function createShareLink(year, month, filename) {
-  const hoursStr = prompt(t('sharePromptExpiry', { filename }), '24');
-  if (hoursStr === null) return;
-  const maxDlStr = prompt(t('sharePromptMaxDl'), '0');
-  if (maxDlStr === null) return;
+let currentShareTarget = null;
 
-  const res = await fetch('/api/modules/share/create', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      year,
-      month,
-      filename,
-      expiresInHours: Number(hoursStr) || 0,
-      maxDownloads: Number(maxDlStr) || 0
-    })
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    alert(data.error || t('errorShare'));
-    return;
+function createShareLink(year, month, filename) {
+  currentShareTarget = { year, month, filename };
+  const modal = document.getElementById('shareModal');
+  const fileHint = document.getElementById('shareModalFilename');
+  const expInput = document.getElementById('shareExpiryInput');
+  const dlInput = document.getElementById('shareMaxDlInput');
+  if (fileHint) fileHint.textContent = `${year}/${month}/${filename}`;
+  if (expInput) expInput.value = '24';
+  if (dlInput) dlInput.value = '0';
+  if (modal) modal.classList.remove('hidden');
+}
+
+function closeShareModal() {
+  const modal = document.getElementById('shareModal');
+  if (modal) modal.classList.add('hidden');
+  currentShareTarget = null;
+}
+
+async function submitCreateShare() {
+  if (!currentShareTarget) return;
+  const { year, month, filename } = currentShareTarget;
+  const hoursStr = document.getElementById('shareExpiryInput')?.value || '24';
+  const maxDlStr = document.getElementById('shareMaxDlInput')?.value || '0';
+  const btn = document.getElementById('btnConfirmShare');
+  if (btn) btn.disabled = true;
+
+  try {
+    const res = await fetch('/api/modules/share/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        year,
+        month,
+        filename,
+        expiresInHours: Number(hoursStr) || 0,
+        maxDownloads: Number(maxDlStr) || 0
+      })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      alert(data.error || t('errorShare'));
+      return;
+    }
+    closeShareModal();
+    await copyText(data.share.shareUrl, t('shareColLink'));
+    loadShares();
+  } catch (err) {
+    alert(err.message || t('errorShare'));
+  } finally {
+    if (btn) btn.disabled = false;
   }
-  await copyText(data.share.shareUrl, t('shareColLink'));
-  loadShares();
 }
 
 async function loadShares() {
