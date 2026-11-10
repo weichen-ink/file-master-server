@@ -551,16 +551,17 @@ app.get('/setup', (req, res) => {
     res.setHeader('Expires', '0');
     return res.sendFile(path.join(__dirname, 'public/setup.html'));
   }
-  const cfg = getConfig();
-  return res.redirect(`/${cfg.admin_path}`);
+  return res.redirect('/');
 });
 
 app.get('/', (req, res) => {
   if (!isConfigInitialized()) {
     return res.redirect('/setup');
   }
-  const cfg = getConfig();
-  return res.redirect(`/${cfg.admin_path}`);
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  return res.sendFile(path.join(__dirname, 'public/index.html'));
 });
 
 app.get('/:customAdminPath', (req, res, next) => {

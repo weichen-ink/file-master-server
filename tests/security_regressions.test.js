@@ -218,3 +218,11 @@ test('getClientIp does not trust spoofed X-Forwarded-For when req.ip is absent',
   };
   assert.equal(getClientIp(spoofedReq), '127.0.0.1');
 });
+
+test('Landing page is served on root without leaking admin_path', () => {
+  const indexHtmlPath = path.join(__dirname, '../src/public/index.html');
+  assert.ok(fs.existsSync(indexHtmlPath), 'index.html must exist');
+  const content = fs.readFileSync(indexHtmlPath, 'utf8');
+  assert.ok(!content.includes('admin_path'), 'index.html must not contain admin_path references');
+  assert.ok(content.includes('File Master'), 'index.html must introduce File Master');
+});

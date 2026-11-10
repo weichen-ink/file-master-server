@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>File Master Server</title>
+  <link rel="stylesheet" href="/assets/console.css?v=1.1.2" />
+  <style>
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      margin: 0;
+      padding: 0;
+      -webkit-font-smoothing: antialiased;
+    }
+    .landing-nav {
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 32px;
+      background: #ffffff;
+      border-bottom: 1px solid var(--border);
+    }
+    .landing-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.01em;
+    }
+    .landing-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--success);
+      background: #ecfdf5;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      border: 1px solid #d1fae5;
+    }
+    .landing-status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--success);
+      box-shadow: 0 0 0 2px rgba(5, 150, 105, 0.2);
+    }
+    .landing-hero {
+      max-width: 840px;
+      margin: 64px auto 40px;
+      padding: 0 24px;
+      text-align: center;
+    }
+    .hero-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--primary);
+      background: rgba(37, 99, 235, 0.08);
+      padding: 4px 14px;
+      border-radius: 9999px;
+      margin-bottom: 20px;
+    }
+    .hero-title {
+      font-size: 38px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1.25;
+      color: #111827;
+      margin-bottom: 16px;
+    }
+    .hero-subtitle {
+      font-size: 16px;
+      line-height: 1.6;
+      color: var(--muted);
+      max-width: 620px;
+      margin: 0 auto;
+    }
+    .landing-grid {
+      max-width: 960px;
+      margin: 20px auto 60px;
+      padding: 0 24px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 20px;
+      width: 100%;
+    }
+    @media (max-width: 720px) {
+      .landing-grid { grid-template-columns: minmax(0, 1fr); }
+      .hero-title { font-size: 28px; }
+      .landing-nav { padding: 0 18px; }
+    }
+    .feature-card {
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+      transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    }
+    .feature-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.05);
+      border-color: rgba(37, 99, 235, 0.2);
+    }
+    .feature-icon-box {
+      width: 42px;
+      height: 42px;
+      border-radius: 10px;
+      background: var(--ink-panel);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      margin-bottom: 16px;
+    }
+    .feature-name {
+      font-size: 15px;
+      font-weight: 700;
+      color: #111827;
+      margin-bottom: 8px;
+    }
+    .feature-desc {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+    .landing-footer {
+      margin-top: auto;
+      background: #ffffff;
+      border-top: 1px solid var(--border);
+      padding: 24px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      font-size: 12.5px;
+      color: var(--muted);
+    }
+    .secure-note {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: #9ca3af;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+
+  <header class="landing-nav">
+    <div class="landing-brand">
+      <span>⚡</span>
+      <span id="siteBrandName">File Master Server</span>
+    </div>
+    <div class="landing-status">
+      <span class="landing-status-dot"></span>
+      <span>服务运行正常 · Service Online</span>
+    </div>
+  </header>
+
+  <main>
+    <section class="landing-hero">
+      <div class="hero-pill">✨ 知识资产与多媒体中枢</div>
+      <h1 class="hero-title">高效、安全、专属的<br />云端媒体与文件服务</h1>
+      <p class="hero-subtitle">
+        专为个人知识库、创作者与开发团队量身定制的高性能自托管资产中枢，无缝兼顾无损原始留存与极速自适应转码分发。
+      </p>
+    </section>
+
+    <section class="landing-grid">
+      <div class="feature-card">
+        <div class="feature-icon-box">⚡</div>
+        <div class="feature-name">按需动态转码与 WebP 优化</div>
+        <div class="feature-desc">原始无损素材永久安全存储；对公开外链在访问时毫秒级按需自适应生成 WebP 与动态防盗水印，大幅加速全网加载并节省 80%+ 流量。</div>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon-box">🛡️</div>
+        <div class="feature-name">隐蔽安全体系与动态风控</div>
+        <div class="feature-desc">全站支持自定义隐蔽安全入口，主页不暴露管理员后台地址；配备多重凭证校验、双重验证（2FA）及连续重试自动 IP 防爆破封禁。</div>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon-box">☁️</div>
+        <div class="feature-name">全自动备份与异地容灾</div>
+        <div class="feature-desc">每日定时将全库核心资产与数据打包无损归档，自动轮转清理旧版本；原生支持自动直传同步至 OneDrive 云盘，并直推 Bark 手机提醒。</div>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon-box">🔌</div>
+        <div class="feature-name">深度生态集成与双端联动</div>
+        <div class="feature-desc">专为 Obsidian File Master 插件提供原生通信协议，同时完美兼容 PicList、CLI 脚本及第三方图床客户端，资产入库与引用行云流水。</div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="landing-footer">
+    <div>
+      <strong>File Master Server</strong> · Self-hosted Asset Platform
+    </div>
+    <div class="secure-note">
+      <span>🔒</span>
+      <span>受保护的专有系统 · 如需管理请从预设的安全路径进入</span>
+    </div>
+  </footer>
+
+  <script>
+    fetch('/api/platform/version')
+      .then(r => r.json())
+      .then(d => {
+        if (d && d.version) {
+          document.title = 'File Master Server v' + d.version;
+        }
+      })
+      .catch(() => {});
+  </script>
+</body>
+</html>

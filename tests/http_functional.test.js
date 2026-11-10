@@ -64,7 +64,10 @@ test('HTTP functional regression across platform, assets, shares and recovery', 
     assert.equal(created.status, 200, created.text); saveCookie(created);
     assert.match(getConfig().password, /^scrypt:/);
     assert.equal((await call('/api/platform/setup-defaults')).status, 403);
-    assert.equal((await call('/setup')).headers.get('location'), '/test-admin');
+    assert.equal((await call('/setup')).headers.get('location'), '/');
+    const landing = await call('/');
+    assert.equal(landing.status, 200);
+    assert.match(landing.text, /File Master/);
     await patch({ max_login_attempts: 100, image_host: { max_width: 256, watermark_min_width: 10 } });
   });
 
