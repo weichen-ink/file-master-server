@@ -867,11 +867,14 @@ function registerImageHostModule(app) {
       const rawBasenameWithExt = path.basename(rawFilePath);
       const rawWmParam = String(req.query.wm || req.query.watermark || '').toLowerCase().trim();
       const validWmTypes = ['image', 'text', 'tile'];
-      const activeWmType = validWmTypes.includes(rawWmParam)
+      const isCustomVariant = validWmTypes.includes(rawWmParam);
+
+      const globalWmEnabled = cfg.image_host?.watermark_enable !== false;
+      const shouldWatermark = isCustomVariant ? true : globalWmEnabled;
+      const activeWmType = isCustomVariant
         ? rawWmParam
         : (cfg.image_host?.watermark_type || 'image');
 
-      const isCustomVariant = validWmTypes.includes(rawWmParam);
       const cacheFilePath = getWebpCacheFilePath(
         year,
         month,
@@ -882,7 +885,7 @@ function registerImageHostModule(app) {
       if (!fs.existsSync(cacheFilePath)) {
         const effectiveImgCfg = {
           ...cfg.image_host,
-          watermark_enable: true,
+          watermark_enable: shouldWatermark,
           watermark_type: activeWmType
         };
         await processAndCacheImage(rawFilePath, cacheFilePath, effectiveImgCfg);

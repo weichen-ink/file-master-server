@@ -17,6 +17,45 @@ const PKG_PATH = path.join(ROOT_DIR, 'package.json');
 const PKG_LOCK_PATH = path.join(ROOT_DIR, 'package-lock.json');
 const WATERMARK_PATH = path.join(ROOT_DIR, 'watermark.png');
 
+function getWatermarkFilesToPreserve() {
+  const candidates = new Set(['watermark.png', 'watermark-dark.png']);
+  try {
+    const cfg = getConfig();
+    const wmImg = cfg.image_host?.watermark_image;
+    if (wmImg) {
+      const rel = path.relative(ROOT_DIR, path.resolve(ROOT_DIR, wmImg));
+      if (!rel.startsWith('..') && !path.isAbsolute(rel)) candidates.add(rel);
+    }
+    const wmDark = cfg.image_host?.watermark_image_dark;
+    if (wmDark) {
+      const rel = path.relative(ROOT_DIR, path.resolve(ROOT_DIR, wmDark));
+      if (!rel.startsWith('..') && !path.isAbsolute(rel)) candidates.add(rel);
+    }
+  } catch {}
+  return [...candidates];
+}
+
+function backupWatermarkFiles() {
+  const backups = new Map();
+  for (const rel of getWatermarkFilesToPreserve()) {
+    const full = path.join(ROOT_DIR, rel);
+    if (fs.existsSync(full)) {
+      backups.set(full, fs.readFileSync(full));
+    }
+  }
+  return backups;
+}
+
+function restoreWatermarkFiles(backups) {
+  if (!backups || !(backups instanceof Map)) return;
+  for (const [full, buf] of backups.entries()) {
+    try {
+      fs.mkdirSync(path.dirname(full), { recursive: true });
+      fs.writeFileSync(full, buf);
+    } catch {}
+  }
+}
+
 let updateInProgress = false;
 
 const OFFICIAL_UPSTREAM_REPO = 'https://github.com/weichen-ink/file-master-server.git';
@@ -333,9 +372,9 @@ async function performHotUpdate(options = {}) {
     console.log(`[HotUpdate] ${msg}`);
   };
 
-  // Back up user's config.yaml and custom watermark.png before touching git
+  // Back up user's config.yaml and all customized watermark files before touching git
   const userRawYaml = getRawConfigYaml();
-  const watermarkBackup = fs.existsSync(WATERMARK_PATH) ? fs.readFileSync(WATERMARK_PATH) : null;
+  const watermarkBackups = backupWatermarkFiles();
   const oldPkgHash = getFileSha256(PKG_PATH) + ':' + getFileSha256(PKG_LOCK_PATH);
 
   try {
@@ -362,9 +401,7 @@ async function performHotUpdate(options = {}) {
     restoreAndMergeUserConfig(userRawYaml, upstreamRawYaml);
     logStep(`Restored and merged user config.yaml (all credentials & settings preserved)`);
 
-    if (watermarkBackup) {
-      fs.writeFileSync(WATERMARK_PATH, watermarkBackup);
-    }
+    restoreWatermarkFiles(watermarkBackups);
 
     const newPkgHash = getFileSha256(PKG_PATH) + ':' + getFileSha256(PKG_LOCK_PATH);
     let depsUpdated = false;
@@ -394,7 +431,7 @@ async function performHotUpdate(options = {}) {
     // Always ensure user's config.yaml is intact even if git reset/fetch failed mid-way
     try {
       saveRawConfigYaml(userRawYaml);
-      if (watermarkBackup) fs.writeFileSync(WATERMARK_PATH, watermarkBackup);
+      restoreWatermarkFiles(watermarkBackups);
     } catch {
       // Ignore secondary restore error
     }

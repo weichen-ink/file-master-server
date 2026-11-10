@@ -407,7 +407,20 @@ app.get('/api/platform/backup/download', requireAdmin, (req, res) => {
   const tmpArchivePath = path.join(UPLOAD_TMP_DIR, `${Date.now()}_${crypto.randomBytes(6).toString('hex')}.tar.gz`);
 
   const targets = [];
-  for (const candidate of ['config.yaml', 'config.example.yaml', 'watermark.png', 'data']) {
+  const backupCandidates = new Set(['config.yaml', 'config.example.yaml', 'watermark.png', 'watermark-dark.png', 'data']);
+  try {
+    const cfg = getConfig();
+    if (cfg.image_host?.watermark_image) {
+      const rel = path.relative(ROOT_DIR, path.resolve(ROOT_DIR, cfg.image_host.watermark_image));
+      if (!rel.startsWith('..') && !path.isAbsolute(rel)) backupCandidates.add(rel);
+    }
+    if (cfg.image_host?.watermark_image_dark) {
+      const rel = path.relative(ROOT_DIR, path.resolve(ROOT_DIR, cfg.image_host.watermark_image_dark));
+      if (!rel.startsWith('..') && !path.isAbsolute(rel)) backupCandidates.add(rel);
+    }
+  } catch {}
+
+  for (const candidate of backupCandidates) {
     if (fs.existsSync(path.join(ROOT_DIR, candidate))) {
       targets.push(candidate);
     }

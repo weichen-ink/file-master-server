@@ -115,7 +115,7 @@ trust_proxy: loopback
 admin_path: admin               # Admin console route (e.g. /admin)
 username: admin                 # Administrator username
 password: scrypt:...            # Auto-hashed with scrypt
-max_login_attempts: 5           # Lockout threshold before IP ban
+max_login_attempts: 3           # Lockout threshold before IP ban
 totp_secret: ""                 # 2FA base32 secret (leave blank to disable)
 api_token: fm_...               # Global API token for client integrations
 
@@ -125,13 +125,20 @@ image_host:
   enable_optimization: true     # Enable Sharp WebP transcoding & watermark
   webp_quality: 82              # WebP compression quality (1-100)
   max_width: 1920               # Max width constraint (0 for unlimited)
-  watermark_enable: true        # Dynamic watermark on optimized link
-  watermark_type: image         # image | text
+  watermark_enable: true        # Watermark switch for public links: true | false
+  watermark_type: image         # image | text | tile
   watermark_pos: bottom-right   # bottom-right | bottom-left | top-right | top-left | center
   watermark_opacity: 0.65       # Transparency (0.1 - 1.0)
   watermark_scale: 0.16         # Proportional scale (16% of width)
+  watermark_margin: 24          # Edge padding in pixels
+  watermark_min_width: 320      # Skip watermarking if image width < threshold
   watermark_image: ./watermark.png
+  watermark_image_dark: ./watermark-dark.png
+  watermark_auto_contrast: true # Adaptive light/dark switching by image luminance
   watermark_text: "© FileMaster"
+  watermark_color: "#ffffff"
+  watermark_color_dark: "#111827"
+  watermark_font: system        # system | pingfang | arial | impact | georgia | courier
 ```
 
 ---
@@ -145,7 +152,7 @@ image_host:
 | `GET` | `/api/image/probe` | Instant upload SHA-256 probe check | API Token / Session |
 | `POST` | `/api/image/upload` | Upload file (multipart streaming `file`) | API Token / Session |
 | `GET` | `/:rawSecret/:year/:month/:file` | Fetch lossless original file | Public |
-| `GET` | `/pub/:year/:month/:file` | Fetch optimized WebP / watermarked image | Public |
+| `GET` | `/pub/:year/:month/:file` | Fetch optimized WebP (supports dynamic `?wm=image`, `?wm=text`, `?wm=tile`) | Public |
 | `GET` | `/api/modules/image-host/list` | Fetch all assets and storage metrics | API Token / Session |
 | `POST` | `/api/modules/image-host/lock` | Toggle asset deletion lock | API Token / Session |
 | `DELETE` | `/api/modules/image-host/item/:y/:m/:f` | Soft-delete file to `storage/trash/` | API Token / Session |
