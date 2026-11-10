@@ -1,11 +1,11 @@
 # =====================================================================
-# FileMaster Server - Global and Module Configuration
+# File Master Server - Global and Module Configuration
 # =====================================================================
 
 # ----------------- 1. Core Settings -----------------
 site_name: File Master Server
-port: 3000
-base_url: http://localhost:3000
+port: 3210
+base_url: http://localhost:3210
 
 # Reverse proxy trust setting (e.g. loopback, 127.0.0.1, or false if directly exposed)
 trust_proxy: loopback
@@ -33,7 +33,7 @@ max_login_attempts: 3
 # Optional TOTP 2FA secret (leave empty "" to disable 2FA)
 totp_secret: ""
 
-# Global API token for FileMaster plugin, PicList, scripts, and CLI tools
+# Global API token for File Master plugin, PicList, scripts, and CLI tools
 api_token: ""
 
 # =====================================================================
@@ -57,7 +57,7 @@ image_host:
   watermark_image: ./wm-light.png
   watermark_image_dark: ./wm-dark.png
   watermark_auto_contrast: true
-  watermark_text: "© FileMaster"
+  watermark_text: "© File Master"
   watermark_color: "#ffffff"
   watermark_color_dark: "#111827"
   watermark_font: system # Web safe font: system | pingfang | arial | impact | georgia | courier

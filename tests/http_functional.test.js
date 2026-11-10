@@ -51,14 +51,14 @@ test('HTTP functional regression across platform, assets, shares and recovery', 
   };
   const assetPath = (item) => path.join(STORAGE_DIR, 'raw', item.year, item.month, item.filename);
 
-  await t.test('First-run wizard requires setup token, hashes credentials and locks after setup', async () => {
+  await t.test('First-run wizard initializes credentials and locks after setup', async () => {
     assert.equal((await call('/')).headers.get('location'), '/setup');
     assert.equal((await call('/setup')).status, 200);
     const status = (await call('/api/platform/status')).data;
     assert.equal(status.needsSetup, true); assert.equal(status.endpoints, null);
     assert.equal((await call('/api/platform/setup-defaults')).status, 200);
-    assert.equal((await call('/api/platform/setup', { method: 'POST', json: credentials })).status, 403);
-    const created = await call('/api/platform/setup', { method: 'POST', headers: { 'X-Filemaster-Setup-Token': SETUP_TOKEN },
+    assert.equal((await call('/api/platform/setup', { method: 'POST', json: { ...credentials, password: '' } })).status, 500);
+    const created = await call('/api/platform/setup', { method: 'POST',
       json: { ...credentials, base_url: base, admin_path: 'test-admin', api_token: token, watermark_enable: false } });
     assert.equal(created.status, 200, created.text); saveCookie(created);
     assert.match(getConfig().password, /^scrypt:/);

@@ -137,7 +137,7 @@ async function transcodePreviewJpeg(rawFilePath, previewCachePath) {
 /**
  * Generates a default semi-transparent watermark PNG if none exists at watermark.png.
  */
-async function ensureDefaultWatermark(watermarkFilePath, text = '© FileMaster', isDark = false) {
+async function ensureDefaultWatermark(watermarkFilePath, text = '© File Master', isDark = false) {
   if (fs.existsSync(watermarkFilePath)) return;
   const bgFill = isDark ? 'rgba(255, 255, 255, 0.55)' : 'rgba(0, 0, 0, 0.38)';
   const txtFill = isDark ? '#111827' : '#ffffff';
@@ -258,13 +258,13 @@ async function buildWatermarkOverlay(imgCfg, targetWidth, targetHeight, basePipe
     const wmPathLight = isPathWithin(requestedWmPath, ROOT_DIR)
       ? requestedWmPath
       : path.resolve(ROOT_DIR, './wm-light.png');
-    await ensureDefaultWatermark(wmPathLight, imgCfg.watermark_text || '© FileMaster', false);
+    await ensureDefaultWatermark(wmPathLight, imgCfg.watermark_text || '© File Master', false);
 
     const requestedDarkPath = path.resolve(ROOT_DIR, imgCfg.watermark_image_dark || './wm-dark.png');
     const wmPathDark = isPathWithin(requestedDarkPath, ROOT_DIR)
       ? requestedDarkPath
       : path.resolve(ROOT_DIR, './wm-dark.png');
-    await ensureDefaultWatermark(wmPathDark, imgCfg.watermark_text || '© FileMaster', true);
+    await ensureDefaultWatermark(wmPathDark, imgCfg.watermark_text || '© File Master', true);
 
     const effectiveScale = Math.min(0.4, scale * portraitBoost);
     let wmTargetWidth = Math.round(targetWidth * effectiveScale);
@@ -339,7 +339,7 @@ async function buildWatermarkOverlay(imgCfg, targetWidth, targetHeight, basePipe
 
   // Mode 2: Repeating diagonal tiled watermark
   if (type === 'tile') {
-    const text = escapeXml(imgCfg.watermark_text || '© FileMaster');
+    const text = escapeXml(imgCfg.watermark_text || '© File Master');
     let textColor = imgCfg.watermark_color || '#ffffff';
     let shadowColor = 'rgba(0,0,0,0.65)';
 
@@ -379,7 +379,7 @@ async function buildWatermarkOverlay(imgCfg, targetWidth, targetHeight, basePipe
   }
 
   // Mode 3: Corner text watermark
-  const text = escapeXml(imgCfg.watermark_text || '© FileMaster');
+  const text = escapeXml(imgCfg.watermark_text || '© File Master');
   const effectiveScale = Math.min(0.4, scale * portraitBoost);
   const wmTargetWidth = Math.max(100, Math.round(targetWidth * effectiveScale));
 

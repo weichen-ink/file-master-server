@@ -395,7 +395,7 @@ function fillConfigForm(cfg, rawYaml) {
   document.getElementById('rawYamlEditor').value = rawYaml || '';
   document.getElementById('f_site_name').value = cfg.site_name || '';
   document.getElementById('f_base_url').value = cfg.base_url || '';
-  document.getElementById('f_port').value = cfg.port || 3000;
+  document.getElementById('f_port').value = cfg.port || 3210;
   
   const mirror = (cfg.upstream_mirror || '').trim();
   const enableMirrorEl = document.getElementById('f_enable_mirror');
@@ -473,7 +473,7 @@ async function saveConfigForm() {
   const patch = {
     site_name: document.getElementById('f_site_name').value.trim(),
     base_url: document.getElementById('f_base_url').value.trim().replace(/\/+$/, ''),
-    port: Number(document.getElementById('f_port').value) || 3000,
+    port: Number(document.getElementById('f_port').value) || 3210,
     upstream_mirror: getSelectedUpstreamMirror(),
     upstream_branch: 'main',
     admin_path: document.getElementById('f_admin_path').value.trim().replace(/^\/+|\/+$/g, ''),

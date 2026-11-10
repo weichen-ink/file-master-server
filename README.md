@@ -1,4 +1,4 @@
-# ⚡ FileMaster Server
+# ⚡ File Master Server
 
 [![Node.js Version](https://img.shields.io/badge/Node.js-%3E%3D18.0.0-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 [![Docker Support](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white)](Dockerfile)
@@ -15,7 +15,7 @@
 <a name="english"></a>
 ## 🌟 Overview
 
-**FileMaster Server** is a fast, database-free self-hosted media backend designed to accompany the [FileMaster Obsidian Plugin](https://github.com/weichen-ink/file-master). It can also function as an independent, secure image hosting platform for PicList, Astro static blogs, CLI scripts, and markdown documentation workflows.
+**File Master Server** is a fast, database-free self-hosted media backend designed to accompany the [File Master Obsidian Plugin](https://github.com/weichen-ink/file-master). It can also function as an independent, secure image hosting platform for PicList, Astro static blogs, CLI scripts, and markdown documentation workflows.
 
 ---
 
@@ -57,8 +57,8 @@
    docker compose up -d --build
    ```
 2. Open your browser and navigate to:  
-   `http://localhost:3000/setup`
-3. Find the setup token in the server log (`docker compose logs file-master-server`), then enter it in the setup wizard to initialize your administrator credentials and API token. The token changes on each server start unless `FILEMASTER_SETUP_TOKEN` is set to a secret of at least 24 bytes.
+   `http://localhost:3210/setup`
+3. Complete the interactive setup wizard to set your administrator credentials and API token.
 
 Use HTTPS for access from other devices. Set `trust_proxy` to your trusted reverse proxy and restart the server so it can mark administrator cookies `Secure` (the default `loopback` only trusts a proxy on the same host). Plain HTTP is suitable only for a local, trusted setup connection; it does not protect the plugin API token or administrator password in transit.
 
@@ -84,10 +84,14 @@ See [batch processing and scale](docs/SCALABILITY.md) for recovery and verificat
 # 1. Install dependencies
 npm install
 
-# 2. Production startup via PM2
+# 2. Production startup via PM2 ecosystem
 npm install -g pm2
-pm2 start src/server.js --name filemaster-server
-pm2 save && pm2 startup
+pm2 start ecosystem.config.js
+# Or run via npm script
+npm run pm2
+
+# 3. View startup output and runtime logs
+pm2 logs file-master-server
 ```
 
 ---
@@ -101,7 +105,7 @@ server {
     client_max_body_size 100M;
 
     location / {
-        proxy_pass http://127.0.0.1:3000;
+        proxy_pass http://127.0.0.1:3210;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -116,9 +120,9 @@ server {
 
 ```yaml
 # Platform Basics
-site_name: FileMaster Server
-port: 3000
-base_url: http://localhost:3000
+site_name: File Master Server
+port: 3210
+base_url: http://localhost:3210
 trust_proxy: loopback
 
 # Security & Authentication
@@ -187,7 +191,7 @@ For large batches, the console supports cancellation, retries of unfinished uplo
 <a name="简体中文"></a>
 ## 🇨🇳 简体中文介绍
 
-**FileMaster Server** 是一款面向个人与中小型团队的轻量级、无数据库自建多媒体图床与资产管理系统。
+**File Master Server** 是一款面向个人与中小型团队的轻量级、无数据库自建多媒体图床与资产管理系统。
 
 ### ✨ 核心特性
 * **⚡ 零外部数据库**: 纯本地文件系统 + 原子 JSON 存储，无需 MySQL/Redis，备份只需拷贝文件夹。

@@ -1,11 +1,12 @@
 {
   "name": "file-master-server",
   "version": "1.0.1",
-  "description": "Self-hosted backend server for FileMaster: smart image hosting, on-the-fly watermarking, WebP conversion, and asset management.",
+  "description": "Self-hosted backend server for File Master: smart image hosting, on-the-fly watermarking, WebP conversion, and asset management.",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
+    "pm2": "pm2 start ecosystem.config.js",
     "test": "node scripts/test.js"
   },
   "dependencies": {

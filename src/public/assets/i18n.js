@@ -373,7 +373,7 @@ const I18N = {
     serverOnline: "服务端进程已重新上线！正在恢复控制台状态...",
     hotUpdateConfirm: "从 [{branch}]{mirrorHint} 安装更新并重启服务？现有配置和文件将保留。",
     pullingUpdate: "正在安装更新...",
-    restartConfirm: "确定立即重启 FileMaster Server 服务端进程吗？",
+    restartConfirm: "确定立即重启 File Master Server 服务端进程吗？",
     restartingServer: "正在重启服务..."
   },
   en: {
@@ -749,7 +749,7 @@ const I18N = {
     serverOnline: "Server is back online! Reloading console state...",
     hotUpdateConfirm: "Install updates from [{branch}]{mirrorHint} and restart the server? Your settings and files will be kept.",
     pullingUpdate: "Installing update...",
-    restartConfirm: "Restart the FileMaster Server process now?",
+    restartConfirm: "Restart the File Master Server process now?",
     restartingServer: "Restarting..."
   }
 };

@@ -97,7 +97,7 @@ function createUpdateBackup({ rootDir: ROOT_DIR, dataDir: DATA_DIR, configPath: 
           fs.writeFileSync(full, buf);
           restoredCount++;
         } catch (err) {
-          console.error(`[FileMaster Updater] Failed to restore watermark file ${full}:`, err);
+          console.error(`[File Master Updater] Failed to restore watermark file ${full}:`, err);
           failed.push({ file: full, error: err.message });
         }
       }
@@ -177,7 +177,7 @@ function createUpdateBackup({ rootDir: ROOT_DIR, dataDir: DATA_DIR, configPath: 
     try {
       const state = readPendingUpdate(pendingFile);
       if (!state.assetsRestored) {
-        console.log('[FileMaster Updater] Interrupted update detected, restoring configuration and watermarks from disk backups...');
+        console.log('[File Master Updater] Interrupted update detected, restoring configuration and watermarks from disk backups...');
         if (!fs.existsSync(cfgBackup)) throw new Error('Config backup missing in data/config.backup.yaml');
         const wmRes = restoreWatermarkFiles(null, backupDir, targetRootDir);
         if (!wmRes.success) {
@@ -189,14 +189,14 @@ function createUpdateBackup({ rootDir: ROOT_DIR, dataDir: DATA_DIR, configPath: 
         writePendingUpdate(state, pendingFile);
       }
       if (state.dependenciesPending) {
-        console.warn('[FileMaster Updater] User assets restored; dependencies may be incomplete. Retry the hot update to install dependencies before restarting.');
+        console.warn('[File Master Updater] User assets restored; dependencies may be incomplete. Retry the hot update to install dependencies before restarting.');
       } else {
         clearPendingUpdate(pendingFile, cfgBackup);
-        console.log('[FileMaster Updater] Successfully recovered from interrupted update.');
+        console.log('[File Master Updater] Successfully recovered from interrupted update.');
       }
       return { recovered: true, success: true, dependenciesPending: state.dependenciesPending };
     } catch (err) {
-      console.error('[FileMaster Updater] Error during interrupted update recovery (flag preserved for retry):', err.message);
+      console.error('[File Master Updater] Error during interrupted update recovery (flag preserved for retry):', err.message);
       return { recovered: true, success: false, error: err.message };
     }
   }

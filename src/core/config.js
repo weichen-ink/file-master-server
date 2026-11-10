@@ -30,9 +30,9 @@ function getExampleConfigTemplate() {
   if (fs.existsSync(EXAMPLE_CONFIG_PATH)) {
     return fs.readFileSync(EXAMPLE_CONFIG_PATH, 'utf8');
   }
-  return `site_name: FileMaster Server
-port: 3000
-base_url: http://localhost:3000
+  return `site_name: File Master Server
+port: 3210
+base_url: http://localhost:3210
 trust_proxy: loopback
 hot_update: true
 upstream_repo: ${OFFICIAL_UPSTREAM_REPO}
@@ -60,7 +60,7 @@ image_host:
   watermark_image: ./wm-light.png
   watermark_image_dark: ./wm-dark.png
   watermark_auto_contrast: true
-  watermark_text: "© FileMaster"
+  watermark_text: "© File Master"
   watermark_color: "#ffffff"
   watermark_color_dark: "#111827"
   watermark_font: system
@@ -110,9 +110,9 @@ function normalizeParsedConfig(parsed = {}, needsSetup = false) {
 
   return {
     needsSetup,
-    site_name: parsed.site_name || defaults.site_name || 'FileMaster Server',
-    port: Number(parsed.port) || Number(defaults.port) || 3000,
-    base_url: String(parsed.base_url || defaults.base_url || 'http://localhost:3000').replace(/\/+$/, ''),
+    site_name: parsed.site_name || defaults.site_name || 'File Master Server',
+    port: Number(parsed.port) || Number(defaults.port) || 3210,
+    base_url: String(parsed.base_url || defaults.base_url || 'http://localhost:3210').replace(/\/+$/, ''),
     trust_proxy:
       parsed.trust_proxy !== undefined
         ? parsed.trust_proxy
@@ -158,8 +158,8 @@ function initializeConfigFromSetup(setupData = {}) {
   const template = getExampleConfigTemplate();
   const doc = YAML.parseDocument(template);
 
-  const siteName = String(setupData.site_name || 'FileMaster Server').trim() || 'FileMaster Server';
-  const port = Number(setupData.port) || 3000;
+  const siteName = String(setupData.site_name || 'File Master Server').trim() || 'File Master Server';
+  const port = Number(setupData.port) || 3210;
   const baseUrl = String(setupData.base_url || `http://localhost:${port}`).trim().replace(/\/+$/, '');
   const adminPath = String(setupData.admin_path || 'admin').trim().replace(/^\/+|\/+$/g, '') || 'admin';
   const username = String(setupData.username || 'admin').trim() || 'admin';

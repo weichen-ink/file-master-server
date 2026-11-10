@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>FileMaster Server</title>
+  <title>File Master Server</title>
   <style>
     :root {
       --bg: #0b0f19;
@@ -194,18 +194,13 @@
     <div class="header">
       <button type="button" class="btn btn-outline" id="languageToggle" onclick="toggleSetupLanguage()" style="float:right; padding:4px 8px;">English</button>
       <span class="badge" data-i18n="badge">首次设置</span>
-      <h1 data-i18n="title">设置 FileMaster Server</h1>
+      <h1 data-i18n="title">设置 File Master Server</h1>
       <p data-i18n="intro">创建管理员账号并设置文件访问地址。</p>
     </div>
 
     <div id="errBox" class="error-msg"></div>
 
     <form id="setupForm" onsubmit="submitSetup(event)">
-      <div class="form-group">
-        <label data-i18n="setupToken">初始化口令</label>
-        <input type="password" id="s_setup_token" class="form-input" autocomplete="off" required />
-        <div class="hint" data-i18n="setupTokenHint">在服务器启动日志中查看；Docker 部署可运行 docker compose logs file-master-server。</div>
-      </div>
       <!-- 1. 管理员账号与凭证 -->
       <div class="section">
         <div class="section-title" data-i18n="accountTitle">1. 账号与令牌</div>
@@ -289,7 +284,7 @@
         <div class="grid-3">
           <div class="form-group">
             <label data-i18n="siteName">站点名称</label>
-            <input type="text" id="s_site_name" class="form-input" value="FileMaster Server" required />
+            <input type="text" id="s_site_name" class="form-input" value="File Master Server" required />
           </div>
           <div class="form-group">
             <label data-i18n="baseUrl">公开访问地址</label>
@@ -297,7 +292,7 @@
           </div>
           <div class="form-group">
             <label data-i18n="port">监听端口</label>
-            <input type="number" id="s_port" class="form-input" value="3000" required />
+            <input type="number" id="s_port" class="form-input" value="3210" required />
           </div>
         </div>
       </div>
@@ -309,7 +304,7 @@
   <script>
     const setupCopy = {
       zh: {
-        badge: '首次设置', title: '设置 FileMaster Server', intro: '创建管理员账号并设置文件访问地址。',
+        badge: '首次设置', title: '设置 File Master Server', intro: '创建管理员账号并设置文件访问地址。',
         setupToken: '初始化口令', setupTokenHint: '在服务器启动日志中查看；Docker 部署可运行 docker compose logs file-master-server。',
         accountTitle: '1. 账号与令牌', username: '管理员用户名', adminPath: '管理页面路径',
         adminPathHint: '默认访问路径为 /admin', password: '管理员密码', passwordPlaceholder: '输入管理员密码',
@@ -324,7 +319,7 @@
         missingPassword: '请输入管理员密码，或点击“生成密码”。', saving: '正在保存设置...', setupFailed: '设置失败'
       },
       en: {
-        badge: 'First-time setup', title: 'Set up FileMaster Server', intro: 'Create an admin account and set the public file URL.',
+        badge: 'First-time setup', title: 'Set up File Master Server', intro: 'Create an admin account and set the public file URL.',
         setupToken: 'Setup token', setupTokenHint: 'Find it in the server startup log. For Docker, run docker compose logs file-master-server.',
         accountTitle: '1. Account and token', username: 'Admin username', adminPath: 'Admin page path',
         adminPathHint: 'Default path: /admin', password: 'Admin password', passwordPlaceholder: 'Enter an admin password',
@@ -411,7 +406,6 @@
       errBox.style.display = 'none';
 
       const password = document.getElementById('s_password').value.trim();
-      const setupToken = document.getElementById('s_setup_token').value.trim();
       if (!password) {
         errBox.textContent = setupText('missingPassword');
         errBox.style.display = 'block';
@@ -425,7 +419,7 @@
       const payload = {
         site_name: document.getElementById('s_site_name').value.trim(),
         base_url: document.getElementById('s_base_url').value.trim(),
-        port: Number(document.getElementById('s_port').value) || 3000,
+        port: Number(document.getElementById('s_port').value) || 3210,
         admin_path: document.getElementById('s_admin_path').value.trim(),
         username: document.getElementById('s_username').value.trim(),
         password,
@@ -441,7 +435,7 @@
       try {
         const res = await fetch('/api/platform/setup', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-FileMaster-Setup-Token': setupToken },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
         const data = await res.json();

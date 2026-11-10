@@ -36,8 +36,8 @@ test('Setup Wizard & Image Optimization: uninitialized mode, setup flow, and opt
     // 3. Complete setup with custom credentials and optimization disabled
     const createdCfg = initializeConfigFromSetup({
       site_name: 'Weichen Image Host',
-      port: 3000,
-      base_url: 'http://localhost:3000',
+      port: 3210,
+      base_url: 'http://localhost:3210',
       admin_path: 'admin',
       username: 'weichen',
       password: 'custom-user-pass-123',

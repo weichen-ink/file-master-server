@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>FileMaster Server Console</title>
+  <title>File Master Server Console</title>
   <link rel="stylesheet" href="/assets/console.css?v=1.0.1" />
 </head>
 <body>
@@ -11,7 +11,7 @@
   <!-- ================= 1. Stealth Login View ================= -->
   <div id="loginView" class="login-wrap hidden">
     <div class="login-card">
-      <div class="login-title">⚡ <span id="loginSiteName">FileMaster Server</span></div>
+      <div class="login-title">⚡ <span id="loginSiteName">File Master Server</span></div>
       <div class="login-sub" data-i18n="loginSub">隐蔽访问路径已生效 · 连续失败将锁定 IP 24 小时</div>
       <div id="loginError" class="err-msg hidden"></div>
       <form id="loginForm">
@@ -42,13 +42,13 @@
   <div id="appView" class="layout hidden">
     <header class="mobile-topbar">
       <button id="mobileMenuButton" class="mobile-nav-button" type="button" onclick="setMobileNav(true)" aria-expanded="false" aria-controls="consoleSidebar" aria-label="打开导航" data-i18n-aria-label="openMenu">☰</button>
-      <strong id="mobileSiteName">FileMaster Server</strong>
+      <strong id="mobileSiteName">File Master Server</strong>
     </header>
     <aside id="consoleSidebar" class="sidebar">
       <div>
         <div class="brand">
           <div class="brand-heading">
-            <h1 id="navSiteName">FileMaster Server</h1>
+            <h1 id="navSiteName">File Master Server</h1>
             <button class="mobile-nav-button mobile-close-button" type="button" onclick="setMobileNav(false)" aria-label="关闭导航" data-i18n-aria-label="closeMenu">×</button>
           </div>
           <p data-i18n="brandSubtitle">文件与图片服务</p>
@@ -361,7 +361,7 @@
                 <div class="form-grid form-grid-two">
                   <div class="form-group">
                     <label data-i18n="lblWatermarkText">水印文字</label>
-                    <input type="text" id="f_watermark_text" class="form-input" placeholder="© FileMaster" />
+                    <input type="text" id="f_watermark_text" class="form-input" placeholder="© File Master" />
                   </div>
                   <div class="form-group">
                     <label data-i18n="lblWatermarkFont">字体族 (Web 安全字体)</label>
@@ -545,7 +545,7 @@
           <div class="form-grid form-grid-port">
             <div class="form-group">
               <label data-i18n="lblBaseUrl">对外访问公网地址</label>
-              <input type="text" id="f_base_url" class="form-input" placeholder="http://192.168.1.100:3000" />
+              <input type="text" id="f_base_url" class="form-input" placeholder="http://192.168.1.100:3210" />
             </div>
             <div class="form-group">
               <label data-i18n="lblPort">服务监听端口</label>

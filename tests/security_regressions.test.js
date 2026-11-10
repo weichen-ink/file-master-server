@@ -122,7 +122,7 @@ test('Failed trash move keeps the original; successful move removes it', async (
   }
 });
 
-test('First-time setup requires its server-side token; HTTPS cookies are Secure', () => {
+test('First-time setup rejects once initialized; HTTPS cookies are Secure', () => {
   const makeRes = () => ({
     statusCode: 200,
     status(code) { this.statusCode = code; return this; },
@@ -134,8 +134,6 @@ test('First-time setup requires its server-side token; HTTPS cookies are Secure'
   assert.equal(denied.statusCode, 403);
   assert.equal(allowed, false);
 
-  requireSetupToken({ headers: { 'x-filemaster-setup-token': SETUP_TOKEN } }, makeRes(), () => { allowed = true; });
-  assert.equal(allowed, true);
   assert.match(createSessionCookie({ secure: true }, 'token'), /; Secure(?:;|$)/);
   assert.doesNotMatch(createSessionCookie({ secure: false }, 'token'), /; Secure(?:;|$)/);
 });

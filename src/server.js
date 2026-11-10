@@ -28,7 +28,6 @@ const {
   generateTotpSecret,
   verifyTotp,
   createSessionToken,
-  SETUP_TOKEN,
   requireSetupToken,
   createSessionCookie,
   revokeSessionToken,
@@ -273,7 +272,7 @@ app.post('/api/platform/logout', (req, res) => {
 app.post('/api/platform/totp-generate', requireAdmin, (req, res) => {
   const cfg = getConfig();
   const secret = generateTotpSecret(16);
-  const issuer = encodeURIComponent(cfg.site_name || 'FileMaster');
+  const issuer = encodeURIComponent(cfg.site_name || 'File Master Server');
   const user = encodeURIComponent(cfg.username || 'admin');
   const otpauthUri = `otpauth://totp/${issuer}:${user}?secret=${secret}&issuer=${issuer}`;
   res.json({ secret, otpauthUri });
@@ -536,7 +535,7 @@ app.use((req, res) => {
 
 // ================= 4. Server Initialization =================
 const initialCfg = getConfig();
-const PORT = process.env.PORT || initialCfg.port || 3000;
+const PORT = process.env.PORT || initialCfg.port || 3210;
 
 function getNetworkAddress(port) {
   try {
@@ -580,10 +579,6 @@ function startServer(port, retriesLeft = 6) {
       if (netAddr) {
         console.log(`  🌐 Network:    ${netAddr}/setup`);
       }
-      console.log('');
-      console.log(process.env.FILEMASTER_SETUP_TOKEN
-        ? `  🔑 Token:      使用环境变量 FILEMASTER_SETUP_TOKEN`
-        : `  🔑 Token:      ${SETUP_TOKEN}`);
       console.log('');
       console.log(`  💡 提示: 按 Ctrl+C 可停止服务`);
       console.log(divider);

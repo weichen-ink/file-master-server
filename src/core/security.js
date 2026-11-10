@@ -1,27 +1,17 @@
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
-const { DATA_DIR, getConfig, readJsonData, writeJsonData } = require('./config');
+const { DATA_DIR, getConfig, readJsonData, writeJsonData, isConfigInitialized } = require('./config');
 
 // In-memory IP brute-force protection map: ip -> { count, bannedUntil, lastAttempt }
 const ipFailures = new Map();
 const BAN_DURATION_MS = 24 * 60 * 60 * 1000; // 24-hour lockout
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30-day session retention
-const configuredSetupToken = process.env.FILEMASTER_SETUP_TOKEN;
-if (configuredSetupToken && Buffer.byteLength(configuredSetupToken) < 24) {
-  throw new Error('FILEMASTER_SETUP_TOKEN must contain at least 24 bytes');
-}
-const SETUP_TOKEN = configuredSetupToken || crypto.randomBytes(24).toString('hex');
+const SETUP_TOKEN = '';
 
 function requireSetupToken(req, res, next) {
-  const supplied = req.headers['x-filemaster-setup-token'];
-  if (typeof supplied !== 'string') {
-    return res.status(403).json({ error: 'Invalid setup token' });
-  }
-  const actual = Buffer.from(supplied);
-  const expected = Buffer.from(SETUP_TOKEN);
-  if (actual.length !== expected.length || !crypto.timingSafeEqual(actual, expected)) {
-    return res.status(403).json({ error: 'Invalid setup token' });
+  if (isConfigInitialized()) {
+    return res.status(403).json({ error: 'Server is already initialized' });
   }
   next();
 }
