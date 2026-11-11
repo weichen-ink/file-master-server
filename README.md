@@ -41,6 +41,25 @@ npm start
 
 同样打开 `http://localhost:3210/setup` 完成初始化。
 
+### PM2 后台运行
+
+适合希望关闭终端后服务仍继续运行的 Node.js 部署。完成上面的克隆和 `npm ci` 后，在项目目录执行；如果已用 `npm start` 启动，请先按 `Ctrl+C` 停止。
+
+```bash
+npm install -g pm2
+npm run pm2
+pm2 save
+```
+
+服务名称为 `fms`，访问地址仍为 `http://localhost:3210`。需要开机自启时，执行 `pm2 startup`，再按它显示的命令完成设置。
+
+| 操作 | 命令 |
+|---|---|
+| 查看运行状态 | `pm2 status fms` |
+| 查看日志 | `pm2 logs fms` |
+| 重启服务 | `pm2 restart fms` |
+| 停止服务 | `pm2 stop fms` |
+
 ## 开始使用
 
 从首页进入管理页面（默认 `/admin`），即可上传和管理文件。连接客户端时，使用“站点设置”中的站点地址和上传 API 令牌；公网访问建议使用 HTTPS。

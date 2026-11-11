@@ -41,6 +41,25 @@ npm start
 
 Open `http://localhost:3210/setup` to finish setup.
 
+### Run in the background with PM2
+
+Use PM2 to keep a Node.js deployment running after you close the terminal. After cloning the project and running `npm ci` above, run these commands from the project directory. If `npm start` is already running, stop it with `Ctrl+C` first.
+
+```bash
+npm install -g pm2
+npm run pm2
+pm2 save
+```
+
+The service is named `fms` and remains available at `http://localhost:3210`. To start it automatically after a reboot, run `pm2 startup` and follow the command it prints.
+
+| Action | Command |
+|---|---|
+| Check status | `pm2 status fms` |
+| View logs | `pm2 logs fms` |
+| Restart | `pm2 restart fms` |
+| Stop | `pm2 stop fms` |
+
 ## Start using it
 
 Enter the console from the homepage (default: `/admin`) to upload and manage files. To connect a client, use the site URL and upload API token from Site settings. Use HTTPS for public access.
