@@ -1,5 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const { formatReadableUrlSegment } = require('../../core/file-security');
 const { DATA_DIR, writeJsonData } = require('../../core/config');
 
 const keyOf = (year, month, filename) => `${year}/${month}/${filename}`;
@@ -48,4 +49,24 @@ function hasOptimizedNameConflict(year, month, filename) {
   const requested = `${path.parse(filename).name}.webp`, bucket = `${year}/${month}/`;
   return Object.entries(readNameState().pub).some(([key, target]) => key.startsWith(bucket) && foldName(key.slice(bucket.length)) === foldName(requested) && target !== filename);
 }
-module.exports = { hasOptimizedNameConflict, keyOf, foldName, conflict, routeNames, readNameState, saveNameState, resolveAlias, assertNameAvailable };
+/** All known public URL bases for an asset, shared by listing and rename previews. */
+function assetLinkMappings(cfg, year, month, filename, item, state = readNameState()) {
+  const bucket = `${year}/${month}/`, result = new Map();
+  for (const [kind, prefixes, to] of [
+    ['raw', [cfg.image_host?.raw_secret_path || 'raw'], item.rawUrl],
+    ['pub', [...new Set(['pub', cfg.image_host?.pub_secret_path || 'pub'])], item.pubUrl]
+  ]) {
+    for (const [key, target] of Object.entries(state[kind])) {
+      if (!key.startsWith(bucket) || target !== filename) continue;
+      for (const prefix of prefixes) result.set(`${cfg.base_url}/${prefix}/${bucket}${formatReadableUrlSegment(key.slice(bucket.length))}`, to);
+    }
+  }
+  return [...result].map(([from, to]) => ({ from, to }));
+}
+function assetReferenceUrls(cfg, year, month, filename, item) {
+  const urls = new Set([item.rawUrl, item.pubUrl, ...assetLinkMappings(cfg, year, month, filename, item).map(mapping => mapping.from)]);
+  // /pub remains supported alongside a custom optimized-link prefix.
+  try { const url = new URL(item.pubUrl); urls.add(`${cfg.base_url}/pub/${url.pathname.split('/').slice(-3).join('/')}`); } catch {}
+  return [...urls];
+}
+module.exports = { assetLinkMappings, assetReferenceUrls, hasOptimizedNameConflict, keyOf, foldName, conflict, routeNames, readNameState, saveNameState, resolveAlias, assertNameAvailable };

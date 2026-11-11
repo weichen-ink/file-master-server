@@ -14,6 +14,7 @@ const {
   getRawPreviewCacheFilePath
 } = require('./asset-paths');
 const { updateShaIndex, writeShaIndex, getFileSha256 } = require('./sha-index');
+const { assetReferenceUrls } = require('./asset-names');
 const { mutateAssets } = require('./mutation-queue');
 const { getAssetStats } = require('./stats');
 
@@ -169,6 +170,7 @@ async function collectImages(cfg) {
       createdAt: stat.birthtimeMs || stat.mtimeMs,
       hits: assetStats.hits || 0,
       lastAccessedAt: assetStats.lastAccessedAt || null,
+      referenceUrls: assetReferenceUrls(cfg, year, month, file, assetMeta),
       rawUrl: assetMeta.rawUrl,
       pubUrl: assetMeta.pubUrl,
       rawPreviewPath: assetMeta.rawPreviewPath,

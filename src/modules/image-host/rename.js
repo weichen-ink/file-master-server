@@ -1,7 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { getConfig, writeJsonData } = require('../../core/config');
-const { isAllowedAttachmentFile, isValidYearSeg, isValidMonthSeg, isPathWithin, sanitizeSegment, buildAssetUrlsAndMeta, formatReadableUrlSegment } = require('../../core/file-security');
+const { isAllowedAttachmentFile, isValidYearSeg, isValidMonthSeg, isPathWithin, sanitizeSegment, buildAssetUrlsAndMeta } = require('../../core/file-security');
 const { RAW_DIR, findRawFile, hasSiblingWithSameBasename } = require('./asset-paths');
 const { hashFileSha256 } = require('./asset-files');
 const { getShaIndex, pathToShaMap, updateShaIndex, removeShaIndex, writeShaIndex } = require('./sha-index');
@@ -9,7 +9,7 @@ const { getProtectedMap } = require('./protection');
 const { getSharesMap, saveSharesMap } = require('../share');
 const { moveAssetStats } = require('./stats');
 const { invalidateScanCache } = require('./catalog');
-const { keyOf, foldName, conflict, routeNames, readNameState, saveNameState, assertNameAvailable } = require('./asset-names');
+const { assetLinkMappings, keyOf, foldName, conflict, routeNames, readNameState, saveNameState, assertNameAvailable } = require('./asset-names');
 const badInput = message => Object.assign(new Error(message), { status: 400 });
 
 function validateInput(input) {
@@ -28,24 +28,11 @@ function metadata(year, month, filename, sha256, files = null) {
   return { year, month, filename, size: stat.size, sha256,
     ...buildAssetUrlsAndMeta(getConfig(), { year, month, filename, hasBasenameCollision: hasSiblingWithSameBasename(year, month, filename, files) }) };
 }
-function mappings(state, year, month, filename, item) {
-  const cfg = getConfig(), bucket = `${year}/${month}/`, result = new Map();
-  for (const [kind, prefixes, to] of [
-    ['raw', [cfg.image_host?.raw_secret_path || 'raw'], item.rawUrl],
-    ['pub', [...new Set(['pub', cfg.image_host?.pub_secret_path || 'pub'])], item.pubUrl]
-  ]) {
-    for (const [key, target] of Object.entries(state[kind])) {
-      if (!key.startsWith(bucket) || target !== filename) continue;
-      for (const prefix of prefixes) result.set(`${cfg.base_url}/${prefix}/${bucket}${formatReadableUrlSegment(key.slice(bucket.length))}`, to);
-    }
-  }
-  return [...result].map(([from, to]) => ({ from, to }));
-}
 function resultFor(record, state) {
   const { year, month } = record;
   const canonical = state.raw[keyOf(year, month, record.newFilename)] || record.newFilename;
   const item = metadata(year, month, canonical, record.expectedSha256);
-  return { success: true, operationId: record.operationId, oldFilename: record.filename, item, linkMappings: mappings(state, year, month, canonical, item) };
+  return { success: true, operationId: record.operationId, oldFilename: record.filename, item, linkMappings: assetLinkMappings(getConfig(), year, month, canonical, item, state) };
 }
 async function collectAliases(state, year, month, files, source) {
   for (const filename of files) {
@@ -147,7 +134,7 @@ async function renameAsset(input, { preview = false } = {}) {
     const oldItem = metadata(year, month, filename, actual);
     const item = { year, month, filename: newFilename, size: stat.size, sha256: actual,
       ...buildAssetUrlsAndMeta(getConfig(), { year, month, filename: newFilename, hasBasenameCollision: hasSiblingWithSameBasename(year, month, newFilename, files.filter(name => name !== filename).concat(newFilename)) }) };
-    return { success: true, oldFilename: filename, oldItem, item, linkMappings: mappings(projected, year, month, newFilename, item) };
+    return { success: true, oldFilename: filename, oldItem, item, linkMappings: assetLinkMappings(getConfig(), year, month, newFilename, item, projected) };
   }
   // No side effects occur before this persistent intent record.
   state.pending = record;
