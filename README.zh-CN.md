@@ -60,6 +60,9 @@ pm2 save
 | 重启服务 | `pm2 restart fms` |
 | 停止服务 | `pm2 stop fms` |
 
+> [!TIP]
+> **Linux 中文文字水印提示**：若在 Linux/VPS 环境中使用中文文字水印，请确保系统中已安装中文字体包以避免渲染为方块豆腐块：`sudo apt-get install -y fonts-noto-cjk fonts-wqy-zenhei fontconfig`。使用最新 Dockerfile 构建的容器已自动内置中文字体。
+
 ## 开始使用
 
 从首页进入管理页面（默认 `/admin`），即可上传和管理文件。连接客户端时，使用“站点设置”中的站点地址和上传 API 令牌；公网访问建议使用 HTTPS。

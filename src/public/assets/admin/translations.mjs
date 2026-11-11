@@ -286,7 +286,7 @@ const I18N = {
     lblWatermarkImageSingle: "水印图片路径",
     lblWatermarkImageLight: "浅色水印 (深色图片使用)",
     lblWatermarkImageDark: "深色水印 (浅色图片使用)",
-    lblWatermarkAutoContrast: "水印模式",
+    lblWatermarkAutoContrast: "智能明暗自适应 (背景识别)",
     optAutoContrastOff: "标准单图 (始终使用同一张水印)",
     optAutoContrastOn: "深浅自适应 (根据图片明暗切换)",
     hintWatermarkDual:
@@ -736,7 +736,7 @@ const I18N = {
     lblWatermarkImageSingle: "Watermark Image Path",
     lblWatermarkImageLight: "Light Watermark (for dark images)",
     lblWatermarkImageDark: "Dark Watermark (for light images)",
-    lblWatermarkAutoContrast: "Watermark Mode",
+    lblWatermarkAutoContrast: "Smart Auto Contrast (Background Detection)",
     optAutoContrastOff: "Standard Single (always use same watermark)",
     optAutoContrastOn: "Adaptive (auto switch by image brightness)",
     hintWatermarkDual:

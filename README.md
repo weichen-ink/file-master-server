@@ -60,6 +60,9 @@ The service is named `fms` and remains available at `http://localhost:3210`. To 
 | Restart | `pm2 restart fms` |
 | Stop | `pm2 stop fms` |
 
+> [!TIP]
+> **Chinese Text Watermarks on Linux**: If you use Chinese text watermarks on a Linux server or VPS, install CJK fonts to ensure glyph rendering: `sudo apt-get install -y fonts-noto-cjk fonts-wqy-zenhei fontconfig` (or equivalent for your distribution). Docker containers built with the latest Dockerfile include these fonts automatically.
+
 ## Start using it
 
 Enter the console from the homepage (default: `/admin`) to upload and manage files. To connect a client, use the site URL and upload API token from Site settings. Use HTTPS for public access.

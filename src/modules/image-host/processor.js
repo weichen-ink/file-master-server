@@ -145,10 +145,10 @@ async function ensureDefaultWatermark(watermarkFilePath, text = '© File Master'
     <svg width="360" height="80" xmlns="http://www.w3.org/2000/svg">
       <style>
         .bg { fill: ${bgFill}; rx: 14px; ry: 14px; }
-        .txt { fill: ${txtFill}; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 32px; font-weight: 700; }
+        .txt { fill: ${txtFill}; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", "Source Han Sans SC", "Noto Sans CJK SC", "WenQuanYi Micro Hei", sans-serif; font-size: 32px; font-weight: 700; }
       </style>
       <rect x="4" y="8" width="352" height="64" class="bg" />
-      <text x="50%" y="40" dy="0.35em" dominant-baseline="central" text-anchor="middle" class="txt">${escapeXml(text)}</text>
+      <text x="50%" y="40" dominant-baseline="central" text-anchor="middle" class="txt">${escapeXml(text)}</text>
     </svg>
   `;
   await sharp(Buffer.from(svg)).png().toFile(watermarkFilePath);
@@ -163,12 +163,12 @@ function escapeXml(str) {
 }
 
 const WEB_SAFE_FONTS = {
-  system: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
-  pingfang: "'PingFang SC', 'Microsoft YaHei', 'Hiragino Sans GB', sans-serif",
-  arial: "Arial, Helvetica, 'Nimbus Sans L', sans-serif",
-  impact: "Impact, 'Arial Black', Charcoal, sans-serif",
-  georgia: "Georgia, 'Times New Roman', Times, serif",
-  courier: "'Courier New', Courier, Monaco, monospace"
+  system: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', 'Source Han Sans SC', 'Noto Sans CJK SC', 'WenQuanYi Micro Hei', 'WenQuanYi Zen Hei', 'Helvetica Neue', Arial, sans-serif",
+  pingfang: "'PingFang SC', 'Microsoft YaHei', 'Source Han Sans SC', 'Noto Sans CJK SC', 'WenQuanYi Micro Hei', 'WenQuanYi Zen Hei', 'Hiragino Sans GB', sans-serif",
+  arial: "Arial, Helvetica, 'Nimbus Sans L', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif",
+  impact: "Impact, 'Arial Black', Charcoal, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif",
+  georgia: "Georgia, 'Times New Roman', Times, 'Songti SC', 'SimSun', 'Noto Serif CJK SC', serif",
+  courier: "'Courier New', Courier, Monaco, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', monospace"
 };
 
 function resolveFontFamily(fontKey) {
@@ -426,7 +426,7 @@ async function buildWatermarkOverlay(imgCfg, targetWidth, targetHeight, basePipe
   const fontFamily = resolveFontFamily(imgCfg.watermark_font);
   const svgText = `
     <svg width="${svgW}" height="${svgH}" xmlns="http://www.w3.org/2000/svg">
-      <text x="50%" y="50%" dy="0.35em" dominant-baseline="central" text-anchor="middle"
+      <text x="50%" y="50%" dominant-baseline="central" text-anchor="middle"
             fill="${textColor}" fill-opacity="${opacity}"
             font-family="${fontFamily}"
             font-weight="700" font-size="${fontSize}"

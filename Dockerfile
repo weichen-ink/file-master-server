@@ -1,11 +1,15 @@
 FROM node:20-slim
 
-# Install git (for online hot-update), libheif-examples (heif-convert for HEIC/HEIF on Linux), and ffmpeg
+# Install git, libheif-examples, ffmpeg, fontconfig, and CJK fonts for text watermarking
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     ca-certificates \
     libheif-examples \
     ffmpeg \
+    fontconfig \
+    fonts-noto-cjk \
+    fonts-wqy-zenhei \
+    fonts-wqy-microhei \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

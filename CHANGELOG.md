@@ -1,5 +1,13 @@
 # Changelog (file-master-server)
 
+## [1.1.4] - 2026-11-11
+
+### Watermark & Chinese CJK font fixes
+- Expand watermark font-family fallback list to include standard Linux CJK fonts (`Noto Sans CJK SC`, `Source Han Sans SC`, `WenQuanYi Micro Hei`, `WenQuanYi Zen Hei`) preventing tofu missing-glyph rendering.
+- Add `fonts-noto-cjk`, `fonts-wqy-zenhei`, `fonts-wqy-microhei`, and `fontconfig` to official Dockerfile.
+- Clarify Chinese settings label for `lblWatermarkAutoContrast` to "智能明暗自适应 (背景识别)" (was misleadingly "水印模式").
+- Remove redundant SVG `dy` vertical offset to fix vertical text alignment with `dominant-baseline="central"`.
+
 ## [1.1.3] - 2026-11-11
 
 ### Maintenance
