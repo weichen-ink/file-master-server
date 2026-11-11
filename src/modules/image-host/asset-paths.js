@@ -3,6 +3,8 @@ const path = require('node:path');
 const { STORAGE_DIR, TRASH_DIR, UPLOAD_TMP_DIR } = require('../../core/config');
 const { isAllowedAttachmentFile } = require('../../core/file-security');
 
+const { resolveAlias, hasOptimizedNameConflict } = require('./asset-names');
+
 const RAW_DIR = path.join(STORAGE_DIR, 'raw');
 const CACHE_DIR = path.join(STORAGE_DIR, 'cache');
 
@@ -33,6 +35,7 @@ function getRawPreviewCacheFilePath(year, month, rawFilename) {
  * Checks whether multiple allowed files in the given month directory share the same basename.
  */
 function hasSiblingWithSameBasename(year, month, filename, filesList = null) {
+  if (hasOptimizedNameConflict(year, month, filename)) return true;
   const monthDir = path.join(RAW_DIR, year, month);
   const files = filesList || (fs.existsSync(monthDir) ? fs.readdirSync(monthDir) : []);
   const targetBase = path.parse(filename).name.replace(/[\s_]+/g, '_');
@@ -55,6 +58,11 @@ function findRawFile(year, month, requestedFilename, requireSameExt = false) {
   const monthDir = path.join(RAW_DIR, year, month);
   if (!fs.existsSync(monthDir)) return null;
 
+  const alias = resolveAlias(year, month, requestedFilename, !requireSameExt);
+  if (alias) {
+    const target = path.join(monthDir, alias);
+    return fs.existsSync(target) ? target : null;
+  }
   const exactPath = path.join(monthDir, requestedFilename);
   if (fs.existsSync(exactPath)) return exactPath;
 

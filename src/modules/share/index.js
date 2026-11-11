@@ -229,6 +229,7 @@ function registerShareModule(app) {
 }
 
 module.exports = {
+  saveSharesMap,
   registerShareModule,
   createShareRecord,
   getSharesMap

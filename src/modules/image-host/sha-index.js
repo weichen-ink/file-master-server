@@ -1,6 +1,7 @@
 const path = require('node:path');
+const fs = require('node:fs');
 const { readJsonData, writeJsonData } = require('../../core/config');
-const { isValidYearSeg, isValidMonthSeg } = require('../../core/file-security');
+const { isValidYearSeg, isValidMonthSeg, isPathWithin } = require('../../core/file-security');
 const { hashFileSha256 } = require('./asset-files');
 const { RAW_DIR } = require('./asset-paths');
 
@@ -142,7 +143,7 @@ async function getFileSha256(fullPath, stat, relKey = null) {
 /**
  * Index entries are hints. Verify bytes without erasing missing/corrupt baselines.
  */
-async function findExistingBySha256(targetSha256) {
+async function findExistingBySha256(targetSha256, preferred = null) {
   const idx = getShaIndex();
   const entry = idx[targetSha256];
   const candidates = new Set();
@@ -150,7 +151,11 @@ async function findExistingBySha256(targetSha256) {
   for (const [rel, info] of pathToShaMap) {
     if (info.sha256 === targetSha256) candidates.add(rel);
   }
+  if (preferred) candidates.add(`${preferred.year}/${preferred.month}/${preferred.filename}`);
   for (const rel of candidates) {
+    const fullPath = path.join(RAW_DIR, rel);
+    const stat = await fs.promises.lstat(fullPath).catch(error => { if (error.code === 'ENOENT') return null; throw error; });
+    if (!stat?.isFile() || !isPathWithin(await fs.promises.realpath(fullPath), fs.realpathSync(RAW_DIR))) continue;
     const actual = await hashFileSha256(path.join(RAW_DIR, rel)).catch((err) => {
       if (err.code === 'ENOENT') return null;
       throw err;

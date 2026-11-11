@@ -40,6 +40,16 @@ function removeAssetStats(year, month, filename) {
   }
 }
 
+function moveAssetStats(source, target) {
+  const stats = getAccessStats();
+  if (stats[source]) {
+    stats[target] = stats[source];
+    delete stats[source];
+    isDirty = true;
+  }
+  if (isDirty) { writeJsonData('access_stats', stats); isDirty = false; }
+}
+
 function scheduleFlush() {
   if (flushTimer) return;
   flushTimer = setTimeout(() => {
@@ -64,6 +74,7 @@ process.on('beforeExit', () => {
 });
 
 module.exports = {
+  moveAssetStats,
   getAccessStats,
   recordHit,
   getAssetStats,

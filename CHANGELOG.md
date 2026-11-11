@@ -1,5 +1,11 @@
 # Changelog (file-master-server)
 
+## [1.1.5] - 2026-11-11
+
+### Web Console & Asset Management
+- Add dynamic Chinese CJK font requirement banner in Web console settings for text watermarks, with one-click install commands for Debian/Ubuntu and Alpine Docker.
+- Support atomic asset renaming with transaction logging, crash recovery, link aliases, and cross-module state migration (shares, statistics, trash).
+
 ## [1.1.4] - 2026-11-11
 
 ### Watermark & Chinese CJK font fixes

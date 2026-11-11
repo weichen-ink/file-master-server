@@ -72,8 +72,13 @@ test('Isolated 1,000-image catalog: async scans, metrics, duplicate deletion, an
         assert.equal(missingProbe.data.exists, false);
         const corruptProbe = await invoke('get', '/api/image/probe', { query: { sha256: threeSha } });
         assert.equal(corruptProbe.data.exists, false);
-        const uploaded = await invoke('post', '/api/image/upload', {
+        const occupied = await invoke('post', '/api/image/upload', {
           file: { buffer: originalThree }, headers: { 'x-file-name': 'asset-3.png' }, socket: {}
+        });
+        assert.equal(occupied.code, 409);
+        assert.equal(occupied.data.code, 'NAME_CONFLICT');
+        const uploaded = await invoke('post', '/api/image/upload', {
+          file: { buffer: originalThree }, headers: { 'x-file-name': 'recovered-asset-3.png' }, socket: {}
         });
         assert.equal(uploaded.data.success, true);
         assert.equal(uploaded.data.deduplicated, false);

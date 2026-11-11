@@ -378,6 +378,8 @@ Object.assign(messages, {
   trash: ["回收站", "Trash"],
   compression: ["图片压缩", "Image compression"],
   watermark: ["图片水印", "Image watermark"],
+  watermarkFontTipTitle: ["中文字体依赖提示 (Linux / Docker)", "Chinese Font Requirement (Linux / Docker)"],
+  watermarkFontTipDesc: ["若服务端运行于 Linux 或 Docker 环境，文字水印需宿主机已安装中文字体（如 Noto Sans CJK 或文泉驿微米黑），否则汉字可能会被渲染为方块（□）。", "If the server runs on Linux or Docker, rendering Chinese text watermarks requires CJK fonts (e.g. Noto Sans CJK or WenQuanYi Micro Hei) installed on the system; otherwise, Chinese characters will render as tofu boxes (□)."],
   unsavedCount: ["{count} 项设置未保存", "{count} unsaved sections"],
   uploadDrop: [
     "在此拖入或粘贴文件，也可以选择文件。",

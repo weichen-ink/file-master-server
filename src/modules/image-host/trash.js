@@ -32,6 +32,7 @@ const { RAW_DIR } = require('./asset-paths');
 const { getFileCategory, isAllowedAttachmentFile, isValidYearSeg, isValidMonthSeg, isPathWithin } = require('../../core/file-security');
 const { updateShaIndex } = require('./sha-index');
 const { publishExclusive } = require('./asset-files');
+const { assertNameAvailable } = require('./asset-names');
 
 function trashMetadata(target, asset) {
   fs.writeFileSync(target + '.json', JSON.stringify(asset), {flag:'wx'});
@@ -82,6 +83,7 @@ async function restoreTrash(id) {
   if (fs.existsSync(target)) throw Object.assign(new Error('A file with this name already exists. The original was not overwritten.'),{status:409});
   const sha256 = await hashFileSha256(item.fullPath);
   if (item.sha256 && item.sha256 !== sha256) throw Object.assign(new Error('Trash file integrity check failed'),{status:409});
+  assertNameAvailable(path.dirname(target), item.year, item.month, item.filename, { restoreSha256: sha256 });
   const staged = path.join(path.dirname(target),`.restore-${crypto.randomUUID()}.tmp`);
   let published = false, cleanupPending = false;
   try {

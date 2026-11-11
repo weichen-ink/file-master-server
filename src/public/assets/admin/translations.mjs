@@ -298,6 +298,9 @@ const I18N = {
     lblWatermarkText: "水印文字",
     lblWatermarkColor: "固定文字颜色",
     lblWatermarkFont: "字体族 (Web 安全字体)",
+    watermarkFontTipTitle: "中文字体依赖提示 (Linux / Docker)",
+    watermarkFontTipDesc:
+      "若服务端运行于 Linux 或 Docker 环境，文字水印需宿主机已安装中文字体（如 Noto Sans CJK 或文泉驿微米黑），否则汉字可能会被渲染为方块（□）。",
     optFontSystem: "系统默认无衬线 (推荐)",
     optFontPingfang: "苹方 / 微软雅黑 (中文优先)",
     optFontArial: "Arial / Helvetica (通用经典)",
@@ -749,6 +752,9 @@ const I18N = {
     lblWatermarkText: "Watermark Text",
     lblWatermarkColor: "Fixed Text Color",
     lblWatermarkFont: "Font Family (Web Safe)",
+    watermarkFontTipTitle: "Chinese Font Requirement (Linux / Docker)",
+    watermarkFontTipDesc:
+      "If the server runs on Linux or Docker, rendering Chinese text watermarks requires CJK fonts (e.g. Noto Sans CJK or WenQuanYi Micro Hei) installed on the system; otherwise, Chinese characters will render as tofu boxes (□).",
     optFontSystem: "System Sans-Serif (Recommended)",
     optFontPingfang: "PingFang / Microsoft YaHei (CJK)",
     optFontArial: "Arial / Helvetica (Universal)",

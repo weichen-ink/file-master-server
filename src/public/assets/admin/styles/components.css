@@ -704,6 +704,17 @@
 .watermark-preview .sample-output { min-height: 180px; margin-top: 16px; }
 .watermark-preview p { margin-top: 12px; font-size: 12px; }
 .watermark-workspace:has(.watermark-preview[hidden]) { grid-template-columns: minmax(0,1fr); }
+.watermark-font-tip { grid-column: 1 / -1; margin: 0; display: flex; flex-direction: column; gap: 10px; }
+.watermark-font-tip-header { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.watermark-font-tip-text { font-size: 12px; line-height: 1.6; margin: 0; color: var(--text); }
+.watermark-font-tip-cmds { display: flex; flex-direction: column; gap: 8px; margin-top: 2px; }
+.watermark-cmd-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.watermark-cmd-label { font-size: 12px; font-weight: 500; color: var(--muted); min-width: 110px; }
+.watermark-cmd-code { display: inline-flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 4px 6px 4px 10px; max-width: 100%; }
+.watermark-cmd-code code { font-size: 12px; color: var(--text); user-select: all; overflow-x: auto; white-space: nowrap; }
+.watermark-cmd-code .icon-button { width: 24px; min-width: 24px; height: 24px; min-height: 24px; padding: 4px; border: 0; background: transparent; color: var(--muted); cursor: pointer; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; }
+.watermark-cmd-code .icon-button:hover { color: var(--text); background: var(--surface-hover); }
+.watermark-cmd-code .icon-button .icon { width: 14px; height: 14px; }
 .sort-controls { display: flex; gap: 6px; flex-wrap: wrap; }
 .sort-controls .sort-button { color: var(--muted); background: transparent; border-color: var(--border); min-height: 40px; padding: 8px 12px; font-size: 14px; gap: 8px; }
 .sort-controls .sort-button.is-active { background: var(--surface); color: var(--text); border-color: var(--muted); }

@@ -29,11 +29,22 @@ const { moveFileToTrash, trashMetadata, publicTrashEntries, findTrash, restoreTr
 const { renderDraftPreview, ensureThumbnail } = require('../processor');
 const { removeAssetStats } = require('../stats');
 
+const { renameAsset } = require('../rename');
+
 let integrityCheck = { state: 'idle', checked: 0, matched: 0, issues: [] };
 let integrityController = null;
 
 /** Console / plugin management API: listing, integrity check, lock, delete, cache clear. */
 function registerManageRoutes(app) {
+  for (const preview of [true, false]) {
+    app.post(`/api/modules/image-host/rename${preview ? '/preview' : ''}`, requireApiOrAdmin, serializeMutation(async (req, res) => {
+      try {
+        const result = await renameAsset(req.body || {}, { preview });
+        if (!preview) appendAuditLog({ action: 'rename', ip: getClientIp(req), year: result.item.year, month: result.item.month, filename: result.oldFilename, newFilename: result.item.filename });
+        res.json(result);
+      } catch (error) { res.status(error.status || 500).json({ error: error.message, code: error.code }); }
+    }));
+  }
   app.get('/api/modules/image-host/trash', requireApiOrAdmin, (req,res) => {
     try { res.json({items:publicTrashEntries()}); } catch(error) { res.status(500).json({error:error.message}); }
   });

@@ -11,9 +11,14 @@ const { registerUploadRoutes } = require('./routes/upload');
 const { registerPublicRoutes } = require('./routes/public');
 const { registerManageRoutes } = require('./routes/manage');
 
+const { recoverPendingRename } = require('./rename');
+const { setBeforeMutation } = require('./mutation-queue');
+
 function registerImageHostModule(app) {
   checkStorageHealth();
   ensureDirs();
+  recoverPendingRename();
+  setBeforeMutation(recoverPendingRename);
   warmShaIndexAsync();
   const initCfg = getConfig();
   const requestedWmPath = path.resolve(ROOT_DIR, initCfg.image_host.watermark_image || './wm-light.png');

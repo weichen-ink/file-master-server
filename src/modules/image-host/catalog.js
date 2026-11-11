@@ -14,6 +14,7 @@ const {
   getRawPreviewCacheFilePath
 } = require('./asset-paths');
 const { updateShaIndex, writeShaIndex, getFileSha256 } = require('./sha-index');
+const { mutateAssets } = require('./mutation-queue');
 const { getAssetStats } = require('./stats');
 
 let cachedScanData = null;
@@ -42,7 +43,8 @@ function scanAllImages(cfg, forceRefresh = false) {
   const generation = scanGeneration;
   const key = `${cfgKey}:${generation}`;
   if (pendingScan?.key === key) return pendingScan.promise;
-  const promise = collectImages(cfg).then((result) => {
+  // Catalog scans also update the hash index, so share the mutation queue.
+  const promise = mutateAssets(() => collectImages(cfg)).then((result) => {
     if (generation === scanGeneration) {
       cachedScanData = result;
       cachedScanTime = Date.now();

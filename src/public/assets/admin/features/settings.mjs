@@ -26,11 +26,18 @@ function fieldHtml(def, value) {
   return `<div class="field" data-field="${e(def.key)}"><label for="f_${e(def.key)}">${e(t(def.label))}</label>${def.type==='select'?`<select ${attrs}>${options}</select>`:`<div class="input-row">${control}${test}</div>`}<span class="field-error" id="error_${e(def.key)}"></span></div>`;
 }
 const samplePreview = () => `<aside class="watermark-preview"><h3>${e(t("watermarkPreview"))}</h3><label class="sr-only" for="sample-select">${e(t("chooseSample"))}</label><select id="sample-select"><option value="">${e(t("chooseSample"))}</option></select><div id="sample-output" class="sample-output">${icon("image")}</div><p id="sample-state" class="muted" role="status"></p></aside>`;
+const watermarkFontTipHtml = () => `<div class="watermark-font-tip notice" id="watermark-font-tip"><div class="watermark-font-tip-header"><strong>💡 ${e(t("watermarkFontTipTitle"))}</strong></div><p class="watermark-font-tip-text">${e(t("watermarkFontTipDesc"))}</p><div class="watermark-font-tip-cmds"><div class="watermark-cmd-row"><span class="watermark-cmd-label">Debian / Ubuntu:</span><div class="watermark-cmd-code"><code>apt install -y fonts-noto-cjk fonts-wqy-zenhei</code><button type="button" class="icon-button" data-action="copy-font-cmd" data-cmd="apt install -y fonts-noto-cjk fonts-wqy-zenhei" title="${e(t("copy"))}" aria-label="${e(t("copy"))}">${icon("copy")}</button></div></div><div class="watermark-cmd-row"><span class="watermark-cmd-label">Alpine (Docker):</span><div class="watermark-cmd-code"><code>apk add font-noto-cjk</code><button type="button" class="icon-button" data-action="copy-font-cmd" data-cmd="apk add font-noto-cjk" title="${e(t("copy"))}" aria-label="${e(t("copy"))}">${icon("copy")}</button></div></div></div></div>`;
 function sectionFields(name,state) {
   const render=keys=>keys.map(key=>schemas[name].find(def=>def.key===key)).filter(Boolean).map(def=>fieldHtml(def,state.draft[def.key])).join('');
   const section=(title,keys,extra="")=>`<section class="form-section"><h2>${e(t(title))}</h2><div class="fields">${render(keys)}${extra}</div></section>`;
   if(name==='site') return section('siteIdentity',['site_name'], `<div class="field"><label for="appearance-select">${e(t('theme'))}</label><select id="appearance-select" data-theme-select>${[['auto','themeAuto'],['light','themeLight'],['dark','themeDark']].map(([value,label])=>`<option value="${value}" ${getTheme()===value?'selected':''}>${e(t(label))}</option>`).join('')}</select></div>${render(['base_url','port'])}`) + section('accountAccess',['username','password','admin_path','max_login_attempts','api_token']) + section('fileLinks',['raw_secret_path','pub_secret_path','card_copy_format']);
-  if(name==='media') return section('compression',schemas.compression.map(def=>def.key)) + `<section class="form-section"><h2>${e(t('watermark'))}</h2><div class="watermark-workspace"><div class="fields">${render(schemas.watermark.map(def=>def.key))}</div>${samplePreview()}</div></section>`;
+  if(name==='media') {
+    const wmFields = schemas.watermark.map(def => {
+      const html = fieldHtml(def, state.draft[def.key]);
+      return def.key === 'watermark_font' ? html + watermarkFontTipHtml() : html;
+    }).join('');
+    return section('compression',schemas.compression.map(def=>def.key)) + `<section class="form-section"><h2>${e(t('watermark'))}</h2><div class="watermark-workspace"><div class="fields">${wmFields}</div>${samplePreview()}</div></section>`;
+  }
   return `<div class="fields">${schemas[name].map(def=>fieldHtml(def,state.draft[def.key])).join('')}</div>`;
 }
 
@@ -64,7 +71,13 @@ export async function mountSettings(ctx, root, route, signal) {
       wrap.hidden = !visible;
       wrap.querySelector("input,select").disabled = !visible || state.saving;
     }
-    if (isMedia) form.querySelector(".watermark-preview").hidden = !state.draft.watermark_enable;
+    if (isMedia) {
+      form.querySelector(".watermark-preview").hidden = !state.draft.watermark_enable;
+      const fontTip = form.querySelector("#watermark-font-tip");
+      if (fontTip) {
+        fontTip.hidden = !state.draft.watermark_enable || state.draft.watermark_type === "image";
+      }
+    }
     root.querySelector("#save-state").textContent = t(
       state.saving ? "saving" : ctx.drafts.dirty(name) ? "unsaved" : "",
     );
@@ -174,6 +187,10 @@ export async function mountSettings(ctx, root, route, signal) {
         if (!state.draft.bark_url) throw new Error(t("required"));
         await ctx.api.testBackup("bark", state.draft.bark_url);
         toast(t("completed"));
+      },
+      "copy-font-cmd": async (target) => {
+        const cmd = target?.dataset?.cmd;
+        if (cmd) await copy(cmd);
       },
     },
     signal,

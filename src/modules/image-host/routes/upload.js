@@ -10,6 +10,7 @@ const {
   buildAssetUrlsAndMeta
 } = require('../../../core/file-security');
 const { hashFileSha256, persistUniqueUpload } = require('../asset-files');
+const { assertNameAvailable, resolveAlias } = require('../asset-names');
 const { RAW_DIR, hasSiblingWithSameBasename } = require('../asset-paths');
 const { updateShaIndex, findExistingBySha256 } = require('../sha-index');
 const { isItemLocked } = require('../protection');
@@ -55,19 +56,22 @@ function registerUploadRoutes(app) {
         ? crypto.createHash('sha256').update(fileObj.buffer).digest('hex')
         : await hashFileSha256(fileObj.path);
       const { year, month, filename, destPath, deduplicated } = await mutateAssets(async () => {
-        // Index hits are hints: verify content before acknowledging an upload.
-        const existing = await findExistingBySha256(fullSha256);
-        if (existing) {
-          const existingPath = path.join(RAW_DIR, existing.year, existing.month, existing.filename);
-          return { ...existing, destPath: existingPath, deduplicated: true };
-        }
         const now = new Date();
         const year = String(now.getFullYear());
         const month = String(now.getMonth() + 1).padStart(2, '0');
         const targetDir = path.join(RAW_DIR, year, month);
         const desiredName = `${path.basename(safeOrigName, origExt)}${origExt}`;
-        const saved = await persistUniqueUpload(fileObj, targetDir, desiredName, fullSha256,
-          hasSiblingWithSameBasename(year, month, desiredName));
+        // Verify bytes first, including a same-name file not yet discovered by index warmup.
+        const preferred = { year, month, filename: resolveAlias(year, month, desiredName, false) || desiredName };
+        const existing = await findExistingBySha256(fullSha256, preferred);
+        if (existing) {
+          const destPath = path.join(RAW_DIR, existing.year, existing.month, existing.filename);
+          const stat = fs.statSync(destPath);
+          updateShaIndex(fullSha256, { ...existing, size: stat.size, mtimeMs: stat.mtimeMs });
+          return { ...existing, destPath, deduplicated: true };
+        }
+        assertNameAvailable(targetDir, year, month, desiredName);
+        const saved = await persistUniqueUpload(fileObj, targetDir, desiredName, fullSha256, false, { rejectOnConflict: true });
         updateShaIndex(fullSha256, { year, month, filename: saved.filename,
           size: saved.stat.size, mtimeMs: saved.stat.mtimeMs });
         return { year, month, ...saved, destPath: path.join(targetDir, saved.filename) };
@@ -117,7 +121,7 @@ function registerUploadRoutes(app) {
       });
     } catch (err) {
       console.error('[File Master] Upload error:', err);
-      return res.status(err.status || 500).json({ error: 'Failed to save file: ' + err.message });
+      return res.status(err.status || 500).json({ error: 'Failed to save file: ' + err.message, code: err.code });
     } finally {
       if (tmpPath && fs.existsSync(tmpPath)) {
         try {

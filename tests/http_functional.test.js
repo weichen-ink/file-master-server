@@ -125,7 +125,7 @@ test('HTTP functional regression across platform, assets, shares and recovery', 
     assert.equal((await call('/api/platform/login', { method: 'POST', json: credentials })).status, 200);
   });
 
-  await t.test('Real multipart uploads validate, preserve Unicode, deduplicate and disambiguate collisions', async () => {
+  await t.test('Real multipart uploads validate, preserve Unicode, deduplicate and reject name conflicts', async () => {
     original = await sharp({ create: { width: 512, height: 384, channels: 3, background: '#345678' } }).png().toBuffer();
     assert.equal((await upload('danger.exe', original)).status, 400);
     assert.equal((await call('/api/image/upload', { method: 'POST', headers: api })).status, 400);
@@ -136,7 +136,7 @@ test('HTTP functional regression across platform, assets, shares and recovery', 
     assert.equal(repeated.data.deduplicated, true); assert.equal(repeated.data.filename, asset.filename);
     const different = await sharp({ create: { width: 512, height: 384, channels: 3, background: '#987654' } }).png().toBuffer();
     const collision = await upload('中文 图片.png', different);
-    assert.equal(collision.status, 200); assert.notEqual(collision.data.filename, asset.filename);
+    assert.equal(collision.status, 409); assert.equal(collision.data.code, 'NAME_CONFLICT');
     assert.deepEqual(fs.readFileSync(assetPath(asset)), original);
     const hits = await Promise.all(Array.from({ length: 6 }, () => upload('parallel.png', original)));
     assert.ok(hits.every((hit) => hit.data.deduplicated));

@@ -1,6 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { hasOptimizedNameConflict } = require('./asset-names');
 const { isValidYearSeg, isValidMonthSeg, isAllowedAttachmentFile } = require('../../core/file-security');
 
 function hashFileSha256(filename, options = {}) {
@@ -32,7 +33,7 @@ async function* walkOriginalFiles(directory) {
           throw err;
         });
         if (stat) yield { year: year.name, month: month.name, filename: entry.name, fullPath, stat,
-          hasBasenameCollision: counts.get(basename(entry.name)) > 1 };
+          hasBasenameCollision: counts.get(basename(entry.name)) > 1 || hasOptimizedNameConflict(year.name, month.name, entry.name) };
       }
     }
   }
@@ -84,7 +85,7 @@ async function publishExclusive(staged, target) {
 }
 
 /** Publish a complete file exclusively; existing names are never overwritten. */
-async function persistUniqueUpload(file, directory, desiredName, sha256, disambiguate = false) {
+async function persistUniqueUpload(file, directory, desiredName, sha256, disambiguate = false, { rejectOnConflict = false } = {}) {
   await fs.promises.mkdir(directory, { recursive: true });
   const ext = path.extname(desiredName);
   const base = path.basename(desiredName, ext);
@@ -102,9 +103,11 @@ async function persistUniqueUpload(file, directory, desiredName, sha256, disambi
         return { filename, deduplicated: false, stat: await fs.promises.stat(target) };
       } catch (err) {
         if (err.code !== 'EEXIST') throw err;
+        if ((await fs.promises.lstat(target)).isSymbolicLink()) throw Object.assign(new Error('Invalid storage target'), { status: 409 });
         if (await hashFileSha256(target) === sha256) {
           return { filename, deduplicated: true, stat: await fs.promises.stat(target) };
         }
+        if (rejectOnConflict) throw Object.assign(new Error('A different file already uses this name. Choose another name.'), { status: 409, code: 'NAME_CONFLICT' });
       }
     }
   } finally {
