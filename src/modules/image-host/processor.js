@@ -242,7 +242,7 @@ function calcSmartWatermarkMetrics(targetWidth, targetHeight, userMargin = 24) {
 async function buildWatermarkOverlay(imgCfg, targetWidth, targetHeight, basePipeline = null) {
   const opacity = Math.min(1, Math.max(0.05, Number(imgCfg.watermark_opacity) || 0.65));
   const scale = Math.min(0.8, Math.max(0.05, Number(imgCfg.watermark_scale) || 0.16));
-  const margin = Number(imgCfg.watermark_margin) || 24;
+  const margin = Number(imgCfg.watermark_margin ?? 24);
   const pos = imgCfg.watermark_pos || 'bottom-right';
   const type = imgCfg.watermark_type || 'image';
 
@@ -258,13 +258,13 @@ async function buildWatermarkOverlay(imgCfg, targetWidth, targetHeight, basePipe
     const wmPathLight = isPathWithin(requestedWmPath, ROOT_DIR)
       ? requestedWmPath
       : path.resolve(ROOT_DIR, './wm-light.png');
-    await ensureDefaultWatermark(wmPathLight, imgCfg.watermark_text || '© File Master', false);
+    if (!imgCfg._previewReadOnly) await ensureDefaultWatermark(wmPathLight, imgCfg.watermark_text || '© File Master', false);
 
     const requestedDarkPath = path.resolve(ROOT_DIR, imgCfg.watermark_image_dark || './wm-dark.png');
     const wmPathDark = isPathWithin(requestedDarkPath, ROOT_DIR)
       ? requestedDarkPath
       : path.resolve(ROOT_DIR, './wm-dark.png');
-    await ensureDefaultWatermark(wmPathDark, imgCfg.watermark_text || '© File Master', true);
+    if (!imgCfg._previewReadOnly) await ensureDefaultWatermark(wmPathDark, imgCfg.watermark_text || '© File Master', true);
 
     const effectiveScale = Math.min(0.4, scale * portraitBoost);
     let wmTargetWidth = Math.round(targetWidth * effectiveScale);
@@ -478,7 +478,7 @@ async function processImage(inputPathForSharp, cacheFilePath, imgCfg) {
     pipeline = pipeline.resize({ width: maxWidth, withoutEnlargement: true });
   }
 
-  const minWidthForWm = Number(imgCfg.watermark_min_width) || 320;
+  const minWidthForWm = Number(imgCfg.watermark_min_width ?? 320);
   const hasSufficientSize = Math.max(targetWidth, targetHeight) >= minWidthForWm && Math.min(targetWidth, targetHeight) >= 120;
   if (imgCfg.watermark_enable && hasSufficientSize) {
     const overlay = await buildWatermarkOverlay(imgCfg, targetWidth, targetHeight, pipeline);
@@ -502,11 +502,23 @@ async function ensureThumbnail(rawPath, cachePath) {
     .webp({ quality: 72 }).toFile(temp));
 }
 
+// Private preview output: never writes public caches or configuration.
+async function renderDraftPreview(rawPath, output, imageConfig) {
+  let input = rawPath;
+  if (NEEDS_TRANSCODE_EXTS.has(path.extname(rawPath).toLowerCase())) input = await ensureTranscodedPreviewJpeg(rawPath, output + '.jpg');
+  const config = {...imageConfig, _previewReadOnly:true};
+  if (!config.enable_optimization) {
+    return sharp(input).rotate().resize({width:2048, withoutEnlargement:true}).webp({quality:90}).toFile(output);
+  }
+  return scheduleImage(() => processImage(input, output, config));
+}
+
 module.exports = {
   NEEDS_TRANSCODE_EXTS,
   ensureTranscodedPreviewJpeg,
   ensureDefaultWatermark,
   processAndCacheImage,
   ensureThumbnail,
+  renderDraftPreview,
   invalidateProcessingCache
 };

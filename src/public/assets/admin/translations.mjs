@@ -1,8 +1,10 @@
 // ================= Bilingual Internationalization (zh-CN / en) =================
 const I18N = {
   zh: {
-    storageWarning: "存储探测未通过：上传需要可写且支持硬链接的文件系统。请检查服务日志，修复权限或更换存储目录后重启。",
-    updateDependenciesPending: "上次更新的依赖安装未完成。即使已是最新提交，也请重新执行更新；完成前请勿手动重启。",
+    storageWarning:
+      "存储探测未通过：上传需要可写且支持硬链接的文件系统。请检查服务日志，修复权限或更换存储目录后重启。",
+    updateDependenciesPending:
+      "上次更新的依赖安装未完成。即使已是最新提交，也请重新执行更新；完成前请勿手动重启。",
     pagePrevious: "上一页",
     pageNext: "下一页",
     pageCount: "第 {current} / {total} 页",
@@ -14,7 +16,8 @@ const I18N = {
     btnViewReport: "查看明细",
     btnDismiss: "关闭提示",
     integrityModalTitle: "原文件完整性校验报告",
-    integrityAllMatched: "所有原文件均通过 SHA-256 完整性哈希校验，未发现文件篡改、损坏、遗漏或未索引项。",
+    integrityAllMatched:
+      "所有原文件均通过 SHA-256 完整性哈希校验，未发现文件篡改、损坏、遗漏或未索引项。",
     integrityIssuesFound: "发现以下异常项，请核对并处理：",
     lblPath: "文件路径",
     lblIssueType: "异常类型",
@@ -36,7 +39,8 @@ const I18N = {
     integrityHasIssues: "发现原文件数据不一致项",
     uploadItem: "上传 {current}/{total}：{name}",
     uploadSummary: "上传成功 {success} 个，未完成 {remaining} 个",
-    integritySummary: "{state}：已检查 {checked} 个，相符 {matched} 个，异常 {issues} 项",
+    integritySummary:
+      "{state}：已检查 {checked} 个，相符 {matched} 个，异常 {issues} 项",
     integrity_idle: "尚未开始",
     integrity_running: "正在校验",
     integrity_completed: "校验完成",
@@ -66,13 +70,13 @@ const I18N = {
     langToggle: "🌐 English",
     brandSubtitle: "文件与图片服务",
     mediaDesc: "配置 WebP 格式转换、画质、分辨率限制与图片/文字水印呈现样式。",
-    integrationDesc: "Obsidian 插件与第三方客户端接入参数、API 端点及配置说明。",
+    integrationDesc:
+      "Obsidian 插件与第三方客户端接入参数、API 端点及配置说明。",
 
     // 隐蔽登录面板
     loginSub: "连续登录失败可能导致此 IP 被锁定 24 小时",
     loginUsername: "管理员账号",
     loginPassword: "密码",
-    loginTotp: "双重验证码 (6 位数字)",
     loginRemember: "保持登录 30 天",
     loginSubmit: "登录",
 
@@ -135,7 +139,8 @@ const I18N = {
 
     // 资产管理页面
     lblAssetManagerTitle: "服务器文件",
-    lblAssetManagerDesc: "上传、浏览和分享服务器上的文件。图片可按需生成 WebP 版本。",
+    lblAssetManagerDesc:
+      "上传、浏览和分享服务器上的文件。图片可按需生成 WebP 版本。",
     chkUploadProtected: "上传到保护目录",
     btnClearWatermarkCache: "清除图片缓存",
     btnUploadFiles: "上传文件",
@@ -165,7 +170,6 @@ const I18N = {
     // 主机监控中心
     lblMonitorTitle: "运行状态",
     lblMonitorDesc: "查看服务器资源用量和服务运行情况。",
-    autoRefreshHint: "每 5 秒自动刷新",
     btnRefreshNow: "🔄 立即刷新",
     mCpuTitle: "CPU 1 分钟平均负载",
     mRamTitle: "物理运行内存 (RAM)",
@@ -194,7 +198,6 @@ const I18N = {
     metricTotalFree: "总计 {total}（可用 {free}）",
     metricCores: "{count} 核",
     metricRawFiles: "{size}（{count} 个原文件）",
-    metricSecurity: "已封禁 IP：{count} · 双重验证：{status}",
     statusOn: "开启",
     statusOff: "关闭",
     durationDays: "{count} 天",
@@ -204,7 +207,6 @@ const I18N = {
     checkedAt: "检查时间：{time}",
     settingsDesc: "设置访问地址、图片处理和文件链接。",
     passwordPlaceholder: "留空则不修改密码",
-    totpPlaceholder: "留空则关闭双重验证",
     copyManually: "请手动复制：",
     errorSaveConfig: "保存设置失败",
     errorSaveYaml: "配置文件无效，保存失败",
@@ -247,7 +249,7 @@ const I18N = {
 
     // 配置表单
     lblSiteName: "站点名称",
-    lblBaseUrl: "公开访问地址",
+    lblBaseUrl: "站点地址",
     lblPort: "服务监听端口",
     lblRawSecretPath: "原文件链接前缀",
     lblPubSecretPath: "WebP 链接前缀",
@@ -279,14 +281,16 @@ const I18N = {
     secWatermarkContent: "水印内容",
     secWatermarkLayout: "位置与排版",
     cardWmGuideTitle: "动态 URL 水印参数",
-    cardWmGuideDesc: "在优化图片链接（pub 路径）后添加 ?wm= 参数即可按需动态调用对应水印形态。访客无法通过 URL 参数绕过水印。",
+    cardWmGuideDesc:
+      "在优化图片链接（pub 路径）后添加 ?wm= 参数即可按需动态调用对应水印形态。访客无法通过 URL 参数绕过水印。",
     lblWatermarkImageSingle: "水印图片路径",
     lblWatermarkImageLight: "浅色水印 (深色图片使用)",
     lblWatermarkImageDark: "深色水印 (浅色图片使用)",
     lblWatermarkAutoContrast: "水印模式",
     optAutoContrastOff: "标准单图 (始终使用同一张水印)",
     optAutoContrastOn: "深浅自适应 (根据图片明暗切换)",
-    hintWatermarkDual: "自动采样水印落点区域的图片亮度，浅色图片配深色水印，深色图片配浅色水印。",
+    hintWatermarkDual:
+      "自动采样水印落点区域的图片亮度，浅色图片配深色水印，深色图片配浅色水印。",
     lblWmGuideDefault: "默认样式 (使用后台当前保存的设置)",
     lblWmGuideImage: "PNG 图片水印 (支持深浅自适应)",
     lblWmGuideText: "角落文字水印",
@@ -311,13 +315,11 @@ const I18N = {
     // 安全中心
     lblSecurityTitle: "安全设置",
     lblSecurityDesc: "管理登录方式、上传 API 令牌和登录失败限制。",
-    lblUsername: "管理员账号",
+    lblUsername: "登录账号",
     lblPassword: "管理员密码（留空则不修改）",
-    lblAdminPath: "管理页面路径",
+    lblAdminPath: "后台登录路径",
     lblMaxLoginAttempts: "允许登录失败次数",
     lblApiToken: "上传 API 令牌",
-    lblTotpSecret: "验证器密钥（留空则关闭双重验证）",
-    btnGenerateTotp: "生成新密钥",
     btnSaveSecurity: "保存安全设置",
 
     // 系统维护与更新
@@ -333,9 +335,11 @@ const I18N = {
     btnRestartOnly: "重启服务",
     btnPullUpdate: "安装更新并重启",
     lblBackupTitle: "导出备份",
-    lblBackupDesc: "下载 .tar.gz 备份文件。Linux 用户也可以自行配置 rclone 定时同步。",
+    lblBackupDesc:
+      "下载 .tar.gz 备份文件。Linux 用户也可以自行配置 rclone 定时同步。",
     lblAutoBackupTitle: "全自动备份与异地容灾 (OneDrive / Rclone + Bark)",
-    lblAutoBackupDesc: "每日定时无损归档全量资产，自动轮转清理旧版本，支持自动直传 OneDrive 并推送 Bark 手机提醒。",
+    lblAutoBackupDesc:
+      "每日定时无损归档全量资产，自动轮转清理旧版本，支持自动直传 OneDrive 并推送 Bark 手机提醒。",
     lblBackupEnabled: "自动备份开关",
     lblBackupFrequency: "备份策略与频率",
     optBackupOn: "开启全自动备份",
@@ -383,10 +387,9 @@ const I18N = {
     lblRcloneHint: "# Linux 环境通过 rclone 定时增量同步云端示例：",
 
     // 新增与补全键
-    rawYamlDesc: "直接编辑根目录配置文件 config.yaml（保存前自动校验 YAML 语法合法性）",
+    rawYamlDesc:
+      "直接编辑根目录配置文件 config.yaml（保存前自动校验 YAML 语法合法性）",
     btnSaveRaw: "💾 校验并保存 config.yaml",
-    lblNewTotpKey: "生成新密钥：",
-    lblNewTotpUri: "身份验证器绑定链接 (可复制到 1Password / Google Authenticator)：",
     lblLocalCommit: "本地提交版本:",
     loadingShares: "正在加载有效分享链接...",
     folderCountHint: "{count} 个目录",
@@ -423,7 +426,8 @@ const I18N = {
     shareBtnCopy: "📋 复制",
     shareBtnRevoke: "🗑️ 撤销",
     revokeShareConfirm: "确定立即撤销此分享链接吗？",
-    sharePromptExpiry: "为“{filename}”创建分享链接。请输入有效小时数（0 表示不过期）：",
+    sharePromptExpiry:
+      "为“{filename}”创建分享链接。请输入有效小时数（0 表示不过期）：",
     sharePromptMaxDl: "请输入最多可下载次数（0 表示不限制）：",
     shareModalTitle: "创建安全分享短链",
     shareExpiryLabel: "有效时长 (小时，0 为不过期)",
@@ -432,14 +436,15 @@ const I18N = {
     gitNoCommits: "暂无提交记录",
     gitNotInit: "未初始化仓库 (拉取时将自动初始化)",
     serverOnline: "服务端进程已重新上线！正在恢复控制台状态...",
-    hotUpdateConfirm: "从 [{branch}]{mirrorHint} 安装更新并重启服务？现有配置和文件将保留。",
     pullingUpdate: "正在安装更新...",
     restartConfirm: "确定立即重启 File Master Server 服务端进程吗？",
-    restartingServer: "正在重启服务..."
+    restartingServer: "正在重启服务...",
   },
   en: {
-    storageWarning: "Storage probe failed: uploads require writable storage with hard-link support. Check server logs, fix permissions or move storage, then restart.",
-    updateDependenciesPending: "Dependency installation from the previous update is unfinished. Run the update again even if the commit is current; avoid restarting until it completes.",
+    storageWarning:
+      "Storage probe failed: uploads require writable storage with hard-link support. Check server logs, fix permissions or move storage, then restart.",
+    updateDependenciesPending:
+      "Dependency installation from the previous update is unfinished. Run the update again even if the commit is current; avoid restarting until it completes.",
     pagePrevious: "Previous",
     pageNext: "Next",
     pageCount: "Page {current} of {total}",
@@ -451,8 +456,10 @@ const I18N = {
     btnViewReport: "View details",
     btnDismiss: "Dismiss",
     integrityModalTitle: "Original File Integrity Report",
-    integrityAllMatched: "All original files passed SHA-256 integrity verification. No tampering, corruption, missing, or unindexed files found.",
-    integrityIssuesFound: "The following issues were detected, please review and resolve:",
+    integrityAllMatched:
+      "All original files passed SHA-256 integrity verification. No tampering, corruption, missing, or unindexed files found.",
+    integrityIssuesFound:
+      "The following issues were detected, please review and resolve:",
     lblPath: "File Path",
     lblIssueType: "Issue Type",
     lblIssueDetail: "Details",
@@ -473,7 +480,8 @@ const I18N = {
     integrityHasIssues: "Detected data inconsistencies in original files",
     uploadItem: "Uploading {current}/{total}: {name}",
     uploadSummary: "Uploaded {success}; unfinished {remaining}",
-    integritySummary: "{state}: checked {checked}, matched {matched}, issues {issues}",
+    integritySummary:
+      "{state}: checked {checked}, matched {matched}, issues {issues}",
     integrity_idle: "Not started",
     integrity_running: "Verifying",
     integrity_completed: "Verification complete",
@@ -502,14 +510,15 @@ const I18N = {
     btnHideSecret: "Hide",
     langToggle: "🌐 简体中文",
     brandSubtitle: "File and image server",
-    mediaDesc: "Configure WebP compression, image dimensions, and watermark styles.",
-    integrationDesc: "Connection parameters and API documentation for Obsidian and third-party tools.",
+    mediaDesc:
+      "Configure WebP compression, image dimensions, and watermark styles.",
+    integrationDesc:
+      "Connection parameters and API documentation for Obsidian and third-party tools.",
 
     // Login View
     loginSub: "Repeated failed sign-ins may lock this IP for 24 hours",
     loginUsername: "Admin username",
     loginPassword: "Password",
-    loginTotp: "Authenticator code (6 digits)",
     loginRemember: "Keep me signed in for 30 days",
     loginSubmit: "Sign in",
 
@@ -533,8 +542,10 @@ const I18N = {
     sortHitsDesc: "👁️ Hits: Most viewed",
     hitsCount: "{hits} views",
     copied: "Copied {label}",
-    deleteConfirm: "Move \"{filename}\" to trash? Its image cache will also be cleared.",
-    lockedNotice: "File '{filename}' is deletion-protected. Unlock it before deleting.",
+    deleteConfirm:
+      'Move "{filename}" to trash? Its image cache will also be cleared.',
+    lockedNotice:
+      "File '{filename}' is deletion-protected. Unlock it before deleting.",
     lockSuccess: "Protected against deletion: {filename}",
     unlockSuccess: "Unlocked deletion protection: {filename}",
     uploading: "Uploading {count} file(s)...",
@@ -542,8 +553,10 @@ const I18N = {
     configSaved: "Settings saved",
     rawSaved: "Configuration file saved",
     cacheCleared: "Image cache cleared. Images will be rebuilt when requested.",
-    noMatchingAssets: "No matching files in this folder. Drop or paste files to upload.",
-    noShareLinks: "No share links yet. Select a file under Server files and click Share.",
+    noMatchingAssets:
+      "No matching files in this folder. Drop or paste files to upload.",
+    noShareLinks:
+      "No share links yet. Select a file under Server files and click Share.",
     shareRevoked: "Share link revoked",
     assetDeleted: "File moved to trash",
     metricsRefreshed: "Metrics refreshed",
@@ -553,7 +566,8 @@ const I18N = {
     checkLatest: "Up to date ({commit})",
     checkFailed: "❌ Check failed",
     updateRestartSuccess: "Update complete. Server restarted.",
-    updateWaitingRestart: "Waiting for server process to restart and come back online...",
+    updateWaitingRestart:
+      "Waiting for server process to restart and come back online...",
     copyRawBtn: "Original URL",
     copyOptBtn: "WebP URL",
     copyMdBtn: "📋 Markdown",
@@ -572,7 +586,8 @@ const I18N = {
 
     // Assets View
     lblAssetManagerTitle: "Server files",
-    lblAssetManagerDesc: "Upload, browse, and share files on the server. WebP versions of images are generated on demand.",
+    lblAssetManagerDesc:
+      "Upload, browse, and share files on the server. WebP versions of images are generated on demand.",
     chkUploadProtected: "Upload to protected folder",
     btnClearWatermarkCache: "Clear image cache",
     btnUploadFiles: "Upload files",
@@ -585,7 +600,8 @@ const I18N = {
     lblStatPubSize: "Cache storage",
     lblStatPubSavings: "Size reduction",
     dropZoneTitle: "Choose files, or drop or paste them here",
-    dropZoneDesc: "Original files are kept; WebP images are generated on first request",
+    dropZoneDesc:
+      "Original files are kept; WebP images are generated on first request",
     folderNavTitle: "Folders",
     searchPlaceholder: "🔍 Filter files in current folder...",
 
@@ -596,13 +612,13 @@ const I18N = {
 
     // Shared Links
     lblSharesTitle: "Share links",
-    lblSharesDesc: "Create a link for a file and set an expiry or download limit.",
+    lblSharesDesc:
+      "Create a link for a file and set an expiry or download limit.",
     btnRefreshShares: "Refresh list",
 
     // Host & Monitoring
     lblMonitorTitle: "Server status",
     lblMonitorDesc: "View server resource use and process status.",
-    autoRefreshHint: "Auto-refresh every 5s",
     btnRefreshNow: "🔄 Refresh Now",
     mCpuTitle: "CPU 1-min Average Load",
     mRamTitle: "Physical Memory (RAM)",
@@ -631,7 +647,6 @@ const I18N = {
     metricTotalFree: "Total {total} (available {free})",
     metricCores: "{count} cores",
     metricRawFiles: "{size} ({count} original files)",
-    metricSecurity: "Blocked IPs: {count} · Two-factor auth: {status}",
     statusOn: "On",
     statusOff: "Off",
     durationDays: "{count} days",
@@ -641,7 +656,6 @@ const I18N = {
     checkedAt: "Checked at {time}",
     settingsDesc: "Set access URLs, image processing, and file links.",
     passwordPlaceholder: "Leave blank to keep the current password",
-    totpPlaceholder: "Leave blank to turn off two-factor authentication",
     copyManually: "Copy manually:",
     errorSaveConfig: "Could not save settings",
     errorSaveYaml: "Invalid config file; could not save",
@@ -666,7 +680,8 @@ const I18N = {
 
     // Client Integration
     piclistTitle: "Connect other apps",
-    piclistDesc: "Choose a custom image host in PicList or a similar app, then enter these values.",
+    piclistDesc:
+      "Choose a custom image host in PicList or a similar app, then enter these values.",
     piclistUploadUrl: "Upload URL",
     btnCopy: "Copy",
     piclistFields: "Form field and response path",
@@ -684,7 +699,7 @@ const I18N = {
 
     // Settings Form
     lblSiteName: "Site Name",
-    lblBaseUrl: "Public Access URL",
+    lblBaseUrl: "Site URL",
     lblPort: "Server Port",
     lblRawSecretPath: "Original file URL prefix",
     lblPubSecretPath: "WebP URL prefix",
@@ -716,15 +731,18 @@ const I18N = {
     secWatermarkContent: "Watermark Content",
     secWatermarkLayout: "Layout & Appearance",
     cardWmGuideTitle: "Dynamic URL Watermark Parameters",
-    cardWmGuideDesc: "Append ?wm= parameter to public image URLs to dynamically switch watermark style. Visitors cannot bypass watermarks with URL parameters.",
+    cardWmGuideDesc:
+      "Append ?wm= parameter to public image URLs to dynamically switch watermark style. Visitors cannot bypass watermarks with URL parameters.",
     lblWatermarkImageSingle: "Watermark Image Path",
     lblWatermarkImageLight: "Light Watermark (for dark images)",
     lblWatermarkImageDark: "Dark Watermark (for light images)",
     lblWatermarkAutoContrast: "Watermark Mode",
     optAutoContrastOff: "Standard Single (always use same watermark)",
     optAutoContrastOn: "Adaptive (auto switch by image brightness)",
-    hintWatermarkDual: "Automatically samples image luminance at watermark position to choose light or dark watermark.",
-    lblWmGuideDefault: "Default Style (no parameter, uses current configured style)",
+    hintWatermarkDual:
+      "Automatically samples image luminance at watermark position to choose light or dark watermark.",
+    lblWmGuideDefault:
+      "Default Style (no parameter, uses current configured style)",
     lblWmGuideImage: "PNG Image Watermark (supports auto contrast)",
     lblWmGuideText: "Corner Text Watermark",
     lblWmGuideTile: "Tiled Watermark",
@@ -742,24 +760,25 @@ const I18N = {
     optTextContrastFixed: "Fixed Color (always use specified color)",
     lblWatermarkColorLight: "Light Text (for dark images)",
     lblWatermarkColorDark: "Dark Text (for light images)",
-    lblAutoClearCache: "Clear old cache after saving so existing images use the new settings on next request",
+    lblAutoClearCache:
+      "Clear old cache after saving so existing images use the new settings on next request",
     btnSaveConfig: "Save settings",
 
     // Security Center
     lblSecurityTitle: "Security",
-    lblSecurityDesc: "Manage sign-in, upload API tokens, and failed sign-in limits.",
+    lblSecurityDesc:
+      "Manage sign-in, upload API tokens, and failed sign-in limits.",
     lblUsername: "Admin Username",
     lblPassword: "Admin password (leave blank to keep unchanged)",
-    lblAdminPath: "Admin page path",
+    lblAdminPath: "Admin sign-in path",
     lblMaxLoginAttempts: "Allowed failed sign-ins",
     lblApiToken: "Upload API token",
-    lblTotpSecret: "Authenticator secret (leave blank to turn off two-factor authentication)",
-    btnGenerateTotp: "Generate new secret",
     btnSaveSecurity: "Save security settings",
 
     // Maintenance & Updates
     lblUpstreamTitle: "Update server",
-    lblUpstreamDesc: "Check for code updates. Installing an update restarts the server and keeps your settings and files.",
+    lblUpstreamDesc:
+      "Check for code updates. Installing an update restarts the server and keeps your settings and files.",
     lblOfficialRepo: "Update source and branch",
     lblOfficialLocked: "Source locked",
     lblEnableMirror: "Use download mirror",
@@ -770,9 +789,12 @@ const I18N = {
     btnRestartOnly: "Restart server",
     btnPullUpdate: "Install update and restart",
     lblBackupTitle: "Export backups",
-    lblBackupDesc: "Download a .tar.gz backup. On Linux, you can also set up scheduled rclone sync yourself.",
-    lblAutoBackupTitle: "Automated Backup & Cloud Disaster Recovery (OneDrive / Rclone + Bark)",
-    lblAutoBackupDesc: "Scheduled lossless packaging, automated retention rotation, direct upload to OneDrive, and instant Bark iOS push notifications.",
+    lblBackupDesc:
+      "Download a .tar.gz backup. On Linux, you can also set up scheduled rclone sync yourself.",
+    lblAutoBackupTitle:
+      "Automated Backup & Cloud Disaster Recovery (OneDrive / Rclone + Bark)",
+    lblAutoBackupDesc:
+      "Scheduled lossless packaging, automated retention rotation, direct upload to OneDrive, and instant Bark iOS push notifications.",
     lblBackupEnabled: "Automated Backup Switch",
     lblBackupFrequency: "Backup Strategy & Frequency",
     optBackupOn: "Enable Automated Backups",
@@ -801,7 +823,8 @@ const I18N = {
     lblBackupTimeOfDay: "Execution Time",
     lblBackupMinuteOfHour: "Minute of Hour (:mm)",
     lblBackupBaseTime: "Base Execution Time",
-    backupStartedToast: "🚀 Backup job started in background, streaming logs...",
+    backupStartedToast:
+      "🚀 Backup job started in background, streaming logs...",
     lblBackupSchedule: "Daily Execution Time",
     lblBackupRetention: "Backup Retention Count",
     lblBackupLocalDir: "Local Backup Directory",
@@ -820,10 +843,9 @@ const I18N = {
     lblRcloneHint: "# Linux incremental backup example using rclone:",
 
     // Additional Keys
-    rawYamlDesc: "Directly edit root config.yaml (YAML syntax validated prior to saving)",
+    rawYamlDesc:
+      "Directly edit root config.yaml (YAML syntax validated prior to saving)",
     btnSaveRaw: "💾 Validate & Save config.yaml",
-    lblNewTotpKey: "Generated Secret:",
-    lblNewTotpUri: "Authenticator App URI (compatible with 1Password / Google Authenticator):",
     lblLocalCommit: "Local Commit:",
     loadingShares: "Loading active share links...",
     folderCountHint: "{count} folder(s)",
@@ -838,7 +860,8 @@ const I18N = {
     catAttachment: "📎 Attachment",
     statCacheOptimizedHint: "Optimized WebP cache (/pub/*)",
     statCacheDisabledHint: "Auto-optimization is disabled in Settings",
-    protectedFolderLockedHint: "Protected from deletion; remove protection before deleting",
+    protectedFolderLockedHint:
+      "Protected from deletion; remove protection before deleting",
     copyOptTooltip: "Copy optimized WebP link (/pub/*)",
     tagRawOnly: "Raw only",
     tagOnDemand: "Optimize on-demand",
@@ -846,8 +869,10 @@ const I18N = {
     tagDirectStream: "Direct stream",
     copyRawTooltip: "Copy original file URL",
     copyMdTooltip: "Copy Markdown syntax",
-    shareTooltip: "Create a share link with an optional expiry and download limit",
-    delLockedTooltip: "This file is protected. Remove protection before deleting.",
+    shareTooltip:
+      "Create a share link with an optional expiry and download limit",
+    delLockedTooltip:
+      "This file is protected. Remove protection before deleting.",
     shareColAsset: "File",
     shareColLink: "Share link",
     shareColDownloads: "Downloads",
@@ -860,7 +885,8 @@ const I18N = {
     shareBtnCopy: "📋 Copy",
     shareBtnRevoke: "🗑️ Revoke",
     revokeShareConfirm: "Revoke this share link immediately?",
-    sharePromptExpiry: "Create a share link for \"{filename}\". Enter hours until expiry (0 for no expiry):",
+    sharePromptExpiry:
+      'Create a share link for "{filename}". Enter hours until expiry (0 for no expiry):',
     sharePromptMaxDl: "Enter the maximum number of downloads (0 for no limit):",
     shareModalTitle: "Create Secure Share Link",
     shareExpiryLabel: "Expires in (hours, 0 for never)",
@@ -869,75 +895,10 @@ const I18N = {
     gitNoCommits: "No commits yet",
     gitNotInit: "Not initialized (will auto-init on pull)",
     serverOnline: "Server is back online! Reloading console state...",
-    hotUpdateConfirm: "Install updates from [{branch}]{mirrorHint} and restart the server? Your settings and files will be kept.",
     pullingUpdate: "Installing update...",
     restartConfirm: "Restart the File Master Server process now?",
-    restartingServer: "Restarting..."
-  }
+    restartingServer: "Restarting...",
+  },
 };
 
-let currentLocale = localStorage.getItem('filemaster_lang') || 'zh';
-
-function t(key, params = {}) {
-  const dict = I18N[currentLocale] || I18N.zh;
-  let msg = dict[key] || I18N.en[key] || key;
-  for (const [k, v] of Object.entries(params)) {
-    msg = msg.replace(new RegExp(`\\{${k}\\}`, 'g'), v);
-  }
-  return msg;
-}
-
-function applyLocaleToStaticDom() {
-  document.documentElement.lang = currentLocale === 'zh' ? 'zh-CN' : 'en';
-  document.querySelectorAll('[data-i18n]').forEach((el) => {
-    const key = el.getAttribute('data-i18n');
-    if (key) {
-      const translated = t(key);
-      if (translated && translated !== key) {
-        if (el.tagName === 'INPUT' && (el.type === 'button' || el.type === 'submit')) {
-          el.value = translated;
-        } else {
-          el.textContent = translated;
-        }
-      }
-    }
-  });
-
-  document.querySelectorAll('[data-i18n-placeholder]').forEach((el) => {
-    const key = el.getAttribute('data-i18n-placeholder');
-    if (key) {
-      const translated = t(key);
-      if (translated && translated !== key) el.placeholder = translated;
-    }
-  });
-
-  document.querySelectorAll('[data-i18n-title]').forEach((el) => {
-    const key = el.getAttribute('data-i18n-title');
-    if (key) {
-      const translated = t(key);
-      if (translated && translated !== key) el.title = translated;
-    }
-  });
-
-  document.querySelectorAll('[data-i18n-aria-label]').forEach((el) => {
-    const key = el.getAttribute('data-i18n-aria-label');
-    if (key) {
-      const translated = t(key);
-      if (translated && translated !== key) el.setAttribute('aria-label', translated);
-    }
-  });
-
-  const langBtn = document.getElementById('btnLangSwitch');
-  if (langBtn) langBtn.textContent = t('langToggle');
-}
-
-function toggleConsoleLanguage() {
-  currentLocale = currentLocale === 'zh' ? 'en' : 'zh';
-  localStorage.setItem('filemaster_lang', currentLocale);
-  applyLocaleToStaticDom();
-  if (typeof renderFolderTree === 'function') renderFolderTree();
-  if (typeof renderGallery === 'function') renderGallery();
-  if (typeof loadImages === 'function') loadImages();
-  if (typeof loadShares === 'function') loadShares();
-  if (typeof loadServerMetrics === 'function') loadServerMetrics(false);
-}
+export default I18N;

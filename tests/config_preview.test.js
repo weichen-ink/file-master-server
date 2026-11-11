@@ -28,9 +28,8 @@ test('Config preview validates and normalizes without writing config.yaml', () =
     assert.equal(prepared.config.image_host.max_width, 640);
     assert.equal(prepared.config.image_host.webp_quality > 0, true);
 
-    const credentials = prepareConfigPatch({ password: 'new-password', clear_totp: true });
+    const credentials = prepareConfigPatch({ password: 'new-password' });
     assert.match(credentials.config.password, /^scrypt:/);
-    assert.equal(credentials.config.totp_secret, '');
   } finally {
     fs.writeFileSync = writeFileSync;
   }

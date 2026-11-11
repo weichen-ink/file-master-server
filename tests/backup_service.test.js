@@ -134,3 +134,20 @@ test('backup-scheduler supports daily, every_12h, every_6h, hourly, weekly, and 
   assert.equal(shouldTriggerBackup({ enabled: true, frequency: 'cron', cron_expression: '30 2 * * *' }, cronMismatch).shouldTrigger, false);
 });
 
+
+test('Backup forecast uses scheduler semantics and server timezone without changing the schedule', () => {
+  const { forecastBackup, shouldTriggerBackup } = require('../src/core/backup-schedule');
+  const now = new Date(2026, 10, 11, 2, 30, 0);
+  const daily = {enabled:true, frequency:'daily', schedule:'03:00'};
+  const forecast = forecastBackup(daily, now);
+  assert.equal(forecast.timezone, Intl.DateTimeFormat().resolvedOptions().timeZone);
+  assert.equal(new Date(forecast.nextRunAt).getHours(), 3);
+  assert.equal(new Date(forecast.nextRunAt).getMinutes(), 0);
+  assert.equal(shouldTriggerBackup(daily, new Date(forecast.nextRunAt)).shouldTrigger, true);
+  const weekly = {...daily, frequency:'weekly', weekday:0};
+  const next = new Date(forecastBackup(weekly, now).nextRunAt);
+  assert.equal(next.getDay(), 0);
+  assert.equal(shouldTriggerBackup(weekly, next).shouldTrigger, true);
+  assert.equal(forecastBackup({...daily, enabled:false}, now).nextRunAt, null);
+  assert.deepEqual(daily, {enabled:true, frequency:'daily', schedule:'03:00'});
+});

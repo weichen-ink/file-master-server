@@ -42,7 +42,6 @@ admin_path: admin
 username: admin
 password: ""
 max_login_attempts: 3
-totp_secret: ""
 api_token: ""
 image_host:
   raw_secret_path: raw
@@ -135,8 +134,8 @@ function normalizeParsedConfig(parsed = {}, needsSetup = false) {
     username: String(parsed.username || defaults.username || 'admin'),
     password: String(parsed.password || ''),
     max_login_attempts: Number(parsed.max_login_attempts) || Number(defaults.max_login_attempts) || 3,
-    totp_secret: String(parsed.totp_secret || '').trim(),
     api_token: String(parsed.api_token || ''),
+    console: { card_copy_format: ["raw", "webp", "markdown_raw", "markdown_webp"].includes(parsed.console?.card_copy_format) ? parsed.console.card_copy_format : "raw" },
     image_host: {
       ...defImg,
       ...img,
@@ -155,6 +154,10 @@ function normalizeParsedConfig(parsed = {}, needsSetup = false) {
       watermark_auto_contrast: img.watermark_auto_contrast !== false
     },
     backup: {
+      frequency: String(parsed.backup?.frequency || "daily"),
+      weekday: Number(parsed.backup?.weekday ?? 0),
+      monthday: Number(parsed.backup?.monthday ?? 1),
+      cron_expression: String(parsed.backup?.cron_expression || ""),
       enabled: (parsed.backup?.enabled !== undefined) ? (parsed.backup.enabled !== false && parsed.backup.enabled !== 'false') : true,
       retention: Math.max(1, Number(parsed.backup?.retention) || Number(defaults.backup?.retention) || 7),
       schedule: String(parsed.backup?.schedule || defaults.backup?.schedule || '03:00').trim(),
@@ -286,37 +289,47 @@ function getRawConfigYaml() {
   return fs.readFileSync(CONFIG_PATH, 'utf8');
 }
 
-/**
- * Produces a desensitized config object and rawYaml for browser responses.
- * By default, password, api_token, and totp_secret are stripped from both config and rawYaml.
- * When revealSecrets is true, api_token and totp_secret are included (password hash is never exposed).
- */
+/** Web editor excludes credentials entirely; reveal only applies to the explicit token action. */
+function configRevision(raw = getRawConfigYaml()) {
+  return crypto.createHash('sha256').update(raw).digest('hex');
+}
 function redactConfigForClient(cfg, rawYaml, revealSecrets = false) {
-  const safeConfig = {
-    ...cfg,
-    password: '',
-    api_token: revealSecrets ? cfg.api_token : '',
-    totp_secret: revealSecrets ? cfg.totp_secret : '',
-    hasPassword: Boolean(cfg.password),
-    hasTotp: Boolean(cfg.totp_secret),
-    hasApiToken: Boolean(cfg.api_token)
-  };
-
-  let safeRawYaml = String(rawYaml || '');
+  const safeConfig = { ...cfg, password: '', api_token: revealSecrets ? cfg.api_token : '',
+    hasPassword: Boolean(cfg.password), hasApiToken: Boolean(cfg.api_token) };
+  // Remove the retired credential before any old configuration reaches the browser.
+  delete safeConfig.totp_secret;
+  delete safeConfig.hasTotp;
+  let safeRawYaml = '';
   try {
-    const doc = YAML.parseDocument(safeRawYaml);
-    if (doc.has('password')) doc.set('password', '');
-    if (!revealSecrets) {
-      if (doc.has('api_token')) doc.set('api_token', '');
-      if (doc.has('totp_secret')) doc.set('totp_secret', '');
-    }
+    const doc = YAML.parseDocument(String(rawYaml || ''));
+    if (doc.errors.length) throw doc.errors[0];
+    for (const key of ['password', 'api_token', 'totp_secret']) doc.delete(key);
     safeRawYaml = doc.toString();
-  } catch {}
+  } catch { /* Never return unparsed configuration that may contain credentials. */ }
+  return { config: safeConfig, rawYaml: safeRawYaml, revision: configRevision(String(rawYaml || '')) };
+}
 
-  return {
-    config: safeConfig,
-    rawYaml: safeRawYaml
-  };
+function prepareEditorConfigYaml(rawText, revision) {
+  if (revision && revision !== configRevision()) {
+    const error = new Error('CONFIG_CHANGED'); error.status = 409; throw error;
+  }
+  const doc = YAML.parseDocument(String(rawText));
+  if (doc.errors.length) throw doc.errors[0];
+  if (doc.has('password') || doc.has('api_token')) throw new Error('EDIT_CREDENTIALS_IN_SECURITY');
+  return prepareRawConfigYaml(rawText);
+}
+function configurationChanges(before, after, prefix = '') {
+  const result = [];
+  for (const key of new Set([...Object.keys(before || {}), ...Object.keys(after || {})])) {
+    if (['password','api_token','totp_secret'].includes(key)) continue;
+    const left = before?.[key], right = after?.[key], name = prefix ? prefix + '.' + key : key;
+    if (left && right && typeof left === 'object' && typeof right === 'object' && !Array.isArray(left) && !Array.isArray(right)) {
+      result.push(...configurationChanges(left, right, name));
+    } else if (JSON.stringify(left) !== JSON.stringify(right)) {
+      result.push({ key: name, before: left ?? null, after: right ?? null });
+    }
+  }
+  return result;
 }
 
 /**
@@ -324,7 +337,7 @@ function redactConfigForClient(cfg, rawYaml, revealSecrets = false) {
  * (password scrypt hashing, preserving existing secrets when blanked by redacted editor,
  * locking upstream_repo, and validating watermark_image path boundaries).
  */
-function prepareRawConfigYaml(rawText, { clearTotp = false } = {}) {
+function prepareRawConfigYaml(rawText) {
   const doc = YAML.parseDocument(String(rawText));
   if (doc.errors.length > 0) throw doc.errors[0];
   const parsed = doc.toJS();
@@ -354,13 +367,8 @@ function prepareRawConfigYaml(rawText, { clearTotp = false } = {}) {
     doc.set('api_token', existingCfg.api_token);
   }
 
-  // 3. Preserve existing totp_secret if submitted blank in raw mode unless explicitly cleared via form
-  const rawTotp = parsed.totp_secret !== undefined ? String(parsed.totp_secret).trim() : '';
-  if (clearTotp) {
-    doc.set('totp_secret', '');
-  } else if (!rawTotp && existingCfg && existingCfg.totp_secret) {
-    doc.set('totp_secret', existingCfg.totp_secret);
-  }
+  // Retire the legacy field on the next normal save.
+  doc.delete('totp_secret');
 
   // 4. Lock upstream_repo to official repository if present
   if (doc.has('upstream_repo')) {
@@ -434,21 +442,16 @@ function prepareConfigPatch(patch = {}) {
     'username',
     'password',
     'max_login_attempts',
-    'totp_secret',
     'api_token'
   ];
 
   for (const key of topKeys) {
     if (patch[key] !== undefined) {
-      if ((key === 'password' || key === 'api_token' || key === 'totp_secret') && patch[key] === '') {
+      if ((key === 'password' || key === 'api_token') && patch[key] === '') {
         continue;
       }
       doc.set(key, patch[key]);
     }
-  }
-
-  if (patch.clear_totp === true) {
-    doc.set('totp_secret', '');
   }
 
   if (patch.image_host && typeof patch.image_host === 'object') {
@@ -464,9 +467,18 @@ function prepareConfigPatch(patch = {}) {
     }
   }
 
+  if (patch.console?.card_copy_format !== undefined) {
+    if (!["raw", "webp", "markdown_raw", "markdown_webp"].includes(patch.console.card_copy_format)) throw new Error('Invalid card copy format');
+    doc.setIn(['console', 'card_copy_format'], patch.console.card_copy_format);
+  }
+
   if (patch.backup && typeof patch.backup === 'object') {
     const backupKeys = [
       'enabled',
+      'frequency',
+      'weekday',
+      'monthday',
+      'cron_expression',
       'retention',
       'schedule',
       'local_dir',
@@ -480,13 +492,13 @@ function prepareConfigPatch(patch = {}) {
         } else if (k === 'retention') {
           doc.setIn(['backup', k], Math.max(1, Number(patch.backup[k]) || 7));
         } else {
-          doc.setIn(['backup', k], String(patch.backup[k] || '').trim());
+          doc.setIn(['backup', k], String(patch.backup[k] ?? '').trim());
         }
       }
     }
   }
 
-  return prepareRawConfigYaml(doc.toString(), { clearTotp: patch.clear_totp === true });
+  return prepareRawConfigYaml(doc.toString());
 }
 
 function updateConfigPreservingComments(patch = {}) {
@@ -508,6 +520,9 @@ module.exports = {
   setConfigOverride,
   getRawConfigYaml,
   redactConfigForClient,
+  configRevision,
+  prepareEditorConfigYaml,
+  configurationChanges,
   validateWatermarkImagePath,
   prepareRawConfigYaml,
   prepareConfigPatch,

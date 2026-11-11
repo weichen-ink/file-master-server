@@ -162,6 +162,7 @@ async function collectImages(cfg) {
       locked,
       size: stat.size,
       cacheSize,
+      webpSize: cacheSizes.get(expectedCacheFile) ?? null,
       hasCache,
       createdAt: stat.birthtimeMs || stat.mtimeMs,
       hits: assetStats.hits || 0,

@@ -9,9 +9,7 @@ const {
   hashPassword,
   verifyPassword,
   createSessionToken,
-  revokeSessionToken,
-  verifyTotp,
-  generateTotpSecret
+  revokeSessionToken
 } = require(path.join(serverRoot, 'src/core/security'));
 const { getConfig, readJsonData, writeJsonData } = require(path.join(serverRoot, 'src/core/config'));
 

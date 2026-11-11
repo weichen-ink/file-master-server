@@ -1,7 +1,8 @@
 const os = require('node:os');
 const fs = require('node:fs');
 const path = require('node:path');
-const { ROOT_DIR, DATA_DIR, getConfig } = require('./config');
+const { ROOT_DIR, STORAGE_DIR, DATA_DIR, getConfig } = require('./config');
+const { sampleCpuUsage } = require('./cpu-usage');
 const { getSecurityStats } = require('./security');
 const { scanAllImages } = require('../modules/image-host');
 
@@ -48,6 +49,7 @@ async function getDirSize(dirPath) {
  * Collects runtime host metrics, process memory, and site storage stats.
  */
 async function collectRuntimeMetrics(revealSecrets = false) {
+  const cpuUsage = sampleCpuUsage();
   const cfg = getConfig();
   const cpus = os.cpus() || [];
   const cpuCount = cpus.length || 1;
@@ -70,7 +72,7 @@ async function collectRuntimeMetrics(revealSecrets = false) {
   const memUsed = Math.max(0, memTotal - memFree);
   const memPercent = memTotal > 0 ? Math.round((memUsed / memTotal) * 1000) / 10 : 0;
 
-  const disk = getDiskUsage(ROOT_DIR);
+  const disk = getDiskUsage(fs.existsSync(STORAGE_DIR) ? STORAGE_DIR : ROOT_DIR);
   const procMem = process.memoryUsage();
   const imgData = await scanAllImages(cfg);
   const dataDirBytes = await getDirSize(DATA_DIR);
@@ -84,6 +86,7 @@ async function collectRuntimeMetrics(revealSecrets = false) {
       cpu: {
         model: cpuModel,
         cores: cpuCount,
+        usagePercent: await cpuUsage,
         loadAvg: loadAvg.map((n) => Number(n.toFixed(2))),
         loadPercent1m
       },
@@ -118,7 +121,6 @@ async function collectRuntimeMetrics(revealSecrets = false) {
       },
       security: {
         ...getSecurityStats(),
-        totpEnabled: Boolean(cfg.totp_secret),
         maxLoginAttempts: cfg.max_login_attempts
       },
       endpoints: {

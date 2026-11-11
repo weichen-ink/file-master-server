@@ -157,9 +157,11 @@ function createUpdateGit({ rootDir: ROOT_DIR, getConfig, isUpdateInProgress, run
       remoteCommit: null,
       remoteShortCommit: null,
       remoteCommitMessage: null,
+      remoteVersion: null,
       remoteCommitDate: null,
       commitsBehind: 0,
       incomingCommits: [],
+      incomingChanges: [],
       hasUpdate: false,
       updateInProgress: isUpdateInProgress()
     };
@@ -213,6 +215,12 @@ function createUpdateGit({ rootDir: ROOT_DIR, getConfig, isUpdateInProgress, run
       result.remoteShortCommit = rShort || null;
       result.remoteCommitMessage = rSubj || null;
       result.remoteCommitDate = rDate || null;
+      try {
+        const { stdout: packageSource } = await runCmd('git', ['show', 'FETCH_HEAD:package.json'], 5000);
+        const version = JSON.parse(packageSource).version;
+        result.remoteVersion = typeof version === 'string' ? version : null;
+      } catch { /* A commit can update files without a readable package manifest. */ }
+
 
       if (result.localCommit && result.remoteCommit) {
         result.hasUpdate = result.localCommit !== result.remoteCommit;
@@ -227,12 +235,16 @@ function createUpdateGit({ rootDir: ROOT_DIR, getConfig, isUpdateInProgress, run
 
             const { stdout: incomingOut } = await runCmd(
               'git',
-              ['log', 'HEAD..FETCH_HEAD', '--oneline', '-n', '15'],
+              ['log', 'HEAD..FETCH_HEAD', '--format=%H%x00%s%x00%b%x00', '-n', '15'],
               5000
             );
-            result.incomingCommits = incomingOut
-              ? incomingOut.split('\n').map((line) => line.trim()).filter(Boolean)
-              : [];
+            const fields = incomingOut.split('\0');
+            for (let i = 0; i + 2 < fields.length; i += 3) {
+              const hash = fields[i].trim();
+              if (!/^[a-f0-9]{40,64}$/i.test(hash)) continue;
+              result.incomingChanges.push({hash, title: fields[i + 1], body: fields[i + 2].trim()});
+            }
+            result.incomingCommits = result.incomingChanges.map(change => `${change.hash.slice(0,7)} ${change.title}`);
           } catch {
             result.commitsBehind = 1;
           }

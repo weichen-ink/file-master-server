@@ -1,3 +1,4 @@
+const { forecastBackup } = require('./backup-schedule');
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawn, execFile } = require('node:child_process');
@@ -134,7 +135,8 @@ function getLocalBackupFiles(backupDir) {
       .filter((f) => f.startsWith('filemaster-') && f.endsWith('.tar.gz'))
       .map((f) => {
         const fullPath = path.join(backupDir, f);
-        const st = fs.statSync(fullPath);
+        const st = fs.lstatSync(fullPath);
+        if (!st.isFile() || fullPath === activeBackupJob?.archivePath) return null;
         return {
           filename: f,
           path: fullPath,
@@ -144,6 +146,7 @@ function getLocalBackupFiles(backupDir) {
           createdAt: new Date(st.mtimeMs).toISOString()
         };
       })
+      .filter(Boolean)
       .sort((a, b) => b.mtime - a.mtime);
   } catch {
     return [];
@@ -331,11 +334,13 @@ async function performBackup({ manual = false } = {}) {
     const archiveFilename = `filemaster-full-${timestamp}.tar.gz`;
     const archivePath = path.join(localDir, archiveFilename);
 
+    activeBackupJob.archivePath = archivePath + '.tmp';
     logStep(`Packing targets into ${archiveFilename}...`);
     // Tar exclude internal backups directory if targets contains 'data'
-    const tarArgs = ['-czf', archivePath, '--exclude=data/backups', '--exclude=*.tmp', '-C', ROOT_DIR, ...targets];
+    const tarArgs = ['-czf', activeBackupJob.archivePath, '--exclude=data/backups', '--exclude=*.tmp', '-C', ROOT_DIR, ...targets];
     await execFileAsync('tar', tarArgs, { timeout: 30 * 60 * 1000 });
 
+    if (fs.existsSync(activeBackupJob.archivePath)) fs.renameSync(activeBackupJob.archivePath, archivePath);
     if (!fs.existsSync(archivePath)) {
       throw new Error('创建归档文件失败，未生成压缩包');
     }
@@ -442,6 +447,7 @@ async function performBackup({ manual = false } = {}) {
 
     throw err;
   } finally {
+    if (activeBackupJob?.archivePath) fs.rmSync(activeBackupJob.archivePath, {force:true});
     activeBackupJob = null;
   }
 }
@@ -455,6 +461,7 @@ function getBackupStatus() {
 
   const isBackingUp = activeBackupJob !== null;
   return {
+    ...forecastBackup(backupCfg),
     config: {
       enabled: backupCfg.enabled !== false,
       frequency: backupCfg.frequency || 'daily',
@@ -477,8 +484,20 @@ function getBackupStatus() {
   };
 }
 
+function listBackupArchives() {
+  return getLocalBackupFiles(resolveBackupDir(getConfig().backup?.local_dir))
+    .map(({filename, size, createdAt}) => ({filename, size, createdAt}));
+}
+function resolveBackupArchive(filename) {
+  if (typeof filename !== 'string' || !/^filemaster-[a-zA-Z0-9_.-]+\.tar\.gz$/.test(filename) || path.basename(filename) !== filename) return null;
+  if (!listBackupArchives().some(file => file.filename === filename)) return null;
+  return path.join(resolveBackupDir(getConfig().backup?.local_dir), filename);
+}
+
 module.exports = {
   performBackup,
+  listBackupArchives,
+  resolveBackupArchive,
   sendBarkNotification,
   testBarkNotification,
   testRcloneTarget,

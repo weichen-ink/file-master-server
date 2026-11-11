@@ -53,28 +53,9 @@ test('Probe cleanup failure becomes a diagnostic instead of crashing startup', (
   assert.deepEqual(probeAtomicUploads(root, io), { checked: true, atomicUploads: false, errorCode: 'EACCES' });
 });
 
-test('Authenticated console warns before uploading when the storage probe fails', async () => {
-  const vm = require('node:vm');
-  const elements = new Map();
-  const context = vm.createContext({
-    document: { getElementById(id) {
-      if (!elements.has(id)) {
-        const hidden = new Set();
-        elements.set(id, { addEventListener() {}, classList: { add: (s) => hidden.add(s), remove: (s) => hidden.delete(s),
-          toggle(s, on) { if (on) hidden.add(s); else hidden.delete(s); }, contains: (s) => hidden.has(s) } });
-      }
-      return elements.get(id);
-    }, addEventListener() {} },
-    window: { addEventListener() {} },
-    fetch: async () => ({ json: async () => ({ authenticated: true, storageHealth: context.health }) })
-  });
-  const source = fs.readFileSync(path.join(__dirname, '../src/public/assets/console.js'), 'utf8');
-  vm.runInContext(source.replace(/\ninitApp\(\);\s*$/, ''), context);
-  vm.runInContext('applyLocaleToStaticDom = () => {}; loadImages = () => {}; loadShares = () => {};', context);
-  context.health = { checked: true, atomicUploads: false };
-  await vm.runInContext('initApp()', context);
-  assert.equal(elements.get('storageWarning').classList.contains('hidden'), false);
-  context.health = { checked: true, atomicUploads: true };
-  await vm.runInContext('initApp()', context);
-  assert.equal(elements.get('storageWarning').classList.contains('hidden'), true);
+test('Authenticated console warns before uploading when storage health is unknown or failed', async () => {
+  const { storageWarning } = await import('../src/public/assets/admin/ui.mjs');
+  assert.match(storageWarning({ atomicUploads: false }), /role="status"/);
+  assert.match(storageWarning(null), /role="status"/);
+  assert.equal(storageWarning({ atomicUploads: true }), '');
 });

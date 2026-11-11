@@ -23,14 +23,6 @@ test('HTTP functional regression across platform, assets, shares and recovery', 
   const credentials = { username: 'tester', password: 'test-only-password' };
   let cookie, asset, original, tiffAsset;
   const api = { Authorization: `Bearer ${token}` };
-  // Independent RFC 6238 code generator; do not reuse the implementation under test.
-  const totp = (secret) => {
-    const bits = [...secret].map((ch) => 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'.indexOf(ch).toString(2).padStart(5, '0')).join('');
-    const key = Buffer.from(bits.match(/.{8}/g).map((byte) => parseInt(byte, 2)));
-    const counter = Buffer.alloc(8); counter.writeBigUInt64BE(BigInt(Math.floor(Date.now() / 30000)));
-    const hash = crypto.createHmac('sha1', key).update(counter).digest();
-    return String((hash.readUInt32BE(hash.at(-1) & 15) & 0x7fffffff) % 1000000).padStart(6, '0');
-  };
   const admin = () => ({ Cookie: cookie, Origin: base });
   const call = async (url, { json, headers, ...options } = {}) => {
     const res = await fetch(new URL(url, base), { redirect: 'manual', signal: AbortSignal.timeout(10000),
@@ -52,6 +44,9 @@ test('HTTP functional regression across platform, assets, shares and recovery', 
   const assetPath = (item) => path.join(STORAGE_DIR, 'raw', item.year, item.month, item.filename);
 
   await t.test('First-run wizard initializes credentials and locks after setup', async () => {
+    const contract = (await call('/api/platform/version')).data;
+    assert.equal(contract.version, require('../package.json').version);
+    assert.equal(contract.minPluginVersion, '1.1');
     assert.equal((await call('/')).headers.get('location'), '/setup');
     assert.equal((await call('/setup')).status, 200);
     const status = (await call('/api/platform/status')).data;
@@ -86,6 +81,28 @@ test('HTTP functional regression across platform, assets, shares and recovery', 
     assert.equal((await call('/api/platform/config', { method: 'PUT', headers: { ...admin(), Origin: 'https://other.invalid' }, json: { patch: {} } })).status, 403);
     assert.equal((await call('/test-admin')).status, 200);
     assert.equal((await call('/assets/console.js')).status, 200);
+    const entry = await call('/assets/admin/app.mjs');
+    assert.equal(entry.status, 200);
+    assert.match(entry.headers.get('content-type'), /javascript/);
+    assert.match(entry.headers.get('cache-control'), /max-age=0/);
+    // Validate the actual transitive ESM graph, including relative imports and MIME.
+    const visited = new Set();
+    async function verifyModule(url) {
+      if (visited.has(url)) return;
+      visited.add(url);
+      const response = await call(url);
+      assert.equal(response.status, 200, url);
+      assert.match(response.headers.get('content-type'), /javascript/, url);
+      assert.match(response.headers.get('cache-control'), /max-age=0/, url);
+      for (const [, specifier] of response.text.matchAll(/(?:from\s*|import\s*)['"]([^'"]+)['"]/g)) {
+        if (specifier.startsWith('.')) await verifyModule(new URL(specifier, 'http://fixture' + url).pathname);
+      }
+    }
+    await verifyModule('/assets/console.js');
+    assert.ok(visited.size >= 10);
+    assert.equal((await call('/api/platform/config/preview', {method:'POST', json:{rawYaml:''}})).status, 401);
+
+
   });
 
   await t.test('Form/raw configuration preserves secrets and rejects malformed input without writes', async () => {
@@ -94,6 +111,11 @@ test('HTTP functional regression across platform, assets, shares and recovery', 
     const revealed = await call('/api/platform/config?reveal=1', { headers: admin() });
     assert.equal(revealed.data.config.api_token, token);
     const before = fs.readFileSync(CONFIG_PATH, 'utf8');
+    const preview = await call('/api/platform/config/preview', { method: 'POST', headers: admin(), json: { rawYaml: redacted.data.rawYaml } });
+    assert.equal(preview.status, 200);
+    assert.equal(preview.data.valid, true);
+    assert.equal(fs.readFileSync(CONFIG_PATH, 'utf8'), before, 'YAML preview must never write configuration');
+    assert.equal((await call('/api/platform/config/preview', { method: 'POST', headers: admin(), json: { rawYaml: 'image_host: []' } })).status, 400);
     const bad = await call('/api/platform/config', { method: 'PUT', headers: admin(), json: { mode: 'raw', rawYaml: 'image_host: []' } });
     assert.equal(bad.status, 400); assert.equal(fs.readFileSync(CONFIG_PATH, 'utf8'), before);
     const raw = await call('/api/platform/config', { method: 'PUT', headers: admin(),
@@ -175,6 +197,88 @@ test('HTTP functional regression across platform, assets, shares and recovery', 
     await patch({ image_host: { pub_secret_path: 'pub', raw_secret_path: 'raw' } });
   });
 
+  await t.test('Draft image preview reflects unsaved parameters without changing config, originals or caches', async () => {
+    const endpoint='/api/modules/image-host/preview';
+    assert.equal((await call(endpoint,{method:'POST',headers:api,json:{...asset}})).status,401);
+    const beforeConfig=fs.readFileSync(CONFIG_PATH,'utf8');
+    const snapshot=(dir)=>!fs.existsSync(dir)?[]:fs.readdirSync(dir,{withFileTypes:true}).flatMap(entry=>entry.isDirectory()?snapshot(path.join(dir,entry.name)):[entry.name+':'+crypto.createHash('sha256').update(fs.readFileSync(path.join(dir,entry.name))).digest('hex')]).sort();
+    const beforeCache=snapshot(path.join(STORAGE_DIR,'cache'));
+    const preview=await call(endpoint,{method:'POST',headers:admin(),json:{...asset,image_host:{enable_optimization:true,max_width:192,watermark_enable:false,webp_quality:60}}});
+    assert.equal(preview.status,200,preview.text.slice(0,200));assert.equal(preview.headers.get('cache-control'),'no-store');
+    assert.equal((await sharp(preview.buffer).metadata()).width,192);
+    const watermarked=await call(endpoint,{method:'POST',headers:admin(),json:{...asset,image_host:{enable_optimization:true,max_width:192,watermark_enable:true,watermark_type:'text',watermark_text:'DRAFT',watermark_min_width:0,watermark_margin:0}}});
+    assert.equal(watermarked.status,200,watermarked.text.slice(0,200));assert.notDeepEqual(watermarked.buffer,preview.buffer);
+    assert.equal((await call(endpoint,{method:'POST',headers:admin(),json:{...asset,filename:'../config.yaml'}})).status,400);
+    assert.equal((await call(endpoint,{method:'POST',headers:admin(),json:{...asset,image_host:{watermark_image:'../../outside.png'}}})).status,400);
+    assert.equal(fs.readFileSync(CONFIG_PATH,'utf8'),beforeConfig);
+    assert.deepEqual(fs.readFileSync(assetPath(asset)),original);
+    assert.deepEqual(snapshot(path.join(STORAGE_DIR,'cache')),beforeCache);
+    assert.equal(fs.readdirSync(path.join(STORAGE_DIR,'tmp')).filter(name=>name.startsWith('draft-preview-')).length,0);
+    await patch({console:{card_copy_format:'markdown_webp'},backup:{frequency:'weekly',weekday:0,monthday:12,cron_expression:'0 4 * * 0'}});
+    assert.equal(getConfig().console.card_copy_format,'markdown_webp');assert.equal(getConfig().backup.frequency,'weekly');assert.equal(getConfig().backup.weekday,0);
+    assert.equal((await call('/api/platform/config',{method:'PUT',headers:admin(),json:{patch:{console:{card_copy_format:'invalid'}}}})).status,400);
+  });
+
+  await t.test('Trash management restores JSON bytes and original integrity baselines, rejects conflicts and authorizes authenticated plugin operations', async () => {
+    const before=Buffer.from('{"trash":"original"}'),after=Buffer.from('{"trash":"modified"}');
+    const saved=(await upload('回收站.json',before)).data;
+    fs.writeFileSync(assetPath(saved),after);
+    const endpoint=`/api/modules/image-host/item/${saved.year}/${saved.month}/${encodeURIComponent(saved.filename)}`;
+    assert.equal((await call(endpoint,{method:'DELETE',headers:api})).status,200);
+    assert.equal((await call('/api/modules/image-host/trash')).status,401);
+    assert.equal((await call('/api/modules/image-host/trash',{headers:api})).status,200);
+    let listed=await call('/api/modules/image-host/trash',{headers:admin()});assert.equal(listed.status,200);
+    const item=listed.data.items.find(i=>i.filename===saved.filename);assert.ok(item);assert.ok(!('fullPath' in item));
+    assert.equal((await call(`/api/modules/image-host/trash/${item.id}/preview`,{headers:api})).status,415);
+    const restore=`/api/modules/image-host/trash/${item.id}/restore`;
+    assert.equal((await call(restore,{method:'POST'})).status,401);
+    fs.writeFileSync(assetPath(saved),'conflicting file');
+    assert.equal((await call(restore,{method:'POST',headers:admin()})).status,409);
+    assert.equal(fs.readFileSync(assetPath(saved),'utf8'),'conflicting file');fs.unlinkSync(assetPath(saved));
+    assert.equal((await call(restore,{method:'POST',headers:api})).status,200);
+    assert.deepEqual(fs.readFileSync(assetPath(saved)),after);
+    const {pathToShaMap}=require('../src/modules/image-host/sha-index');
+    assert.equal(pathToShaMap.get(`${saved.year}/${saved.month}/${saved.filename}`).baselineSha256,crypto.createHash('sha256').update(before).digest('hex'));
+    assert.equal((await call('/api/modules/image-host/trash',{headers:admin()})).data.items.some(i=>i.id===item.id),false);
+    assert.equal((await call(restore,{method:'POST',headers:admin()})).status,404);
+    assert.equal((await call('/api/modules/image-host/trash/invalid',{method:'DELETE',headers:admin()})).status,400);
+    await call(endpoint,{method:'DELETE',headers:api});
+    listed=await call('/api/modules/image-host/trash',{headers:admin()});const second=listed.data.items.find(i=>i.filename===saved.filename);
+    assert.equal((await call(`/api/modules/image-host/trash/${second.id}`,{method:'DELETE'})).status,401);
+    assert.equal((await call(`/api/modules/image-host/trash/${second.id}`,{method:'DELETE',headers:api})).status,200);
+    assert.equal((await call('/api/modules/image-host/trash',{headers:admin()})).data.items.some(i=>i.id===second.id),false);
+  });
+
+  await t.test('Deleted image previews require authentication and disappear after restore or permanent deletion', async () => {
+    const image = await sharp({create:{width:640,height:480,channels:3,background:'#7132f5'}}).png().toBuffer();
+    const uploaded = await upload('trash-preview-regression.png',image);assert.equal(uploaded.status,200,uploaded.text);const saved=uploaded.data;
+    const endpoint=`/api/modules/image-host/item/${saved.year}/${saved.month}/${encodeURIComponent(saved.filename)}`;
+    assert.equal((await call(endpoint,{method:'DELETE',headers:api})).status,200);
+    let listing = await call('/api/modules/image-host/trash',{headers:api});
+    let item=listing.data.items.find(item=>item.filename===saved.filename);
+    assert.equal(item.isImage,true);assert.ok(!('fullPath' in item));
+    let preview=`/api/modules/image-host/trash/${item.id}/preview`;
+    assert.equal((await call(preview)).status,401);
+    for(const [suffix,expectedWidth] of [['?thumbnail=1',320],['',640]]) {
+      const result=await call(preview+suffix,{headers:api});assert.equal(result.status,200,result.text);
+      assert.match(result.headers.get('cache-control'),/private.*no-store/);
+      assert.equal(result.headers.get('content-type'),'image/webp');
+      const metadata=await sharp(result.buffer).metadata();assert.equal(metadata.width,expectedWidth);
+    }
+    assert.equal((await call('/api/modules/image-host/trash/invalid/preview',{headers:api})).status,400);
+    assert.equal((await call(`/api/modules/image-host/trash/${item.id}/restore`,{method:'POST',headers:api})).status,200);
+    assert.deepEqual(fs.readFileSync(assetPath(saved)),image);
+    assert.equal((await call(preview,{headers:admin()})).status,404);
+    await call(endpoint,{method:'DELETE',headers:api});
+    listing=await call('/api/modules/image-host/trash',{headers:api});item=listing.data.items.find(item=>item.filename===saved.filename);
+    preview=`/api/modules/image-host/trash/${item.id}/preview`;
+    assert.equal((await call(preview+'?thumbnail=1',{headers:admin()})).status,200);
+    assert.equal((await call(`/api/modules/image-host/trash/${item.id}`,{method:'DELETE',headers:api})).status,200);
+    assert.equal((await call(preview,{headers:api})).status,404);
+    const {UPLOAD_TMP_DIR}=require('../src/core/config');
+    assert.equal(fs.readdirSync(UPLOAD_TMP_DIR).some(name=>name.startsWith('trash-preview-')),false);
+  });
+
   await t.test('Integrity jobs detect tampering and locks protect originals before trash deletion', async () => {
     const runIntegrity = async () => {
       let result = await call('/api/modules/image-host/integrity', { method: 'POST', headers: api });
@@ -216,18 +320,62 @@ test('HTTP functional regression across platform, assets, shares and recovery', 
     }
   });
 
-  await t.test('2FA config survives redacted editing and rejects passwords without a valid TOTP', async () => {
-    const generated = await call('/api/platform/totp-generate', { method: 'POST', headers: admin() });
-    assert.equal(generated.status, 200); assert.match(generated.data.otpauthUri, /^otpauth:/);
-    const secret = generated.data.secret;
-    await patch({ totp_secret: secret });
-    const redacted = (await call('/api/platform/config', { headers: admin() })).data;
-    const saved = await call('/api/platform/config', { method: 'PUT', headers: admin(), json: { mode: 'raw', rawYaml: redacted.rawYaml } });
-    assert.equal(saved.status, 200); saveCookie(saved); assert.equal(getConfig().totp_secret, secret);
-    assert.equal((await call('/api/platform/login', { method: 'POST', json: credentials })).status, 401);
-    const valid = await call('/api/platform/login', { method: 'POST', json: { ...credentials, totpCode: totp(secret) } });
-    assert.equal(valid.status, 200); saveCookie(valid);
-    await patch({ clear_totp: true }); assert.equal(getConfig().totp_secret, '');
+  await t.test('Saved backup listing and downloads expose completed archives only and require admin access',async()=>{
+    const backupDir=path.join(root,'data','backups');fs.mkdirSync(backupDir,{recursive:true});
+    const filename='filemaster-full-fixture.tar.gz',archive=Buffer.from('fixture-archive');
+    fs.writeFileSync(path.join(backupDir,filename),archive);
+    fs.writeFileSync(path.join(backupDir,'filemaster-partial.tar.gz.tmp'),'not-finished');
+    fs.symlinkSync(CONFIG_PATH,path.join(backupDir,'filemaster-symlink.tar.gz'));
+    assert.equal((await call('/api/platform/backup/files')).status,401);
+    assert.equal((await call('/api/platform/backup/files',{headers:api})).status,401);
+    const listed=await call('/api/platform/backup/files',{headers:admin()});assert.equal(listed.status,200);
+    assert.deepEqual(listed.data.files.map(i=>i.filename),[filename]);assert.equal(listed.data.files[0].size,archive.length);
+    assert.ok(!listed.text.includes(backupDir));
+    const downloaded=await call('/api/platform/backup/files/'+filename,{headers:admin()});assert.equal(downloaded.status,200);assert.deepEqual(downloaded.buffer,archive);
+    assert.equal((await call('/api/platform/backup/files/filemaster-symlink.tar.gz',{headers:admin()})).status,404);
+    assert.equal((await call('/api/platform/backup/files/config.yaml',{headers:admin()})).status,404);
+    fs.rmSync(backupDir,{recursive:true,force:true});
+  });
+
+  await t.test('Retired login credential cannot block password login or leak through configuration', async () => {
+    fs.appendFileSync(CONFIG_PATH, '\ntotp_secret: "RETIRED_TEST_SECRET"\n');
+    const login = await call('/api/platform/login', {method:'POST',json:credentials});
+    assert.equal(login.status,200);saveCookie(login);
+    assert.equal((await call('/api/platform/login',{method:'POST',json:{...credentials,password:'wrong'}})).status,401);
+    for(const reveal of ['', '?reveal=1']){
+      const result=await call('/api/platform/config'+reveal,{headers:admin()});
+      assert.equal(result.status,200);assert.ok(!result.text.includes('RETIRED_TEST_SECRET'));
+      assert.ok(!('totp_secret' in result.data.config));
+    }
+    assert.equal((await call('/api/platform/totp-generate',{method:'POST',headers:admin()})).status,404);
+    await patch({site_name:'Migration complete'});
+    assert.ok(!fs.readFileSync(CONFIG_PATH,'utf8').includes('totp_secret'));
+  });
+
+  await t.test('Editor rejects credential fields and stale saves; preview returns only actual changes', async () => {
+    const snapshot=(await call('/api/platform/config',{headers:admin()})).data;
+    const before=fs.readFileSync(CONFIG_PATH,'utf8');
+    for(const entry of ['password: changed','api_token: changed']){
+      const result=await call('/api/platform/config',{method:'PUT',headers:admin(),json:{mode:'raw',rawYaml:snapshot.rawYaml+'\n'+entry,revision:snapshot.revision}});
+      assert.equal(result.status,400);assert.equal(result.data.error,'EDIT_CREDENTIALS_IN_SECURITY');
+      assert.equal(fs.readFileSync(CONFIG_PATH,'utf8'),before);
+    }
+    const unchanged=await call('/api/platform/config/preview',{method:'POST',headers:admin(),json:{rawYaml:snapshot.rawYaml,revision:snapshot.revision}});
+    assert.deepEqual(unchanged.data.changes,[]);
+    const invalid=await call('/api/platform/config/preview',{method:'POST',headers:admin(),json:{rawYaml:'image_host: [\n',revision:snapshot.revision}});
+    assert.equal(invalid.status,400);assert.ok(invalid.data.line>0);assert.ok(invalid.data.code);
+    await patch({site_name:'Concurrent change'});
+    for(const endpoint of ['/api/platform/config','/api/platform/config/preview']){
+      const stale=await call(endpoint,{method:endpoint.endsWith('preview')?'POST':'PUT',headers:admin(),json:{mode:'raw',rawYaml:snapshot.rawYaml,revision:snapshot.revision}});
+      assert.equal(stale.status,409);assert.equal(stale.data.error,'CONFIG_CHANGED');
+    }
+    const current=(await call('/api/platform/config',{headers:admin()})).data;
+    const raw=current.rawYaml.replace('Concurrent change','Reviewed change');
+    const preview=await call('/api/platform/config/preview',{method:'POST',headers:admin(),json:{rawYaml:raw,revision:current.revision}});
+    assert.deepEqual(preview.data.changes,[{key:'site_name',before:'Concurrent change',after:'Reviewed change'}]);
+    const saved=await call('/api/platform/config',{method:'PUT',headers:admin(),json:{mode:'raw',rawYaml:raw,revision:current.revision}});
+    assert.equal(saved.status,200);saveCookie(saved);assert.equal(getConfig().api_token,token);
+    assert.equal((await call('/api/platform/login',{method:'POST',json:credentials})).status,200);
   });
 
   await t.test('Metrics/update status are authenticated and logout revokes its session', async () => {

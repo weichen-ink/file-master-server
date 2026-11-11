@@ -154,8 +154,14 @@ function registerShareModule(app) {
       .map((item) => {
         const expiredByTime = item.expiresAt > 0 && now >= item.expiresAt;
         const expiredByCount = item.maxDownloads > 0 && item.downloads >= item.maxDownloads;
+        const target = path.resolve(RAW_DIR, String(item.year), String(item.month), String(item.filename));
+        let fileExists = false;
+        try { fileExists = isPathWithin(target, RAW_DIR) && isPathWithin(fs.realpathSync(target), RAW_DIR) && fs.statSync(target).isFile(); } catch {}
+        const state = !fileExists ? 'fileMissing' : expiredByTime ? 'expired' : expiredByCount ? 'quotaUsed' : 'active';
         return {
           ...item,
+          fileExists,
+          state,
           expired: expiredByTime || expiredByCount,
           shareUrl: `${cfg.base_url}/s/${item.id}`
         };

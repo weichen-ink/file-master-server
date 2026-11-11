@@ -4,51 +4,22 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const vm = require('node:vm');
 const { Readable } = require('node:stream');
 const { UPLOAD_TMP_DIR, isConfigInitialized } = require('../src/core/config');
 const { SETUP_TOKEN, requireSetupToken, createSessionCookie } = require('../src/core/security');
 const { acceptSingleUpload, moveFileToTrash } = require('../src/modules/image-host');
 
-test('Gallery treats uploaded filename as data in click handlers and HTML', () => {
-  const elements = new Map();
-  const context = vm.createContext({
-    document: { addEventListener() {}, getElementById(id) {
-      if (!elements.has(id)) elements.set(id, {
-        value: '', innerHTML: '', textContent: '', addEventListener() {},
-        classList: { add() {}, remove() {} }
-      });
-      return elements.get(id);
-    } },
-    window: { addEventListener() {} },
-    t: (key) => key
-  });
-  const source = fs.readFileSync(path.join(__dirname, '../src/public/assets/console.js'), 'utf8');
-  vm.runInContext(source.replace(/\ninitApp\(\);\s*$/, ''), context);
-
+test('Gallery treats uploaded filenames as data without executable click handlers', async () => {
+  const { fileCard } = await import('../src/public/assets/admin/features/files.mjs');
+  const { parseRoute, detailHref } = await import('../src/public/assets/admin/router.mjs');
   const filename = "x'-alert`1`-'.png";
-  context.item = {
-    year: '2026', month: '10', filename, ext: 'png', size: 5,
-    isImage: true, isProcessableImage: true,
-    rawUrl: `/raw/2026/10/${filename}`,
-    pubUrl: '/pub/2026/10/example.webp',
-    rawPreviewPath: `/raw/2026/10/${filename}`
-  };
-  vm.runInContext('allImages = [item]; renderGallery()', context);
-  const html = elements.get('galleryGrid').innerHTML;
+  const item = { year: '2026', month: '10', filename, ext: 'png', size: 5, isImage: true,
+    rawPreviewPath: '/raw/2026/10/' + encodeURIComponent(filename) };
+  const html = fileCard(item, 0);
   assert.ok(html.includes('&#39;'));
+  assert.ok(!/\bonclick=/.test(html));
   assert.ok(!html.includes(`title="${filename}"`));
-
-  const handler = /onclick="([^"]+)"/.exec(html)[1]
-    .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
-  let opened;
-  let injected = false;
-  new Function('openPreview', 'alert', handler)(
-    (...args) => { opened = args; },
-    () => { injected = true; }
-  );
-  assert.deepEqual(opened, ['2026', '10', filename]);
-  assert.equal(injected, false);
+  assert.equal(parseRoute(detailHref(item)).key, `2026/10/${filename}`);
 });
 
 test('Multipart upload accepts one file and rejects a second without leaving temp files', async () => {
@@ -167,10 +138,10 @@ test('Config exports EXAMPLE_CONFIG_PATH, redacts credentials by default, and bl
   const redacted = redactConfigForClient(sampleCfg, sampleYaml, false);
   assert.equal(redacted.config.password, '');
   assert.equal(redacted.config.api_token, '');
-  assert.equal(redacted.config.totp_secret, '');
+  assert.equal('totp_secret' in redacted.config, false);
   assert.equal(redacted.config.hasPassword, true);
   assert.equal(redacted.config.hasApiToken, true);
-  assert.equal(redacted.config.hasTotp, true);
+  assert.equal('hasTotp' in redacted.config, false);
   assert.ok(!redacted.rawYaml.includes('scrypt:1234:abcd'));
   assert.ok(!redacted.rawYaml.includes('fm_secret_token_999'));
   assert.ok(!redacted.rawYaml.includes('JBSWY3DPEHPK3PXP'));
@@ -178,7 +149,10 @@ test('Config exports EXAMPLE_CONFIG_PATH, redacts credentials by default, and bl
   const revealed = redactConfigForClient(sampleCfg, sampleYaml, true);
   assert.equal(revealed.config.password, '');
   assert.equal(revealed.config.api_token, 'fm_secret_token_999');
-  assert.equal(revealed.config.totp_secret, 'JBSWY3DPEHPK3PXP');
+  assert.equal('totp_secret' in revealed.config, false);
+  assert.ok(!revealed.rawYaml.includes('JBSWY3DPEHPK3PXP'));
+  assert.ok(!redacted.rawYaml.includes('password:'));
+  assert.ok(!redacted.rawYaml.includes('api_token:'));
   assert.ok(!revealed.rawYaml.includes('scrypt:1234:abcd'));
 
   assert.equal(validateWatermarkImagePath('./watermark.png'), './watermark.png');

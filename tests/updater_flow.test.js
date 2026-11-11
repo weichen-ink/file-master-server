@@ -197,3 +197,19 @@ test('Malformed update state blocks updates and preserves backup evidence', asyn
   assert.equal(f.read('data/config.backup.yaml'), 'saved evidence');
   assert.equal(f.calls.length, 0);
 });
+
+test('Update check includes remote version and separate multiline commit bodies',async t=>{
+  const f=createFixture(t),hash='a'.repeat(40),other='b'.repeat(40);
+  const updater=openFixture(f.rootDir,async(cmd,args)=>{
+    let stdout='';
+    if(args[0]==='log'&&args.includes('HEAD..FETCH_HEAD'))stdout=`${hash}\0优化预览\0支持拖动与缩放。\n\n保留第二段说明。\0\n${other}\0修复导航\0\0\n`;
+    else if(args[0]==='log')stdout=args.includes('FETCH_HEAD')?`${hash}|aaaaaaa|优化预览|2026-11-11`:'old|old|旧版|2026-11-10';
+    else if(args[0]==='show')stdout='{"version":"1.2.0"}';
+    else if(args[0]==='rev-list')stdout='2';
+    return {stdout,stderr:''};
+  });
+  const data=await updater.getUpdateStatus({fetchRemote:true});
+  assert.equal(data.remoteVersion,'1.2.0');assert.equal(data.hasUpdate,true);assert.equal(data.commitsBehind,2);
+  assert.deepEqual(data.incomingChanges,[{hash,title:'优化预览',body:'支持拖动与缩放。\n\n保留第二段说明。'},{hash:other,title:'修复导航',body:''}]);
+  assert.deepEqual(data.incomingCommits,['aaaaaaa 优化预览','bbbbbbb 修复导航']);
+});

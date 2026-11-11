@@ -30,8 +30,6 @@ password: ""
 # Brute-force protection: IP is banned for 24h after exceeding failed attempts
 max_login_attempts: 3
 
-# Optional TOTP 2FA secret (leave empty "" to disable 2FA)
-totp_secret: ""
 
 # Global API token for File Master plugin, PicList, scripts, and CLI tools
 api_token: ""

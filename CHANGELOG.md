@@ -1,5 +1,38 @@
 # Changelog (file-master-server)
 
+## [1.1] - 2026-11-11
+
+### Web console and navigation
+- Reorganize navigation around file management and system settings, with compact utility icons for theme, language, GitHub, and sign out.
+- Refine the site identity and minimal homepage footer, including the repository link and a dynamically generated year.
+- Add light, dark, and system appearance preferences backed by shared theme variables.
+- Replace the monolithic console with focused routing, API, state, translation, feature, and UI modules.
+
+### File browsing and previews
+- Unify file, share, and recycle-bin collections with consistent columns, thumbnails, action placement, and responsive layouts.
+- Present time archives as a vertical year/month hierarchy and expose time, size, and name sorting as direct buttons.
+- Add configurable file-card copying, compact original/WebP link rows, and simpler file-location breadcrumbs.
+- Support image zoom presets, wheel zoom, dragging at every scale, and a larger preview dialog with backdrop dismissal.
+- Limit drag-and-drop uploading to the explicitly opened upload flow; show maintenance progress in dialogs instead of a separate task center.
+- Add authenticated recycle-bin previews for both the web console and plugin.
+
+### Settings and operations
+- Consolidate site addresses, account access, upload tokens, and copy preferences; simplify client setup to a focused PicList page.
+- Group compression and watermark settings under Image optimization, with a live preview for watermark changes.
+- Replace service-information clutter with CPU, memory, disk usage, automatic refresh, and service restart controls.
+- Improve backup scheduling with timezone and next-run information, archive listing and downloads, and inline destination tests.
+- Publish completed backup archives atomically and exclude incomplete archives and symbolic links from download listings.
+- Group update identity, proxy options, and checking controls together; render incoming commit titles and bodies as update cards.
+- Install updates directly from the action button without a second confirmation, retaining execution progress and recovery behavior.
+- Simplify configuration editing, keep credentials outside the YAML editor, and detect conflicting configuration revisions before applying changes.
+- Remove the retired two-factor authentication feature and its configuration, API, UI, and documentation references.
+
+### Documentation and compatibility
+- Rewrite the Chinese and English READMEs around installation, everyday use, compatibility, backups, and troubleshooting.
+- Keep setup instructions focused on everyday use and document Docker configuration persistence.
+- Set the server version and minimum supported plugin version to 1.1.
+- Validate with 113 isolated server tests and responsive browser checks. Mobile Obsidian device testing remains a separate release check.
+
 ## [1.0.1] - 2026-11-10
 
 ### Storage and batch operations
@@ -9,7 +42,7 @@
 - Add gallery pagination, thumbnails, bounded/coalesced image generation, and retries for transient upload failures.
 
 ### Configuration and update recovery
-- Validate prepared configuration before cache invalidation and persist TOTP changes atomically.
+- Validate prepared configuration before cache invalidation and persist credential changes atomically.
 - Separate update orchestration, backup/recovery, and Git operations; verify watermark backup checksums.
 - Retain unfinished dependency installation across failures and process restarts, including retries against the same commit; only clean recovery state after completion.
 

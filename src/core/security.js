@@ -189,63 +189,6 @@ function getSecurityStats() {
 }
 
 /**
- * Base32 encoding/decoding and standard RFC 6238 TOTP (6-digit Authenticator code).
- */
-const BASE32_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-
-function generateTotpSecret(length = 16) {
-  const bytes = crypto.randomBytes(length);
-  let secret = '';
-  for (let i = 0; i < length; i++) {
-    secret += BASE32_ALPHABET[bytes[i] % 32];
-  }
-  return secret;
-}
-
-function base32Decode(base32Str) {
-  const clean = String(base32Str).toUpperCase().replace(/[^A-Z2-7]/g, '');
-  let bits = 0;
-  let value = 0;
-  const output = [];
-  for (let i = 0; i < clean.length; i++) {
-    value = (value << 5) | BASE32_ALPHABET.indexOf(clean[i]);
-    bits += 5;
-    if (bits >= 8) {
-      output.push((value >>> (bits - 8)) & 0xff);
-      bits -= 8;
-    }
-  }
-  return Buffer.from(output);
-}
-
-function generateTotpCode(secret, stepOffset = 0) {
-  const key = base32Decode(secret);
-  const counter = Math.floor(Date.now() / 1000 / 30) + stepOffset;
-  const buf = Buffer.alloc(8);
-  buf.writeBigUInt64BE(BigInt(counter));
-  const hmac = crypto.createHmac('sha1', key).update(buf).digest();
-  const offset = hmac[hmac.length - 1] & 0x0f;
-  const code =
-    (((hmac[offset] & 0x7f) << 24) |
-      ((hmac[offset + 1] & 0xff) << 16) |
-      ((hmac[offset + 2] & 0xff) << 8) |
-      (hmac[offset + 3] & 0xff)) %
-    1000000;
-  return String(code).padStart(6, '0');
-}
-
-function verifyTotp(secret, inputCode) {
-  if (!secret) return true; // Skip 2FA if totp_secret is empty
-  const cleanCode = String(inputCode || '').trim();
-  if (!/^\d{6}$/.test(cleanCode)) return false;
-  // Allow a +/- 1 step window (+/- 30s) to account for slight clock drift
-  for (const offset of [-1, 0, 1]) {
-    if (generateTotpCode(secret, offset) === cleanCode) return true;
-  }
-  return false;
-}
-
-/**
  * Issues and validates stateless HMAC session tokens.
  */
 function createSessionToken(cfg) {
@@ -398,8 +341,6 @@ module.exports = {
   recordLoginFailure,
   clearLoginFailures,
   getSecurityStats,
-  generateTotpSecret,
-  verifyTotp,
   createSessionToken,
   verifySessionToken,
   revokeSessionToken,

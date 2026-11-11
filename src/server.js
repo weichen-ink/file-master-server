@@ -13,7 +13,8 @@ const {
   getConfig,
   getRawConfigYaml,
   redactConfigForClient,
-  prepareRawConfigYaml,
+  prepareEditorConfigYaml,
+  configurationChanges,
   prepareConfigPatch,
   writePreparedConfig,
   updateConfigPreservingComments,
@@ -25,8 +26,6 @@ const {
   checkIpBan,
   recordLoginFailure,
   clearLoginFailures,
-  generateTotpSecret,
-  verifyTotp,
   createSessionToken,
   requireSetupToken,
   createSessionCookie,
@@ -50,7 +49,9 @@ const {
   testBarkNotification,
   testRcloneTarget,
   getBackupStatus,
-  isBackupInProgress
+  isBackupInProgress,
+  listBackupArchives,
+  resolveBackupArchive
 } = require('./core/backup-service');
 const { startBackupScheduler } = require('./core/backup-scheduler');
 const { registerImageHostModule, clearCacheDir, getStorageHealth } = require('./modules/image-host');
@@ -131,7 +132,7 @@ app.get('/api/platform/version', (req, res) => {
     name: 'file-master-server',
     version: readPackageVersion(),
     apiVersion: 1,
-    minPluginVersion: '1.0.0',
+    minPluginVersion: '1.1',
     features: {
       webp: true,
       watermark: true,
@@ -150,12 +151,12 @@ app.get('/api/platform/status', (req, res) => {
   const authenticated = !needsSetup && isAdminAuthenticated(req);
   res.json({
     siteName: cfg.site_name,
+    version: readPackageVersion(),
     needsSetup,
     optimizationEnabled: cfg.image_host?.enable_optimization !== false,
     authenticated,
     storageHealth: authenticated ? getStorageHealth() : null,
     username: authenticated ? cfg.username : null,
-    totpEnabled: Boolean(cfg.totp_secret),
     endpoints: authenticated
       ? {
           port: cfg.port,
@@ -237,13 +238,12 @@ app.post('/api/platform/login', loginRateLimiter, (req, res) => {
   }
 
   const cfg = getConfig();
-  const { username, password, totpCode, rememberMe } = req.body || {};
+  const { username, password, rememberMe } = req.body || {};
 
   const userOk = String(username || '').trim() === cfg.username;
   const passOk = verifyPassword(password, cfg.password);
-  const totpOk = verifyTotp(cfg.totp_secret, totpCode);
 
-  if (!userOk || !passOk || !totpOk) {
+  if (!userOk || !passOk) {
     const remaining = recordLoginFailure(ip);
     if (remaining === 0) {
       return res.status(403).json({
@@ -251,7 +251,7 @@ app.post('/api/platform/login', loginRateLimiter, (req, res) => {
       });
     }
     return res.status(401).json({
-      error: `Invalid credentials or 2FA code (${remaining} attempts remaining)`
+      error: `Invalid username or password (${remaining} attempts remaining)`
     });
   }
 
@@ -277,15 +277,6 @@ app.post('/api/platform/logout', (req, res) => {
   res.json({ success: true });
 });
 
-app.post('/api/platform/totp-generate', requireAdmin, (req, res) => {
-  const cfg = getConfig();
-  const secret = generateTotpSecret(16);
-  const issuer = encodeURIComponent(cfg.site_name || 'File Master Server');
-  const user = encodeURIComponent(cfg.username || 'admin');
-  const otpauthUri = `otpauth://totp/${issuer}:${user}?secret=${secret}&issuer=${issuer}`;
-  res.json({ secret, otpauthUri });
-});
-
 app.get('/api/platform/metrics', requireAdmin, async (req, res) => {
   const revealSecrets = req.query.reveal === '1' || req.query.reveal === 'true';
   try {
@@ -299,6 +290,21 @@ app.get('/api/platform/config', requireAdmin, (req, res) => {
   const cfg = getConfig();
   const revealSecrets = req.query.reveal === '1' || req.query.reveal === 'true';
   res.json(redactConfigForClient(cfg, getRawConfigYaml(), revealSecrets));
+});
+
+function configurationError(err) {
+  return { error: err.message, code: err.code, line: err.linePos?.[0]?.line };
+}
+
+// Read-only validation for the advanced editor. Never writes configuration or clears caches.
+app.post('/api/platform/config/preview', requireAdmin, (req, res) => {
+  try {
+    const prepared = prepareEditorConfigYaml(req.body?.rawYaml, req.body?.revision);
+    const changes = configurationChanges(require('yaml').parse(getRawConfigYaml()), require('yaml').parse(prepared.yaml));
+    res.json({ valid: true, changes });
+  } catch (err) {
+    res.status(err.status || 400).json(configurationError(err));
+  }
 });
 
 function shouldPurgeImageCache(oldCfg, newCfg) {
@@ -315,10 +321,10 @@ const handleConfigUpdate = (req, res) => {
   let prepared;
   try {
     prepared = mode === 'raw'
-      ? prepareRawConfigYaml(rawYaml)
+      ? prepareEditorConfigYaml(rawYaml, req.body?.revision)
       : prepareConfigPatch(patch || {});
   } catch (err) {
-    return res.status(400).json({ error: 'Invalid configuration: ' + err.message });
+    return res.status(err.status || 400).json(configurationError(err));
   }
 
   const needsCachePurge = Boolean(
@@ -357,6 +363,7 @@ const handleConfigUpdate = (req, res) => {
       success: true,
       config: redacted.config,
       rawYaml: redacted.rawYaml,
+      revision: redacted.revision,
       adminPathChanged: oldAdminPath !== updatedCfg.admin_path,
       newAdminPath: updatedCfg.admin_path
     });
@@ -497,6 +504,18 @@ app.get('/api/platform/backup/download', requireAdmin, (req, res) => {
 });
 
 // ================= 1.7 Automated Backup & Disaster Recovery APIs =================
+app.get('/api/platform/backup/files', requireAdmin, (req, res) => {
+  try { res.json({ files: listBackupArchives() }); }
+  catch (err) { res.status(500).json({ error: err.message }); }
+});
+app.get('/api/platform/backup/files/:filename', requireAdmin, (req, res) => {
+  try {
+    const file = resolveBackupArchive(req.params.filename);
+    if (!file) return res.status(404).json({ error: 'Backup not found' });
+    res.download(file, req.params.filename);
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
 app.get('/api/platform/backup/status', requireAdmin, (req, res) => {
   try {
     res.json(getBackupStatus());
@@ -554,7 +573,8 @@ registerShareModule(app);
 // Additional modules can be mounted here
 
 // ================= 3. Setup Wizard & Admin Console Routing =================
-app.use('/assets', express.static(path.join(__dirname, 'public/assets'), { maxAge: '1h' }));
+// Native module imports keep stable URLs across hot updates; revalidate every deployment.
+app.use('/assets', express.static(path.join(__dirname, 'public/assets'), { maxAge: 0 }));
 
 app.get('/setup', (req, res) => {
   if (!isConfigInitialized()) {
