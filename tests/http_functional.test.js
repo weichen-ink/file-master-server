@@ -46,7 +46,7 @@ test('HTTP functional regression across platform, assets, shares and recovery', 
   await t.test('First-run wizard initializes credentials and locks after setup', async () => {
     const contract = (await call('/api/platform/version')).data;
     assert.equal(contract.version, require('../package.json').version);
-    assert.equal(contract.minPluginVersion, '1.1');
+    assert.equal(contract.minPluginVersion, '1.1.0');
     assert.equal((await call('/')).headers.get('location'), '/setup');
     assert.equal((await call('/setup')).status, 200);
     const status = (await call('/api/platform/status')).data;

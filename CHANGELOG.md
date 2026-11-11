@@ -1,6 +1,12 @@
 # Changelog (file-master-server)
 
-## [1.1] - 2026-11-11
+## [1.1.1] - 2026-11-11
+
+### Internationalization and logging
+- Default startup banner and console output to English, switching to Chinese only when configured with `language: "zh"`.
+- Align platform contract versioning to semantic 1.1.1.
+
+## [1.1.0] - 2026-11-11
 
 ### Web console and navigation
 - Reorganize navigation around file management and system settings, with compact utility icons for theme, language, GitHub, and sign out.
