@@ -1,20 +1,20 @@
 # File Master Server
 
-自建文件库，集中管理图片、附件和分享链接。
+A self-hosted home for your images, attachments, and shared links.
 
-**简体中文** · [English](README.en.md) · [Obsidian 插件](https://github.com/weichen-ink/file-master)
+[简体中文](README.zh-CN.md) · **English** · [Obsidian plugin](https://github.com/weichen-ink/file-master)
 
-## 功能
+## Features
 
-- **文件管理**：上传、搜索、时间归档，支持网格和列表查看。
-- **图片预览**：放大、拖动，复制原文件、WebP 或 Markdown 链接。
-- **图片优化**：压缩、调整尺寸、添加水印，同时保留原文件。
-- **分享与回收站**：创建限时分享，恢复误删文件。
-- **日常维护**：查看资源占用、定时备份、下载备份和在线更新。
+- **File management**: upload, search, browse by date, and switch between grid and list views.
+- **Image previews**: zoom, pan, and copy original, WebP, or Markdown links.
+- **Image optimization**: compress, resize, and watermark images while keeping originals.
+- **Sharing and trash**: create expiring shares and restore accidentally deleted files.
+- **Server management**: view resource use, schedule and download backups, and install updates.
 
-可独立使用，也可连接 Obsidian 插件或 PicList。支持中英文界面，以及亮色、暗色和跟随系统主题。
+Use it on its own or connect Obsidian or PicList. Supports Chinese and English, with light, dark, and system themes.
 
-## 部署
+## Deploy
 
 ### Docker Compose
 
@@ -24,13 +24,13 @@ cd file-master-server
 docker compose up -d --build
 ```
 
-打开 `http://localhost:3210/setup`，设置站点和管理员账号。远程部署时，将 `localhost` 换成服务器地址。
+Open `http://localhost:3210/setup` to set up your site and administrator account. For a remote deployment, replace `localhost` with your server address.
 
-初始化后，请按[部署说明](docs/DEPLOYMENT.md)保存并挂载站点配置；升级容器时保留文件和配置。
+After setup, follow the [deployment guide](docs/DEPLOYMENT.md#english) to save and mount your site configuration. Keep your files and configuration when updating the container.
 
 ### Node.js
 
-需要 Node.js 18 或更新版本。
+Requires Node.js 18 or later.
 
 ```bash
 git clone https://github.com/weichen-ink/file-master-server.git
@@ -39,11 +39,11 @@ npm ci
 npm start
 ```
 
-同样打开 `http://localhost:3210/setup` 完成初始化。
+Open `http://localhost:3210/setup` to finish setup.
 
-### PM2 后台运行
+### Run in the background with PM2
 
-适合希望关闭终端后服务仍继续运行的 Node.js 部署。完成上面的克隆和 `npm ci` 后，在项目目录执行；如果已用 `npm start` 启动，请先按 `Ctrl+C` 停止。
+Use PM2 to keep a Node.js deployment running after you close the terminal. After cloning the project and running `npm ci` above, run these commands from the project directory. If `npm start` is already running, stop it with `Ctrl+C` first.
 
 ```bash
 npm install -g pm2
@@ -51,19 +51,19 @@ npm run pm2
 pm2 save
 ```
 
-服务名称为 `fms`，访问地址仍为 `http://localhost:3210`。需要开机自启时，执行 `pm2 startup`，再按它显示的命令完成设置。
+The service is named `fms` and remains available at `http://localhost:3210`. To start it automatically after a reboot, run `pm2 startup` and follow the command it prints.
 
-| 操作 | 命令 |
+| Action | Command |
 |---|---|
-| 查看运行状态 | `pm2 status fms` |
-| 查看日志 | `pm2 logs fms` |
-| 重启服务 | `pm2 restart fms` |
-| 停止服务 | `pm2 stop fms` |
+| Check status | `pm2 status fms` |
+| View logs | `pm2 logs fms` |
+| Restart | `pm2 restart fms` |
+| Stop | `pm2 stop fms` |
 
-## 开始使用
+## Start using it
 
-从首页进入管理页面（默认 `/admin`），即可上传和管理文件。连接客户端时，使用“站点设置”中的站点地址和上传 API 令牌；公网访问建议使用 HTTPS。
+Enter the console from the homepage (default: `/admin`) to upload and manage files. To connect a client, use the site URL and upload API token from Site settings. Use HTTPS for public access.
 
-本版本为 **1.1**，连接 Obsidian 时请使用 **1.1 或更新版本**的插件。升级前可在“备份与恢复”中保存一份完整备份。
+This is version **1.1**. Connecting Obsidian requires plugin **1.1 or later**. Before updating, save a full backup in Backup & recovery.
 
-[更新记录](CHANGELOG.md) · [问题反馈](https://github.com/weichen-ink/file-master-server/issues) · [MIT 许可证](LICENSE)
+[Changelog](CHANGELOG.md) · [Report an issue](https://github.com/weichen-ink/file-master-server/issues) · [MIT license](LICENSE)
