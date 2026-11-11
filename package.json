@@ -1,6 +1,6 @@
 {
   "name": "file-master-server",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Self-hosted file and image management with a web library, sharing, backups, and WebP links.",
   "main": "src/server.js",
   "scripts": {

@@ -1,5 +1,10 @@
 # Changelog (file-master-server)
 
+## [1.1.2] - 2026-11-11
+
+### Maintenance
+- Align platform version to 1.1.2.
+
 ## [1.1.1] - 2026-11-11
 
 ### Internationalization and logging
