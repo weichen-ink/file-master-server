@@ -40,6 +40,7 @@ api_token: ""
 
 # ----------------- [Module 1: Image Host] -----------------
 image_host:
+  rename_alias_days: 7 # Keep old links working for this many days after a rename (1–365); then release the old name
   raw_secret_path: raw # Path prefix for accessing original lossless files (/raw/YYYY/MM/file.ext)
   pub_secret_path: pub # Path prefix for accessing optimized WebP files (/pub/YYYY/MM/file.webp)
   enable_optimization: true # Enable automatic image optimization (/pub/YYYY/MM/file.webp): true | false

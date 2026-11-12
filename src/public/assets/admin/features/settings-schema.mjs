@@ -33,6 +33,7 @@ export const schemas = {
     number("port", "lblPort", 1, 65535),
     field("raw_secret_path", "lblRawSecretPath", "text", { required: true }),
     field("pub_secret_path", "lblPubSecretPath", "text", { required: true }),
+    number("rename_alias_days", "renameAliasDays", 1, 365, 1, {help:"renameAliasDaysHelp"}),
   ],
   security: [
     field("username", "lblUsername", "text", { required: true }),
@@ -200,6 +201,7 @@ export function sectionValues(name, cfg) {
       raw_secret_path: cfg.image_host.raw_secret_path,
       pub_secret_path: cfg.image_host.pub_secret_path,
       card_copy_format: cfg.console?.card_copy_format || "raw",
+      rename_alias_days: cfg.image_host.rename_alias_days ?? 7,
     });
   if (name === "updates") {
     result.mirror_enabled = Boolean(cfg.upstream_mirror);
@@ -219,14 +221,14 @@ export function sectionPatch(name, values) {
     return { image_host: allowed };
   if (name === "backup") return { backup: allowed };
   if (["general", "site"].includes(name)) {
-    const { raw_secret_path, pub_secret_path, card_copy_format, ...base } =
+    const { raw_secret_path, pub_secret_path, card_copy_format, rename_alias_days, ...base } =
       allowed;
     if (!base.password) delete base.password;
     if (!base.api_token) delete base.api_token;
     return {
       ...base,
       console: { card_copy_format },
-      image_host: { raw_secret_path, pub_secret_path },
+      image_host: { raw_secret_path, pub_secret_path, ...(rename_alias_days===undefined ? {} : {rename_alias_days}) },
     };
   }
   if (name === "security") {

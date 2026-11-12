@@ -46,6 +46,7 @@ api_token: ""
 image_host:
   raw_secret_path: raw
   pub_secret_path: pub
+  rename_alias_days: 7
   enable_optimization: true
   upload_rate_limit: 1200
   webp_quality: 82
@@ -148,6 +149,7 @@ function normalizeParsedConfig(parsed = {}, needsSetup = false) {
           .trim()
           .replace(/^\/+|\/+$/g, '') || 'pub',
       enable_optimization: img.enable_optimization !== false,
+      rename_alias_days: Number.isInteger(Number(img.rename_alias_days)) && Number(img.rename_alias_days)>=1 && Number(img.rename_alias_days)<=365 ? Number(img.rename_alias_days) : 7,
       upload_rate_limit: img.upload_rate_limit !== undefined ? Number(img.upload_rate_limit) : 1200,
       watermark_image: safeWatermarkImg,
       watermark_image_dark: safeWatermarkDark,
@@ -348,6 +350,9 @@ function prepareRawConfigYaml(rawText) {
     (!parsed.image_host || typeof parsed.image_host !== 'object' || Array.isArray(parsed.image_host))) {
     throw new Error('Invalid YAML format: image_host must be a key-value object');
   }
+  if (parsed.image_host?.rename_alias_days !== undefined && (!Number.isInteger(parsed.image_host.rename_alias_days) || parsed.image_host.rename_alias_days<1 || parsed.image_host.rename_alias_days>365)) {
+    throw new Error('Old filename retention must be a whole number from 1 to 365 days');
+  }
 
   const existingCfg = isConfigInitialized() ? getConfig() : null;
 
@@ -458,6 +463,7 @@ function prepareConfigPatch(patch = {}) {
     const imgKeys = [
       'raw_secret_path',
       'pub_secret_path',
+      'rename_alias_days',
       ...IMAGE_PROCESSING_CONFIG_KEYS
     ];
     for (const k of imgKeys) {

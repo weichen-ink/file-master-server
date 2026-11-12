@@ -1,6 +1,8 @@
 // ================= Bilingual Internationalization (zh-CN / en) =================
 const I18N = {
   zh: {
+    renameAliasDays: "旧文件名保留天数",
+    renameAliasDaysHelp: "改名后，旧链接在保留期内仍可访问；到期后旧名称可重新使用。修改此项只影响之后的改名。",
     storageWarning:
       "存储探测未通过：上传需要可写且支持硬链接的文件系统。请检查服务日志，修复权限或更换存储目录后重启。",
     updateDependenciesPending:
@@ -444,6 +446,8 @@ const I18N = {
     restartingServer: "正在重启服务...",
   },
   en: {
+    renameAliasDays: "Keep old filenames (days)",
+    renameAliasDaysHelp: "After a rename, old links keep working for this many days. The old name can be reused afterward. Changes apply to future renames.",
     storageWarning:
       "Storage probe failed: uploads require writable storage with hard-link support. Check server logs, fix permissions or move storage, then restart.",
     updateDependenciesPending:

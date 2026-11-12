@@ -28,6 +28,9 @@ test('Config preview validates and normalizes without writing config.yaml', () =
     assert.equal(prepared.config.image_host.max_width, 640);
     assert.equal(prepared.config.image_host.webp_quality > 0, true);
 
+    assert.equal(prepareConfigPatch({image_host:{rename_alias_days:14}}).config.image_host.rename_alias_days,14);
+    for(const days of [0,-1,1.5,366,'seven']) assert.throws(()=>prepareConfigPatch({image_host:{rename_alias_days:days}}), /whole number/);
+
     const credentials = prepareConfigPatch({ password: 'new-password' });
     assert.match(credentials.config.password, /^scrypt:/);
   } finally {

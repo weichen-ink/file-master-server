@@ -1,22 +1,51 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { formatReadableUrlSegment } = require('../../core/file-security');
-const { DATA_DIR, writeJsonData } = require('../../core/config');
+const { DATA_DIR, writeJsonData, getConfig } = require('../../core/config');
 
 const keyOf = (year, month, filename) => `${year}/${month}/${filename}`;
 // The public resolver treats spaces and underscores as equivalent too.
 const foldName = name => String(name).normalize('NFC').toLowerCase().replace(/[\s_]+/g, '_');
 const conflict = (message, code = 'NAME_CONFLICT') => Object.assign(new Error(message), { status: 409, code });
 let cached;
+const aliasRetentionDays = () => getConfig().image_host.rename_alias_days;
+const canonicalRoutes = (kind, filename) => kind === 'raw' ? [filename,filename.replace(/[\s_]+/g,'_')] : routeNames(filename);
+function pruneExpiredAliases(state, now = Date.now()) {
+  let changed = false;
+  for (const kind of ['raw','pub']) {
+    for (const [key,expiresAt] of Object.entries(state.aliasExpirations[kind])) {
+      if (expiresAt <= now) {
+        delete state[kind][key];
+        delete state.aliasExpirations[kind][key];
+        changed = true;
+      }
+    }
+  }
+  if (changed) saveNameState(state);
+  return state;
+}
 function readNameState() {
-  if (cached) return cached;
+  if (cached) return pruneExpiredAliases(cached);
   const file = path.join(DATA_DIR, 'asset_names.json');
-  if (!fs.existsSync(file)) return (cached = { version: 1, raw: {}, pub: {}, identities: {}, operations: {}, pending: null });
+  if (!fs.existsSync(file)) return (cached = { version: 1, raw: {}, pub: {}, aliasExpirations:{raw:{},pub:{}}, identities: {}, operations: {}, pending: null });
   const state = JSON.parse(fs.readFileSync(file, 'utf8'));
   if (state.version !== 1 || !['raw','pub','identities','operations'].every(key => state[key] && typeof state[key] === 'object' && !Array.isArray(state[key]))) {
     throw new Error('Invalid asset name registry; restore asset_names.json before modifying files');
   }
-  return (cached = state);
+  if (!state.aliasExpirations) {
+    // Existing installations get a full grace period from their first upgraded start.
+    state.aliasExpirations = {raw:{},pub:{}};
+    const expiresAt = Date.now() + aliasRetentionDays() * 86400000;
+    for (const kind of ['raw','pub']) {
+      for (const [key,target] of Object.entries(state[kind])) {
+        if (!canonicalRoutes(kind,target).includes(key.split('/').pop())) state.aliasExpirations[kind][key] = expiresAt;
+      }
+    }
+    // Older operation records used aliases to find their latest canonical name.
+    for (const record of Object.values(state.operations)) record.canonicalFilename = state.raw[keyOf(record.year,record.month,record.newFilename)] || record.newFilename;
+    saveNameState(state);
+  }
+  return pruneExpiredAliases(cached = state);
 }
 function saveNameState(state) {
   writeJsonData('asset_names', state);
@@ -69,4 +98,4 @@ function assetReferenceUrls(cfg, year, month, filename, item) {
   try { const url = new URL(item.pubUrl); urls.add(`${cfg.base_url}/pub/${url.pathname.split('/').slice(-3).join('/')}`); } catch {}
   return [...urls];
 }
-module.exports = { assetLinkMappings, assetReferenceUrls, hasOptimizedNameConflict, keyOf, foldName, conflict, routeNames, readNameState, saveNameState, resolveAlias, assertNameAvailable };
+module.exports = { aliasRetentionDays, assetLinkMappings, assetReferenceUrls, hasOptimizedNameConflict, keyOf, foldName, conflict, routeNames, readNameState, saveNameState, resolveAlias, assertNameAvailable };

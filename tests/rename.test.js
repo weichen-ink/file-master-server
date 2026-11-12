@@ -175,4 +175,79 @@ test('Server rename keeps file identity, old URLs and one upload namespace', asy
     assert.deepEqual(results.map(result=>result.status).sort(),[200,404]);
     const success=results.find(result=>result.status===200);assert.deepEqual(fs.readFileSync(location(success.data.item)),image);
   });
+  await t.test('Old names expire at the configured deadline, release upload/rename/restore reservations, and keep operation retries stable',async()=>{
+    const {getConfig,setConfigOverride}=require('../src/core/config');
+    const cfg=getConfig(), now=Date.now, start=now();
+    const originals=[];
+    try {
+      setConfigOverride({...cfg,image_host:{...cfg.image_host,rename_alias_days:2}});
+      for(const [index,endpoint] of ['/api/image/upload','/api/modules/image-host/upload'].entries()) {
+        const bytes=Buffer.concat([image,Buffer.from('expiry-'+index)]);
+        const original=(await upload(`expiry-${index}.png`,bytes)).data;
+        const firstRequest=payload(original,`expiry-middle-${index}.png`);
+        const preview=await post('/api/modules/image-host/rename/preview',firstRequest);
+        assert.equal(preview.data.aliasRetentionDays,2);
+        assert.ok(preview.data.aliasExpiresAt>=start+2*86400000);
+        assert.equal(readNameState().raw[`${original.year}/${original.month}/${original.filename}`],undefined,'Preview cannot reserve a name');
+        const renamed=await post('/api/modules/image-host/rename',firstRequest);
+        assert.equal(renamed.status,200);
+        const expiry=renamed.data.aliasExpiresAt;
+        assert.equal(readNameState().aliasExpirations.raw[`${original.year}/${original.month}/${original.filename}`],expiry);
+        Date.now=()=>start+86400000;
+        const chained=await post('/api/modules/image-host/rename',payload(renamed.data.item,`expiry-final-${index}.png`));
+        assert.equal(chained.status,200);
+        assert.equal(readNameState().aliasExpirations.raw[`${original.year}/${original.month}/${original.filename}`],expiry,'Later renames must not extend an earlier deadline');
+        Date.now=()=>expiry-1;
+        assert.deepEqual((await call(original.rawUrl)).buffer,bytes);
+        assert.equal((await call(original.pubUrl)).status,200);
+        assert.equal((await upload(original.filename,Buffer.concat([other,Buffer.from('before-expiry-'+index)]),endpoint)).status,409);
+        Date.now=()=>expiry;
+        assert.equal((await call(original.rawUrl)).status,404);
+        assert.equal((await call(original.pubUrl)).status,404);
+        const {assertNameAvailable}=require('../src/modules/image-host/asset-names');
+        assert.doesNotThrow(()=>assertNameAvailable(path.dirname(location(original)),original.year,original.month,original.filename));
+        assert.deepEqual((await call(chained.data.item.rawUrl)).buffer,bytes);
+        const replay=await post('/api/modules/image-host/rename',firstRequest);
+        assert.equal(replay.status,200);assert.equal(replay.data.item.filename,chained.data.item.filename);
+        const newBytes=Buffer.concat([other,Buffer.from('after-expiry-'+index)]);
+        const reused=await upload(original.filename,newBytes,endpoint);
+        assert.equal(reused.status,200);assert.equal(reused.data.filename,original.filename);
+        assert.deepEqual((await call(original.rawUrl)).buffer,newBytes);
+        // Old operation IDs must still identify the renamed file after the old pathname is reused.
+        const retried=await post('/api/modules/image-host/rename',firstRequest);
+        assert.equal(retried.data.item.filename,chained.data.item.filename);
+        originals.push({original,canonical:chained.data.item,expiry});
+        Date.now=now;
+      }
+      const saved=JSON.parse(fs.readFileSync(path.join(require('../src/core/config').DATA_DIR,'asset_names.json'),'utf8'));
+      assert.ok(saved.operations[Object.keys(saved.operations).at(-1)].canonicalFilename);
+      // A fresh process uses the same persisted expiration metadata.
+      const record=originals[0];
+      const child=execFileSync(process.execPath,['-e',`Date.now=()=>${record.expiry}; const {findRawFile}=require('./src/modules/image-host/asset-paths'); console.log(require('node:path').basename(findRawFile('${record.canonical.year}','${record.canonical.month}','${record.canonical.filename}',true)));`],{cwd:path.resolve(__dirname,'..')}).toString();
+      assert.ok(child.includes(record.canonical.filename));
+    } finally { Date.now=now;setConfigOverride(null); }
+  });
+
+  await t.test('Existing alias registries receive one persisted seven-day grace period on upgrade',()=>{
+    const registry=path.join(require('../src/core/config').DATA_DIR,'asset_names.json');
+    const original=fs.readFileSync(registry);
+    const now=Date.now();
+    const legacy={version:1,raw:{'2026/11/legacy.png':'canonical.png','2026/11/canonical.png':'canonical.png'},pub:{'2026/11/legacy.webp':'canonical.png','2026/11/canonical.webp':'canonical.png'},identities:{},operations:{},pending:null};
+    try {
+      fs.writeFileSync(registry,JSON.stringify(legacy));
+      const run=(time)=>JSON.parse(execFileSync(process.execPath,['-e',`Date.now=()=>${time}; const {readNameState}=require('./src/modules/image-host/asset-names'); console.log(JSON.stringify(readNameState()));`],{cwd:path.resolve(__dirname,'..')}).toString());
+      const migrated=run(now),expiry=migrated.aliasExpirations.raw['2026/11/legacy.png'];
+      assert.equal(expiry,now+7*86400000);
+      assert.equal(migrated.aliasExpirations.pub['2026/11/legacy.webp'],expiry);
+      assert.equal(migrated.aliasExpirations.raw['2026/11/canonical.png'],undefined);
+      assert.equal(migrated.aliasExpirations.pub['2026/11/canonical.webp'],undefined);
+      assert.equal(run(now+86400000).aliasExpirations.raw['2026/11/legacy.png'],expiry,'Restarting cannot extend the grace period');
+      const expired=run(expiry);
+      assert.equal(expired.raw['2026/11/legacy.png'],undefined);
+      assert.equal(expired.pub['2026/11/legacy.webp'],undefined);
+      assert.equal(expired.raw['2026/11/canonical.png'],'canonical.png');
+      assert.equal(expired.pub['2026/11/canonical.webp'],'canonical.png');
+    } finally { fs.writeFileSync(registry,original); }
+  });
+
 });

@@ -9,7 +9,7 @@ const { getProtectedMap } = require('./protection');
 const { getSharesMap, saveSharesMap } = require('../share');
 const { moveAssetStats } = require('./stats');
 const { invalidateScanCache } = require('./catalog');
-const { assetLinkMappings, keyOf, foldName, conflict, routeNames, readNameState, saveNameState, assertNameAvailable } = require('./asset-names');
+const { aliasRetentionDays, assetLinkMappings, keyOf, foldName, conflict, routeNames, readNameState, saveNameState, assertNameAvailable } = require('./asset-names');
 const badInput = message => Object.assign(new Error(message), { status: 400 });
 
 function validateInput(input) {
@@ -30,9 +30,9 @@ function metadata(year, month, filename, sha256, files = null) {
 }
 function resultFor(record, state) {
   const { year, month } = record;
-  const canonical = state.raw[keyOf(year, month, record.newFilename)] || record.newFilename;
+  const canonical = record.canonicalFilename || state.raw[keyOf(year, month, record.newFilename)] || record.newFilename;
   const item = metadata(year, month, canonical, record.expectedSha256);
-  return { success: true, operationId: record.operationId, oldFilename: record.filename, item, linkMappings: assetLinkMappings(getConfig(), year, month, canonical, item, state) };
+  return { success: true, operationId: record.operationId, oldFilename: record.filename, item, aliasRetentionDays:record.aliasRetentionDays, aliasExpiresAt:record.aliasExpiresAt, linkMappings: assetLinkMappings(getConfig(), year, month, canonical, item, state) };
 }
 async function collectAliases(state, year, month, files, source) {
   for (const filename of files) {
@@ -79,8 +79,13 @@ function recoverPendingRename() {
   // Preserve all previous aliases, pointing directly at the latest file, including its new name.
   for (const kind of ['raw', 'pub']) {
     Object.assign(state[kind], record.aliases[kind]);
+    Object.assign(state.aliasExpirations[kind], record.aliases.aliasExpirations?.[kind]);
     for (const [key, targetName] of Object.entries(state[kind])) {
       if (key.startsWith(`${year}/${month}/`) && targetName === filename) state[kind][key] = newFilename;
+    }
+    // New canonical routes never expire, including a reclaimed name owned by this file.
+    for (const key of Object.keys(state.aliasExpirations[kind])) {
+      if (key.startsWith(`${year}/${month}/`) && !record.aliases.aliasExpirations?.[kind]?.[key]) delete state.aliasExpirations[kind][key];
     }
   }
   Object.assign(state.identities, record.aliases.identities);
@@ -88,7 +93,10 @@ function recoverPendingRename() {
   state.identities[targetKey] = expectedSha256;
   saveNameState(state); // Old URLs resolve correctly before the old directory entry is removed.
   if (sourceStat) fs.unlinkSync(source);
-  state.operations[record.operationId] = { year, month, filename, newFilename, expectedSha256, operationId: record.operationId };
+  for (const operation of Object.values(state.operations)) {
+    if (operation.year===year && operation.month===month && (operation.canonicalFilename || operation.newFilename)===filename) operation.canonicalFilename=newFilename;
+  }
+  state.operations[record.operationId] = { year, month, filename, newFilename, canonicalFilename:newFilename, expectedSha256, operationId: record.operationId, aliasRetentionDays:record.aliasRetentionDays, aliasExpiresAt:record.aliasExpiresAt };
   state.pending = null;
   saveNameState(state);
   invalidateScanCache();
@@ -113,12 +121,16 @@ async function renameAsset(input, { preview = false } = {}) {
   getShaIndex();
   const known = pathToShaMap.get(keyOf(year, month, filename));
   const projected = structuredClone(state);
+  const retentionDays = aliasRetentionDays(), expiresAt = Date.now() + retentionDays * 86400000;
   const files = fs.readdirSync(directory).filter(name => isAllowedAttachmentFile(name));
   const bases = new Set([path.parse(filename).name, path.parse(newFilename).name].map(foldName));
   await collectAliases(projected, year, month, files.filter(name => bases.has(foldName(path.parse(name).name))), filename);
   for (const kind of ['raw','pub']) {
     for (const [key, target] of Object.entries(projected[kind])) {
-      if (key.startsWith(`${year}/${month}/`) && target === filename) projected[kind][key] = newFilename;
+      if (key.startsWith(`${year}/${month}/`) && target === filename) {
+        projected[kind][key] = newFilename;
+        projected.aliasExpirations[kind][key] ??= expiresAt;
+      }
     }
   }
   projected.raw[keyOf(year, month, newFilename)] = newFilename;
@@ -127,14 +139,19 @@ async function renameAsset(input, { preview = false } = {}) {
   projected.pub[keyOf(year, month, `${newFilename}.webp`)] = newFilename;
   const futureFiles = files.filter(name => name !== filename).concat(newFilename);
   if (!hasSiblingWithSameBasename(year, month, newFilename, futureFiles)) projected.pub[keyOf(year, month, `${path.parse(newFilename).name}.webp`)] = newFilename;
+  for (const kind of ['raw','pub']) {
+    const canonicalNames = kind==='raw' ? [newFilename,newFilename.replace(/[\s_]+/g,'_')] : routeNames(newFilename);
+    for (const name of canonicalNames) delete projected.aliasExpirations[kind][keyOf(year,month,name)];
+  }
   const record = { ...input, ino: stat.ino, dev: stat.dev, size: stat.size, mtimeMs: stat.mtimeMs,
+    aliasRetentionDays:retentionDays, aliasExpiresAt:expiresAt,
     baselineSha256: known?.baselineSha256 || known?.sha256 || actual,
-    aliases: { raw: projected.raw, pub: projected.pub, identities: projected.identities } };
+    aliases: { raw: projected.raw, pub: projected.pub, aliasExpirations:projected.aliasExpirations, identities: projected.identities } };
   if (preview) {
     const oldItem = metadata(year, month, filename, actual);
     const item = { year, month, filename: newFilename, size: stat.size, sha256: actual,
       ...buildAssetUrlsAndMeta(getConfig(), { year, month, filename: newFilename, hasBasenameCollision: hasSiblingWithSameBasename(year, month, newFilename, files.filter(name => name !== filename).concat(newFilename)) }) };
-    return { success: true, oldFilename: filename, oldItem, item, linkMappings: assetLinkMappings(getConfig(), year, month, newFilename, item, projected) };
+    return { success: true, oldFilename: filename, oldItem, item, aliasRetentionDays:retentionDays, aliasExpiresAt:expiresAt, linkMappings: assetLinkMappings(getConfig(), year, month, newFilename, item, projected) };
   }
   // No side effects occur before this persistent intent record.
   state.pending = record;
