@@ -200,3 +200,11 @@ test('Landing page is served on root without leaking admin_path', () => {
   assert.ok(!content.includes('admin_path'), 'index.html must not contain admin_path references');
   assert.ok(content.includes('File Master'), 'index.html must introduce File Master');
 });
+
+test('404 page is served without leaking admin_path', () => {
+  const notFoundPath = path.join(__dirname, '../src/public/404.html');
+  assert.ok(fs.existsSync(notFoundPath), '404.html must exist');
+  const content = fs.readFileSync(notFoundPath, 'utf8');
+  assert.ok(!content.includes('admin_path'), '404.html must not contain admin_path references');
+  assert.ok(content.includes('404'), '404.html must display 404');
+});

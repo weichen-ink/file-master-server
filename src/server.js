@@ -617,7 +617,15 @@ app.get('/:customAdminPath', (req, res, next) => {
 
 // Unmapped routes return 404
 app.use((req, res) => {
-  res.status(404).send('Not Found');
+  res.status(404);
+  if (req.path.startsWith('/api/')) {
+    return res.json({ error: 'Not found' });
+  }
+  if (req.accepts('html')) {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    return res.sendFile(path.join(__dirname, 'public/404.html'));
+  }
+  return res.send('Not Found');
 });
 
 // ================= 4. Server Initialization =================
