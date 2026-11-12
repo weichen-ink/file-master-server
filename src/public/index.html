@@ -96,6 +96,47 @@
       border-radius: 50%;
       background: var(--success);
       box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% {
+        box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+      }
+      50% {
+        box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.4);
+      }
+    }
+
+    .heart {
+      display: inline-block;
+      animation: heartbeat 1.3s ease-in-out infinite;
+      transform-origin: center;
+      vertical-align: baseline;
+    }
+
+    @keyframes heartbeat {
+      0%, 100% {
+        transform: scale(1);
+      }
+      14% {
+        transform: scale(1.28);
+      }
+      28% {
+        transform: scale(1);
+      }
+      42% {
+        transform: scale(1.22);
+      }
+      70% {
+        transform: scale(1);
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .heart, .status-dot {
+        animation: none;
+      }
     }
 
     .title {
@@ -140,20 +181,38 @@
     <div class="brand-icon">⚡</div>
     <div class="status-badge">
       <span class="status-dot"></span>
-      <span>Service Active</span>
+      <span id="statusText">服务正常运行</span>
     </div>
     <h1 class="title">File Master Server</h1>
-    <p class="subtitle">高性能多媒体与知识资产服务节点</p>
+    <p class="subtitle" id="subtitleText">自建文件库与多媒体图床服务</p>
   </div>
 
   <div class="footer-copy">
-    © <span id="currentYear">2026</span> File Master · Made with 💗 by <a href="https://weichen.ink/" target="_blank" rel="noopener noreferrer">微尘</a> · <a href="https://github.com/weichen-ink/file-master-server" target="_blank" rel="noopener noreferrer">GitHub</a>
+    © <span id="currentYear">2026</span> File Master · Made with <span class="heart">❤️</span> by <a href="https://weichen.ink/" target="_blank" rel="noopener noreferrer">微尘</a> · <a href="https://github.com/weichen-ink/file-master-server" target="_blank" rel="noopener noreferrer">GitHub</a>
   </div>
 
   <script>
     (function() {
-      var el = document.getElementById('currentYear');
-      if (el) el.textContent = new Date().getFullYear();
+      var yearEl = document.getElementById('currentYear');
+      if (yearEl) yearEl.textContent = new Date().getFullYear();
+
+      var lang = 'zh';
+      try {
+        var stored = localStorage.getItem('filemaster_lang');
+        if (stored === 'en' || stored === 'zh') {
+          lang = stored;
+        } else if (navigator.language && !navigator.language.toLowerCase().startsWith('zh')) {
+          lang = 'en';
+        }
+      } catch (e) {}
+
+      if (lang === 'en') {
+        var statusEl = document.getElementById('statusText');
+        if (statusEl) statusEl.textContent = 'Service Active';
+        var subEl = document.getElementById('subtitleText');
+        if (subEl) subEl.textContent = 'Self-hosted file repository and media asset service';
+        document.documentElement.lang = 'en';
+      }
     })();
   </script>
 </body>

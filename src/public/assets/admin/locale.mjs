@@ -341,11 +341,12 @@ export const messages = {
     "清除所有派生图片缓存？原文件会保留，后续访问将重新生成缓存。",
     "Clear all derivative image caches? Originals are preserved and derivatives regenerate on access.",
   ],
-  signInTitle: ["登录你的工作空间", "Sign in to your workspace"],
+  signInTitle: ["登录工作空间", "Sign in to your workspace"],
   signInDesc: [
-    "管理文件、分享与服务设置。",
-    "Manage files, sharing, and your service.",
+    "集中管理媒体资产、外链分享与系统设置。",
+    "Manage media assets, public shares, and server settings.",
   ],
+  loginEyebrow: ["私有化文件工作空间", "YOUR PERSONAL FILE WORKSPACE"],
   connected: ["已连接", "Connected"],
   sessionExpired: [
     "会话已失效，请重新登录。",
@@ -366,7 +367,7 @@ export const messages = {
     "Save or discard the update source draft before installing.",
   ],
   moveUp: ["返回", "Back"],
-  welcome: ["文件与链接，一处掌握。", "Files and links, in one place."],
+  welcome: ["文件与外链，尽在掌控", "Files and links, in one place"],
 };
 Object.assign(messages, {
   "ghproxy.net": ["ghproxy.net", "ghproxy.net"],

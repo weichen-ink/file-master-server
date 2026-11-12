@@ -76,7 +76,8 @@ const I18N = {
       "Obsidian 插件与第三方客户端接入参数、API 端点及配置说明。",
 
     // 隐蔽登录面板
-    loginSub: "连续登录失败可能导致此 IP 被锁定 24 小时",
+    loginEyebrow: "私有化文件工作空间",
+    loginSub: "为保障安全，连续登录失败将临时锁定当前 IP（24 小时）",
     loginUsername: "管理员账号",
     loginPassword: "密码",
     loginRemember: "保持登录 30 天",
@@ -523,7 +524,8 @@ const I18N = {
       "Connection parameters and API documentation for Obsidian and third-party tools.",
 
     // Login View
-    loginSub: "Repeated failed sign-ins may lock this IP for 24 hours",
+    loginEyebrow: "YOUR PERSONAL FILE WORKSPACE",
+    loginSub: "Repeated failed sign-ins will temporarily lock this IP (24h)",
     loginUsername: "Admin username",
     loginPassword: "Password",
     loginRemember: "Keep me signed in for 30 days",
