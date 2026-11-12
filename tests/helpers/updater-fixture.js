@@ -4,7 +4,7 @@ const os = require('node:os');
 const YAML = require('yaml');
 const { createUpdater } = require('../../src/core/updater');
 
-function openFixture(rootDir, runCommand, faults = {}) {
+function openFixture(rootDir, runCommand, faults = {}, resolveOfficialCommit = async () => 'a'.repeat(40)) {
   const configPath = path.join(rootDir, 'config.yaml');
   const config = {
     getConfig: () => YAML.parse(fs.readFileSync(configPath, 'utf8')),
@@ -18,7 +18,7 @@ function openFixture(rootDir, runCommand, faults = {}) {
   };
   // Production adapters are standalone functions; keep the fixture equally callable.
   config.saveRawConfigYaml = config.saveRawConfigYaml.bind(config);
-  return createUpdater({ rootDir, config, runCommand });
+  return createUpdater({ rootDir, config, runCommand, resolveOfficialCommit });
 }
 
 function createFixture(t) {
@@ -51,7 +51,7 @@ function createFixture(t) {
       faults.afterReset?.();
     }
     const stdout = args[0] === 'log' ? 'before|before|old|2026-11-10' : args[0] === 'rev-parse'
-      ? (args.includes('FETCH_HEAD') ? 'after' : 'main') : '';
+      ? (args.some(arg=>arg.startsWith('FETCH_HEAD')) ? (faults.fetchedCommit || 'a'.repeat(40)) : 'main') : '';
     return { stdout, stderr: '' };
   };
   const updater = openFixture(rootDir, runCommand, faults);

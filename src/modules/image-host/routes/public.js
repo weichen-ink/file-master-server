@@ -49,6 +49,7 @@ function registerPublicRoutes(app) {
       }
 
       setSecurityFileHeaders(res, rawFilePath);
+      res.setHeader('Cache-Control', 'public, no-cache');
 
       const rawExt = path.extname(rawFilePath).toLowerCase();
       if (req.method === 'HEAD' && PROCESSABLE_IMAGE_EXTS.has(rawExt)) {
@@ -56,7 +57,7 @@ function registerPublicRoutes(app) {
         return res.status(200).end();
       }
       if (!PROCESSABLE_IMAGE_EXTS.has(rawExt)) {
-        res.setHeader('Cache-Control', 'public, max-age=604800');
+        res.setHeader('Cache-Control', 'public, no-cache');
         if (req.method !== 'HEAD') recordHit(year, month, path.basename(rawFilePath));
         return res.sendFile(rawFilePath);
       }
@@ -83,18 +84,19 @@ function registerPublicRoutes(app) {
         effectiveVariant
       );
 
-      if (!fs.existsSync(cacheFilePath)) {
+      const hadCache = fs.existsSync(cacheFilePath);
+      {
         const effectiveImgCfg = {
           ...cfg.image_host,
           watermark_enable: shouldWatermark,
           watermark_type: activeWmType
         };
         await processAndCacheImage(rawFilePath, cacheFilePath, effectiveImgCfg);
-        invalidateScanCache();
+        if (!hadCache) invalidateScanCache();
       }
 
       res.setHeader('Content-Type', 'image/webp');
-      res.setHeader('Cache-Control', 'public, max-age=604800');
+      res.setHeader('Cache-Control', 'public, no-cache');
       if (req.method !== 'HEAD') recordHit(year, month, rawBasenameWithExt);
       return res.sendFile(cacheFilePath);
     } catch (err) {
@@ -143,7 +145,7 @@ function registerPublicRoutes(app) {
         await ensureThumbnail(rawFilePath, thumbnailPath);
         if (!hadThumbnail) invalidateScanCache();
         res.setHeader('Content-Type', 'image/webp');
-        res.setHeader('Cache-Control', 'private, max-age=2592000');
+        res.setHeader('Cache-Control', 'private, no-cache');
         return res.sendFile(thumbnailPath);
       }
       if (NEEDS_TRANSCODE_EXTS.has(ext) && req.query.download !== '1' && req.query.raw !== '1') {
@@ -151,12 +153,12 @@ function registerPublicRoutes(app) {
         const previewCachePath = getRawPreviewCacheFilePath(year, month, rawBasenameWithExt);
         await ensureTranscodedPreviewJpeg(rawFilePath, previewCachePath);
         res.setHeader('Content-Type', 'image/jpeg');
-        res.setHeader('Cache-Control', 'private, max-age=2592000');
+        res.setHeader('Cache-Control', 'private, no-cache');
         if (req.method !== 'HEAD') recordHit(year, month, rawBasenameWithExt);
         return res.sendFile(previewCachePath);
       }
 
-      res.setHeader('Cache-Control', 'private, max-age=2592000');
+      res.setHeader('Cache-Control', 'private, no-cache');
       if (req.method !== 'HEAD') recordHit(year, month, path.basename(rawFilePath));
       return res.sendFile(rawFilePath);
     } catch (err) {

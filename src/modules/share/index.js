@@ -1,7 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const { DATA_DIR, STORAGE_DIR, getConfig, readJsonData, writeJsonData } = require('../../core/config');
+const { STORAGE_DIR, getConfig, readCriticalJsonData, writeJsonData, isRecord, dataRevision } = require('../../core/config');
 const { requireApiOrAdmin, getClientIp, createRateLimiter } = require('../../core/security');
 const { appendAuditLog } = require('../../core/audit');
 const {
@@ -14,27 +14,21 @@ const {
 } = require('../../core/file-security');
 
 const RAW_DIR = path.join(STORAGE_DIR, 'raw');
-const SHARES_FILE_PATH = path.join(DATA_DIR, 'shares.json');
 
 let cachedSharesMap = null;
 let cachedSharesMtimeMs = 0;
 let flushTimer = null;
 
+function validateShares(value) {
+  return isRecord(value) && Object.values(value).every(item => isRecord(item) &&
+    typeof item.id === 'string' && isValidYearSeg(item.year) && isValidMonthSeg(item.month) &&
+    isAllowedAttachmentFile(item.filename) && Number.isFinite(item.expiresAt) && Number.isFinite(item.downloads) && Number.isFinite(item.maxDownloads));
+}
 function getSharesMap() {
-  try {
-    if (fs.existsSync(SHARES_FILE_PATH)) {
-      const mtimeMs = fs.statSync(SHARES_FILE_PATH).mtimeMs;
-      if (!cachedSharesMap || mtimeMs !== cachedSharesMtimeMs) {
-        const data = readJsonData('shares', {});
-        cachedSharesMap = data && typeof data === 'object' && !Array.isArray(data) ? data : {};
-        cachedSharesMtimeMs = mtimeMs;
-      }
-      return cachedSharesMap;
-    }
-  } catch {}
-  if (!cachedSharesMap) {
-    const data = readJsonData('shares', {});
-    cachedSharesMap = data && typeof data === 'object' && !Array.isArray(data) ? data : {};
+  const revision = dataRevision('shares');
+  if (!cachedSharesMap || revision !== cachedSharesMtimeMs) {
+    const data = readCriticalJsonData('shares', {}, validateShares);
+    cachedSharesMap = data; cachedSharesMtimeMs = revision;
   }
   return cachedSharesMap;
 }
@@ -44,13 +38,11 @@ function saveSharesMap(map) {
     clearTimeout(flushTimer);
     flushTimer = null;
   }
-  cachedSharesMap = map;
+  readCriticalJsonData('shares', {}, validateShares);
   writeJsonData('shares', map);
-  try {
-    if (fs.existsSync(SHARES_FILE_PATH)) {
-      cachedSharesMtimeMs = fs.statSync(SHARES_FILE_PATH).mtimeMs;
-    }
-  } catch {}
+  cachedSharesMap = map;
+  cachedSharesMtimeMs = dataRevision('shares');
+
 }
 
 function scheduleSharesFlush() {

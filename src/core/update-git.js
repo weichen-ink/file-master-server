@@ -111,9 +111,29 @@ function executeCommand(rootDir, cmd, args, timeoutMs = 60000) {
 }
 
 
-function createUpdateGit({ rootDir: ROOT_DIR, getConfig, isUpdateInProgress, runCommand }) {
+/** Resolve provenance through fixed HTTPS GitHub API, independent of mirrors and local Git URL rewrites. */
+async function resolveOfficialCommit(branch) {
+  const url = `https://api.github.com/repos/weichen-ink/file-master-server/commits/${encodeURIComponent(branch)}`;
+  const response = await fetch(url,{redirect:'error',signal:AbortSignal.timeout(15000),
+    headers:{Accept:'application/vnd.github+json','User-Agent':'File-Master-Updater'}});
+  if (!response.ok) throw new Error(`Cannot verify the official update (HTTP ${response.status})`);
+  const body = await response.json();
+  if (!/^[a-f0-9]{40}$/.test(body.sha)) throw new Error('Official update did not return a full commit ID');
+  return body.sha;
+}
+
+function createUpdateGit({ rootDir: ROOT_DIR, getConfig, isUpdateInProgress, runCommand, resolveCommit = resolveOfficialCommit }) {
   const PKG_PATH = path.join(ROOT_DIR, 'package.json');
   const runCmd = runCommand || ((cmd, args, timeout) => executeCommand(ROOT_DIR, cmd, args, timeout));
+  async function fetchVerifiedUpdate(repo,branch,timeout = 45000) {
+    const expected = await resolveCommit(branch);
+    if (!/^[a-f0-9]{40}$/.test(expected)) throw new Error('Cannot verify the official update commit');
+    await ensureGitInitialized(repo);
+    await runCmd('git',['fetch','--prune','--',repo,branch],timeout);
+    const {stdout} = await runCmd('git',['rev-parse','--verify','FETCH_HEAD^{commit}'],5000);
+    if (stdout.trim() !== expected) throw new Error('Update verification failed: fetched commit does not match the official branch. No update was installed.');
+    return expected;
+  }
   function getFileSha256(filePath) {
     if (!fs.existsSync(filePath)) return '';
     return crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest('hex');
@@ -202,8 +222,7 @@ function createUpdateGit({ rootDir: ROOT_DIR, getConfig, isUpdateInProgress, run
       if (!validateGitBranch(upstreamBranch)) {
         throw new Error(`Invalid upstream branch name: "${upstreamBranch}"`);
       }
-      await ensureGitInitialized(effectiveRepo);
-      await runCmd('git', ['fetch', '--prune', '--', effectiveRepo, upstreamBranch], 30000);
+      await fetchVerifiedUpdate(effectiveRepo,upstreamBranch,30000);
 
       const { stdout: remoteLog } = await runCmd(
         'git',
@@ -269,7 +288,7 @@ function createUpdateGit({ rootDir: ROOT_DIR, getConfig, isUpdateInProgress, run
     }
   }
 
-  return { runCmd, getFileSha256, readPackageVersion, getUpdateStatus, ensureGitInitialized };
+  return { fetchVerifiedUpdate, runCmd, getFileSha256, readPackageVersion, getUpdateStatus, ensureGitInitialized };
 }
-module.exports = { createUpdateGit, OFFICIAL_UPSTREAM_REPO, getEffectiveUpstreamRepo,
+module.exports = { resolveOfficialCommit, createUpdateGit, OFFICIAL_UPSTREAM_REPO, getEffectiveUpstreamRepo,
   validateGitMirror, validateGitRemote, validateGitBranch };

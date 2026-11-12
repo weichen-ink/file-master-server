@@ -9,7 +9,7 @@ const { createUpdateGit, OFFICIAL_UPSTREAM_REPO, getEffectiveUpstreamRepo,
   validateGitMirror, validateGitRemote, validateGitBranch } = require('./update-git');
 
 // One coordinator owns the lock. Tests use separate roots and a command boundary.
-function createUpdater({ rootDir = ROOT_DIR, config = defaultConfig, runCommand } = {}) {
+function createUpdater({ rootDir = ROOT_DIR, config = defaultConfig, runCommand, resolveOfficialCommit } = {}) {
   const DATA_DIR = path.join(rootDir, 'data');
   const CONFIG_PATH = path.join(rootDir, 'config.yaml');
   const EXAMPLE_CONFIG_PATH = path.join(rootDir, 'config.example.yaml');
@@ -19,8 +19,8 @@ function createUpdater({ rootDir = ROOT_DIR, config = defaultConfig, runCommand 
   let updateInProgress = false;
   const backup = createUpdateBackup({ rootDir, dataDir: DATA_DIR, configPath: CONFIG_PATH, getConfig });
   const { backupWatermarkFiles, restoreWatermarkFiles, readPendingUpdate, writePendingUpdate, clearPendingUpdate } = backup;
-  const git = createUpdateGit({ rootDir, getConfig, isUpdateInProgress: () => updateInProgress, runCommand });
-  const { runCmd, getFileSha256, readPackageVersion, ensureGitInitialized } = git;
+  const git = createUpdateGit({ rootDir, getConfig, isUpdateInProgress: () => updateInProgress, runCommand, resolveCommit:resolveOfficialCommit });
+  const { runCmd, getFileSha256, readPackageVersion, fetchVerifiedUpdate } = git;
 
   async function getUpdateStatus(options) {
     return { ...await git.getUpdateStatus(options), dependenciesPending: Boolean(readPendingUpdate()?.dependenciesPending) };
@@ -115,17 +115,14 @@ function createUpdater({ rootDir = ROOT_DIR, config = defaultConfig, runCommand 
       const fromCommit = beforeStatus.localShortCommit || 'unknown';
 
       logStep(`Fetching latest commits from ${effectiveRepo} (branch: ${upstreamBranch})...`);
-      await ensureGitInitialized(effectiveRepo);
-      await runCmd('git', ['fetch', '--prune', '--', effectiveRepo, upstreamBranch], 45000);
-
-      const { stdout: targetHashOut } = await runCmd('git', ['rev-parse', '--short', 'FETCH_HEAD'], 5000);
-      const toCommit = targetHashOut || 'FETCH_HEAD';
+      const verifiedCommit = await fetchVerifiedUpdate(effectiveRepo,upstreamBranch);
+      const toCommit = verifiedCommit.slice(0,7);
 
       logStep(`Applying update (${fromCommit} -> ${toCommit})...`);
       // Reset can change dependencies even if the process exits before hash comparison.
       state.dependenciesPending = true;
       writePendingUpdate(state);
-      await runCmd('git', ['reset', '--hard', 'FETCH_HEAD'], 15000);
+      await runCmd('git', ['reset', '--hard', verifiedCommit], 15000);
       const newPkgHash = getFileSha256(PKG_PATH) + ':' + getFileSha256(PKG_LOCK_PATH);
       state.dependenciesPending = previousInstallPending || oldPkgHash !== newPkgHash;
       writePendingUpdate(state);

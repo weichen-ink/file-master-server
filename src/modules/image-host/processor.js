@@ -17,6 +17,7 @@ function invalidateProcessingCache() {
   cacheGeneration++;
 }
 
+const sourceSignature = stat => `${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeMs}:${stat.ctimeMs}`;
 function runImageCacheJob(rawPath, cachePath, build, generation = cacheGeneration) {
   const key = `${generation}:${cachePath}`;
   if (imageJobs.has(key)) return imageJobs.get(key);
@@ -30,16 +31,22 @@ function runImageCacheJob(rawPath, cachePath, build, generation = cacheGeneratio
     const rawStat = await fs.promises.stat(rawPath);
     const cached = await fs.promises.stat(cachePath).catch(() => null);
     assertCurrent();
-    if (cached && cached.size > 0 && cached.mtimeMs >= rawStat.mtimeMs) return cachePath;
+    const signature = sourceSignature(rawStat);
+    const saved = await fs.promises.readFile(cachePath + '.source', 'utf8').catch(() => null);
+    if (cached && cached.size > 0 && saved === signature) return cachePath;
     await fs.promises.mkdir(path.dirname(cachePath), { recursive: true });
     const temp = `${cachePath}.${crypto.randomUUID()}.tmp`;
     try {
       await build(temp);
       assertCurrent();
+      if (sourceSignature(fs.statSync(rawPath)) !== signature) throw Object.assign(new Error('Source image changed; retry this request'),{status:503});
+      fs.writeFileSync(temp + '.source', signature);
       fs.renameSync(temp, cachePath);
+      fs.renameSync(temp + '.source', cachePath + '.source');
       return cachePath;
     } finally {
       await fs.promises.unlink(temp).catch(() => {});
+      await fs.promises.unlink(temp + '.source').catch(() => {});
     }
   }).finally(() => imageJobs.delete(key));
   imageJobs.set(key, job);

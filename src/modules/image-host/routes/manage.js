@@ -1,7 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
-const crypto = require('node:crypto');
-const { getConfig, TRASH_DIR, UPLOAD_TMP_DIR, prepareConfigPatch } = require('../../../core/config');
+const { getConfig, UPLOAD_TMP_DIR, prepareConfigPatch } = require('../../../core/config');
 const { requireApiOrAdmin, requireAdmin, getClientIp } = require('../../../core/security');
 const { appendAuditLog } = require('../../../core/audit');
 const {
@@ -12,22 +11,14 @@ const {
   isValidYearSeg,
   isValidMonthSeg
 } = require('../../../core/file-security');
-const { hashFileSha256, verifyOriginalFiles } = require('../asset-files');
-const {
-  RAW_DIR,
-  CACHE_DIR,
-  getWebpCacheFilePath,
-  getLegacyWebpCacheFilePath,
-  getRawPreviewCacheFilePath,
-  hasSiblingWithSameBasename
-} = require('../asset-paths');
-const { pathToShaMap, getShaIndex, removeShaIndex } = require('../sha-index');
+const { verifyOriginalFiles } = require('../asset-files');
+const { RAW_DIR } = require('../asset-paths');
+const { pathToShaMap, getShaIndex } = require('../sha-index');
 const { isItemLocked, setItemLockState } = require('../protection');
 const { scanAllImages, invalidateScanCache, clearCacheDir } = require('../catalog');
 const { serializeMutation } = require('../mutation-queue');
-const { moveFileToTrash, trashMetadata, publicTrashEntries, findTrash, restoreTrash, deleteTrash } = require('../trash');
+const { trashAsset, publicTrashEntries, findTrash, restoreTrash, deleteTrash } = require('../trash');
 const { renderDraftPreview, ensureThumbnail } = require('../processor');
-const { removeAssetStats } = require('../stats');
 
 const { renameAsset } = require('../rename');
 
@@ -177,73 +168,12 @@ function registerManageRoutes(app) {
       });
     }
 
-    const cacheFilePath = getWebpCacheFilePath(year, month, filename);
-    const legacyCacheFilePath = getLegacyWebpCacheFilePath(year, month, filename);
-    const rawPreviewCachePath = getRawPreviewCacheFilePath(year, month, filename);
-    const legacyPreviewCachePath = path.join(CACHE_DIR, year, month, `${path.parse(filename).name}.raw_preview.jpg`);
-
-    let deletedSize = 0;
-    let deletedSha = null;
-
-    if (fs.existsSync(rawFilePath)) {
-      try {
-        const stat = fs.statSync(rawFilePath);
-        deletedSize = stat.size;
-        deletedSha = await hashFileSha256(rawFilePath);
-        const trashDay = new Date().toISOString().slice(0, 10);
-        const trashTargetDir = path.join(TRASH_DIR, trashDay, year, month);
-        fs.mkdirSync(trashTargetDir, { recursive: true });
-        const parsed = path.parse(filename);
-        const trashName = `${parsed.name}_${Date.now()}_${crypto.randomBytes(4).toString('hex')}${parsed.ext}`;
-        const trashTarget = path.join(trashTargetDir, trashName);
-        getShaIndex();
-        const known = pathToShaMap.get(`${year}/${month}/${filename}`);
-        trashMetadata(trashTarget,{year,month,filename,deletedAt:Date.now(),sha256:deletedSha,baselineSha256:known?.baselineSha256 || known?.sha256 || null});
-        try { await moveFileToTrash(rawFilePath, trashTarget, deletedSha); }
-        catch(error) { fs.rmSync(trashTarget+'.json',{force:true}); throw error; }
-      } catch (err) {
-        console.error('[File Master] Failed to move file to trash:', err);
-        return res.status(500).json({ error: 'Failed to move file to trash; original file was preserved' });
-      }
-    }
-
-    // Explicit deletion retires the path even if its bytes changed or were already missing.
-    removeAssetStats(year, month, filename);
-    getShaIndex();
-    const relKey = `${year}/${month}/${filename}`;
-    const indexedSha = pathToShaMap.get(relKey)?.sha256;
-    if (indexedSha) {
-      try { removeShaIndex(indexedSha, relKey); }
-      catch (err) { console.warn('[File Master] Failed to update SHA index after deletion:', err); }
-    }
-
-    // Safely clean up associated cache files without failing the delete response if unlink throws
-    const hasRemainingSibling = hasSiblingWithSameBasename(year, month, filename);
-    const cacheTargets = [
-      cacheFilePath,
-      getWebpCacheFilePath(year, month, filename, 'clean'),
-      getWebpCacheFilePath(year, month, filename, 'image'),
-      getWebpCacheFilePath(year, month, filename, 'text'),
-      getWebpCacheFilePath(year, month, filename, 'tile'),
-      path.join(CACHE_DIR, year, month, `${filename}.thumb.webp`),
-      path.join(CACHE_DIR, year, month, `${filename}.thumb.webp.preview.jpg`),
-      rawPreviewCachePath
-    ];
-    if (!hasRemainingSibling) {
-      cacheTargets.push(legacyCacheFilePath, legacyPreviewCachePath);
-    }
-    for (const cache of [...cacheTargets]) {
-      if (cache.endsWith('.webp')) cacheTargets.push(path.join(path.dirname(cache), `${path.parse(cache).name}.raw_preview.jpg`));
-    }
-    for (const target of new Set(cacheTargets)) {
-      try {
-        if (isPathWithin(target, CACHE_DIR) && fs.existsSync(target)) {
-          fs.unlinkSync(target);
-        }
-      } catch (err) {
-        console.warn('[File Master] Failed to remove cache file after deletion:', target, err.message);
-      }
-    }
+    const condition = req.headers['if-match'];
+    if (condition && !/^"[a-f0-9]{64}"$/.test(condition)) return res.status(400).json({error:'Invalid attachment hash condition'});
+    let deleted;
+    try { deleted = await trashAsset(year,month,filename,condition ? condition.slice(1,-1) : null); }
+    catch (error) { return res.status(error.status || 500).json({error:error.message}); }
+    const {size:deletedSize,sha256:deletedSha} = deleted;
 
     invalidateScanCache();
 

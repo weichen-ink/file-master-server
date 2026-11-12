@@ -1,6 +1,6 @@
 const path = require('node:path');
 const fs = require('node:fs');
-const { readJsonData, writeJsonData } = require('../../core/config');
+const { readCriticalJsonData, writeJsonData, isRecord, dataRevision } = require('../../core/config');
 const { isValidYearSeg, isValidMonthSeg, isPathWithin } = require('../../core/file-security');
 const { hashFileSha256 } = require('./asset-files');
 const { RAW_DIR } = require('./asset-paths');
@@ -9,6 +9,7 @@ const { RAW_DIR } = require('./asset-paths');
 const MAX_SHA_CACHE_ENTRIES = 2000;
 const sha256Cache = new Map();
 let shaIndex = null;
+let loadedRevision;
 const pathToShaMap = new Map();
 
 function setBoundedShaCache(key, hash) {
@@ -23,43 +24,46 @@ function setBoundedShaCache(key, hash) {
   sha256Cache.set(key, hash);
 }
 
-function rebuildPathToShaMap(idx) {
-  pathToShaMap.clear();
-  for (const [sha, info] of Object.entries(idx || {})) {
-    if (info && info.year && info.month && info.filename) {
-      pathToShaMap.set(`${info.year}/${info.month}/${info.filename}`, {
-        sha256: sha,
-        baselineSha256: info.baselineSha256 || sha,
-        size: info.size,
-        mtimeMs: info.mtimeMs
-      });
-    }
-  }
+const validHash = value => /^[a-f0-9]{64}$/.test(value);
+function validateShaIndex(saved) {
+  if (!isRecord(saved)) return false;
+  const validInfo = info => isRecord(info) && (info.baselineSha256 == null || validHash(info.baselineSha256)) &&
+    Number.isFinite(info.size) && Number.isFinite(info.mtimeMs);
+  if (saved.version === 2) return isRecord(saved.files) && Object.entries(saved.files).every(([rel,info]) => {
+    const [year,month,filename,...extra] = rel.split('/');
+    return !extra.length && isValidYearSeg(year) && isValidMonthSeg(month) && filename && validInfo(info) && validHash(info.sha256);
+  });
+  return Object.entries(saved).every(([sha,info]) => validHash(sha) && validInfo(info) &&
+    isValidYearSeg(info.year) && isValidMonthSeg(info.month) && typeof info.filename === 'string' && !/[\\/]/.test(info.filename));
 }
-
 function getShaIndex() {
-  if (!shaIndex) {
-    const saved = readJsonData('sha_index', {});
-    shaIndex = {};
-    if (saved.version === 2 && saved.files && typeof saved.files === 'object') {
-      for (const [rel, info] of Object.entries(saved.files)) {
-        const [year, month, filename, extra] = rel.split('/');
-        if (!extra && isValidYearSeg(year) && isValidMonthSeg(month) && filename &&
-          /^[a-f0-9]{64}$/.test(info?.sha256)) {
-          updateShaIndex(info.sha256, { year, month, filename, size: info.size,
-            mtimeMs: info.mtimeMs, baselineSha256: info.baselineSha256 || info.sha256 }, false);
-        }
-      }
-    } else {
-      shaIndex = saved;
-      rebuildPathToShaMap(shaIndex);
+  const revision = dataRevision('sha_index');
+  if (!shaIndex || revision !== loadedRevision) {
+    const saved = readCriticalJsonData('sha_index', {}, validateShaIndex);
+    // Validate completely before replacing either cache, so a failed load cannot leave an empty index.
+    const next = {}, paths = new Map();
+    const entries = saved.version === 2 ? Object.entries(saved.files) : Object.entries(saved).map(([sha,info]) =>
+      [`${info.year}/${info.month}/${info.filename}`, {...info,sha256:sha}]);
+    for (const [rel,info] of entries) {
+      const [year,month,filename] = rel.split('/');
+      next[info.sha256] = {year,month,filename,size:info.size,mtimeMs:info.mtimeMs,baselineSha256:info.baselineSha256 || info.sha256};
+      paths.set(rel,{sha256:info.sha256,baselineSha256:info.baselineSha256 || info.sha256,size:info.size,mtimeMs:info.mtimeMs});
     }
+    shaIndex = next; pathToShaMap.clear(); for (const [rel,info] of paths) pathToShaMap.set(rel,info);
+    loadedRevision = revision;
+    sha256Cache.clear();
   }
   return shaIndex;
 }
 
 function writeShaIndex() {
+  // Also check before flushing a long scan; do not overwrite state replaced during that scan.
+  if (dataRevision('sha_index') !== loadedRevision) {
+    readCriticalJsonData('sha_index', {}, validateShaIndex);
+    throw Object.assign(new Error('SHA index changed on disk; retry after reloading'),{status:409});
+  }
   writeJsonData('sha_index', { version: 2, files: Object.fromEntries(pathToShaMap) });
+  loadedRevision = dataRevision('sha_index');
 }
 
 function updateShaIndex(sha256, info, flush = true) {

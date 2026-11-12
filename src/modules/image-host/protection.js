@@ -1,8 +1,8 @@
-const { readJsonData, writeJsonData } = require('../../core/config');
+const { readCriticalJsonData, writeJsonData } = require('../../core/config');
 
 function getProtectedMap() {
-  const data = readJsonData('protected_files', {});
-  return data && typeof data === 'object' && !Array.isArray(data) ? data : {};
+  return readCriticalJsonData('protected_files', {}, value => value && typeof value === 'object' && !Array.isArray(value) &&
+    Object.entries(value).every(([key,item]) => /^\d{4}\/\d{2}\/[^/]+$/.test(key) && item && typeof item === 'object' && Number.isFinite(item.lockedAt)));
 }
 
 function isItemLocked(year, month, filename, protectedMap = null) {

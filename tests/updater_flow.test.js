@@ -36,7 +36,7 @@ test('Unchanged dependencies skip npm and concurrent requests share one update l
   const started = new Promise((resolve) => { entered = resolve; });
   const updater = openFixture(f.rootDir, async (cmd, args) => {
     if (args[0] === 'fetch') { entered(); await gate; }
-    return { stdout: 'same', stderr: '' };
+    return { stdout: args[0] === 'rev-parse' && args.includes('FETCH_HEAD^{commit}') ? 'a'.repeat(40) : 'same', stderr: '' };
   });
   const first = updater.performHotUpdate();
   await started;
@@ -112,7 +112,7 @@ test('A process exit immediately after reset leaves backups recoverable in a fre
         fs.writeFileSync(path.join(root, 'watermark.png'), 'upstream');
         process.exit(27);
       }
-      return { stdout: 'before', stderr: '' };
+      return { stdout: args[0] === 'rev-parse' ? 'a'.repeat(40) : 'before', stderr: '' };
     }).performHotUpdate().catch(() => process.exit(1));
   `], { env: { ...process.env, FM_UPDATER_HELPER: helper, FM_UPDATER_ROOT: f.rootDir }, encoding: 'utf8', timeout: 10000 });
   assert.equal(child.status, 27, child.stderr);
@@ -142,7 +142,7 @@ test('Offline Git integration fetches a local upstream and restores tracked cust
     const actual = [...args];
     if (args[0] === 'fetch') actual[actual.length - 2] = upstream;
     return { stdout: git(f.rootDir, actual), stderr: '' };
-  });
+  }, {}, async () => git(upstream,['rev-parse','HEAD']));
   assert.equal((await updater.performHotUpdate()).success, true);
   assert.equal(git(f.rootDir, ['rev-parse', 'HEAD']), git(upstream, ['rev-parse', 'HEAD']));
   assertAssets(f);
@@ -206,10 +206,24 @@ test('Update check includes remote version and separate multiline commit bodies'
     else if(args[0]==='log')stdout=args.includes('FETCH_HEAD')?`${hash}|aaaaaaa|优化预览|2026-11-11`:'old|old|旧版|2026-11-10';
     else if(args[0]==='show')stdout='{"version":"1.2.0"}';
     else if(args[0]==='rev-list')stdout='2';
+    else if(args[0]==='rev-parse')stdout=hash;
     return {stdout,stderr:''};
   });
   const data=await updater.getUpdateStatus({fetchRemote:true});
   assert.equal(data.remoteVersion,'1.2.0');assert.equal(data.hasUpdate,true);assert.equal(data.commitsBehind,2);
   assert.deepEqual(data.incomingChanges,[{hash,title:'优化预览',body:'支持拖动与缩放。\n\n保留第二段说明。'},{hash:other,title:'修复导航',body:''}]);
   assert.deepEqual(data.incomingCommits,['aaaaaaa 优化预览','bbbbbbb 修复导航']);
+});
+
+test('An untrusted mirror cannot install a different commit, even with the same short prefix',async t=>{
+  const f=createFixture(t);f.faults.fetchedCommit='a'.repeat(7)+'b'.repeat(33);
+  await assert.rejects(f.updater.performHotUpdate({upstream_mirror:'https://untrusted.example'}),/does not match the official branch/);
+  assert.ok(!f.calls.some(call=>call[1]==='reset'));assert.ok(!f.calls.some(call=>call[0].startsWith('npm')));
+  assertAssets(f);assert.equal(f.pending(),false);
+});
+test('Official verification failure blocks fetching and installation without insecure fallback',async t=>{
+  const f=createFixture(t);
+  const updater=openFixture(f.rootDir,async(cmd,args)=>{f.calls.push([cmd,...args]);return {stdout:'',stderr:''};},{},async()=>{throw new Error('official source unreachable');});
+  await assert.rejects(updater.performHotUpdate({upstream_mirror:'https://untrusted.example'}),/official source unreachable/);
+  assert.ok(!f.calls.some(call=>['fetch','reset'].includes(call[1])));assertAssets(f);
 });

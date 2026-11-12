@@ -282,6 +282,28 @@ function readJsonData(moduleName, defaultData = []) {
   }
 }
 
+// Critical state must never turn a read/parse failure into a successful empty state.
+const isRecord = value => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+function readCriticalJsonData(moduleName, defaultData, validate = isRecord) {
+  const file = path.join(DATA_DIR, `${moduleName}.json`);
+  let raw;
+  try { raw = fs.readFileSync(file, 'utf8'); }
+  catch (error) { if (error.code === 'ENOENT') return defaultData; throw stateError(moduleName, error); }
+  try {
+    const value = JSON.parse(raw);
+    if (!validate(value)) throw new Error('Invalid data structure');
+    return value;
+  } catch (error) { throw stateError(moduleName, error); }
+}
+function stateError(name, cause) {
+  return Object.assign(new Error(`Cannot read ${name}.json; restore this file before continuing`, { cause }),
+    { status: 503, code: 'STATE_INVALID' });
+}
+function dataRevision(moduleName) {
+  try { const s = fs.statSync(path.join(DATA_DIR, `${moduleName}.json`)); return `${s.ino}:${s.size}:${s.mtimeMs}:${s.ctimeMs}`; }
+  catch (error) { if (error.code === 'ENOENT') return 'missing'; throw stateError(moduleName, error); }
+}
+
 /**
  * Atomically writes data to data/<moduleName>.json using a temporary file.
  */
@@ -558,5 +580,8 @@ module.exports = {
   updateConfigPreservingComments,
   IMAGE_PROCESSING_CONFIG_KEYS,
   readJsonData,
+  readCriticalJsonData,
+  isRecord,
+  dataRevision,
   writeJsonData
 };

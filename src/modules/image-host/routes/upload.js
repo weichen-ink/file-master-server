@@ -231,6 +231,7 @@ function registerUploadRoutes(app) {
       if (tmpOutput && fs.existsSync(tmpOutput)) {
         try {
           fs.unlinkSync(tmpOutput);
+          fs.rmSync(tmpOutput + '.source', {force:true});
         } catch {}
       }
     }

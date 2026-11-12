@@ -8,6 +8,7 @@ const { getShaIndex, pathToShaMap, updateShaIndex, removeShaIndex, writeShaIndex
 const { getProtectedMap } = require('./protection');
 const { getSharesMap, saveSharesMap } = require('../share');
 const { moveAssetStats } = require('./stats');
+const { invalidateAssetCache } = require('./asset-cache');
 const { invalidateScanCache } = require('./catalog');
 const { aliasRetentionDays, assetLinkMappings, keyOf, foldName, conflict, routeNames, readNameState, saveNameState, assertNameAvailable } = require('./asset-names');
 const badInput = message => Object.assign(new Error(message), { status: 400 });
@@ -62,6 +63,8 @@ function recoverPendingRename() {
   }
   const stat = fs.lstatSync(target);
   if (!stat.isFile() || stat.ino !== record.ino || stat.dev !== record.dev || stat.size !== record.size || stat.mtimeMs !== record.mtimeMs || (sourceStat && (sourceStat.ino !== stat.ino || sourceStat.dev !== stat.dev))) throw conflict('The rename target changed; automatic recovery stopped');
+  invalidateAssetCache(year,month,filename);
+  invalidateAssetCache(year,month,newFilename);
   getShaIndex();
   const previous = pathToShaMap.get(sourceKey);
   if (previous) removeShaIndex(previous.sha256, sourceKey, false);

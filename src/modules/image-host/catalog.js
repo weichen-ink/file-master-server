@@ -9,11 +9,10 @@ const {
   RAW_DIR,
   CACHE_DIR,
   ensureDirs,
-  getWebpCacheFilePath,
-  getLegacyWebpCacheFilePath,
-  getRawPreviewCacheFilePath
+  getWebpCacheFilePath
 } = require('./asset-paths');
 const { updateShaIndex, writeShaIndex, getFileSha256 } = require('./sha-index');
+const { assetCachePaths } = require('./asset-cache');
 const { assetReferenceUrls } = require('./asset-names');
 const { mutateAssets } = require('./mutation-queue');
 const { getAssetStats } = require('./stats');
@@ -35,6 +34,7 @@ function invalidateScanCache() {
  * Scans all raw assets and compiles summary metrics.
  */
 function scanAllImages(cfg, forceRefresh = false) {
+  try { require('./trash').recoverPendingTrash(); } catch (error) { return Promise.reject(error); }
   const cfgKey = `${cfg.base_url}|${cfg.image_host?.raw_secret_path}|${cfg.image_host?.pub_secret_path}|${cfg.image_host?.enable_optimization}`;
   const now = Date.now();
   if (!forceRefresh && cachedScanData && cfgKey === cachedScanCfgKey && now - cachedScanTime < SCAN_CACHE_TTL_MS) {
@@ -61,6 +61,7 @@ function scanAllImages(cfg, forceRefresh = false) {
 
 async function collectImages(cfg) {
   ensureDirs();
+  require('./trash').recoverPendingTrash();
   const protectedMap = getProtectedMap();
   const list = [];
   let totalRawBytes = 0;
@@ -103,25 +104,9 @@ async function collectImages(cfg) {
     const effectiveVariant = globalWmEnabled ? activeWmType : 'clean';
     const expectedCacheFile = getWebpCacheFilePath(year, month, file, effectiveVariant);
 
-    const primaryCacheFile = getWebpCacheFilePath(year, month, file);
-    const legacyCacheFile = getLegacyWebpCacheFilePath(year, month, file);
     let assetCacheBytes = 0;
     if (assetMeta.isProcessableImage) {
-      const processedCacheFiles = [
-        primaryCacheFile,
-        getWebpCacheFilePath(year, month, file, 'clean'),
-        getWebpCacheFilePath(year, month, file, 'image'),
-        getWebpCacheFilePath(year, month, file, 'text'),
-        getWebpCacheFilePath(year, month, file, 'tile'),
-        ...(!hasCollision ? [legacyCacheFile] : [])
-      ];
-      const candidateCacheFiles = new Set([
-        ...processedCacheFiles,
-        ...processedCacheFiles.map((filePath) => path.join(path.dirname(filePath), `${path.parse(filePath).name}.raw_preview.jpg`)),
-        getRawPreviewCacheFilePath(year, month, file),
-        path.join(CACHE_DIR, year, month, `${file}.thumb.webp`),
-        path.join(CACHE_DIR, year, month, `${file}.thumb.webp.preview.jpg`)
-      ]);
+      const candidateCacheFiles = assetCachePaths(year,month,file);
       for (const cPath of candidateCacheFiles) {
         assetCacheBytes += cacheSizes.get(cPath) || 0;
       }

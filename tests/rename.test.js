@@ -24,7 +24,7 @@ test('Server rename keeps file identity, old URLs and one upload namespace', asy
   const call = async (url, options = {}) => {
     const res = await fetch(new URL(url, base), { ...options, headers: { ...headers, ...options.headers }, signal: AbortSignal.timeout(10000) });
     const buffer = Buffer.from(await res.arrayBuffer());
-    return { status: res.status, buffer, data: res.headers.get('content-type')?.includes('json') ? JSON.parse(buffer) : null };
+    return { status: res.status, headers:res.headers, buffer, data: res.headers.get('content-type')?.includes('json') ? JSON.parse(buffer) : null };
   };
   const post = (url, body) => call(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   const upload = (name, bytes, endpoint = '/api/image/upload') => {
@@ -184,6 +184,9 @@ test('Server rename keeps file identity, old URLs and one upload namespace', asy
       for(const [index,endpoint] of ['/api/image/upload','/api/modules/image-host/upload'].entries()) {
         const bytes=Buffer.concat([image,Buffer.from('expiry-'+index)]);
         const original=(await upload(`expiry-${index}.png`,bytes)).data;
+        const oldWebp = await call(original.pubUrl+'?wm=0');
+        assert.equal(oldWebp.status,200);
+        assert.match(oldWebp.headers.get('cache-control'),/no-cache/);
         const firstRequest=payload(original,`expiry-middle-${index}.png`);
         const preview=await post('/api/modules/image-host/rename/preview',firstRequest);
         assert.equal(preview.data.aliasRetentionDays,2);
@@ -213,6 +216,10 @@ test('Server rename keeps file identity, old URLs and one upload namespace', asy
         const reused=await upload(original.filename,newBytes,endpoint);
         assert.equal(reused.status,200);assert.equal(reused.data.filename,original.filename);
         assert.deepEqual((await call(original.rawUrl)).buffer,newBytes);
+        const freshWebp = await call(reused.data.pubUrl+'?wm=0');
+        assert.equal(freshWebp.status,200);assert.notDeepEqual(freshWebp.buffer,oldWebp.buffer);
+        const expectedPixel=await sharp(other).raw().toBuffer(),actualPixel=await sharp(freshWebp.buffer).raw().toBuffer();
+        assert.ok(Math.abs(actualPixel[0]-expectedPixel[0])<10,'Reused name must show the new image');
         // Old operation IDs must still identify the renamed file after the old pathname is reused.
         const retried=await post('/api/modules/image-host/rename',firstRequest);
         assert.equal(retried.data.item.filename,chained.data.item.filename);

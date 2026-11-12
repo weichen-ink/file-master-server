@@ -105,6 +105,20 @@ test('HTTP functional regression across platform, assets, shares and recovery', 
 
   });
 
+  await t.test('Anonymous probes never lock out a valid administrator; real failed tokens still lock out guesses',async()=>{
+    const security=require('../src/core/security');
+    await patch({max_login_attempts:3});
+    try {
+      for(let i=0;i<6;i++) assert.equal((await call('/api/modules/image-host/list')).status,401);
+      assert.equal(security.checkIpBan('127.0.0.1').banned,false);
+      for(let i=0;i<3;i++) await call('/api/modules/image-host/list',{headers:{Authorization:'Bearer invalid-token'}});
+      assert.equal(security.checkIpBan('127.0.0.1').banned,true);
+      assert.equal((await call('/test-admin',{headers:admin()})).status,200);
+      assert.equal((await call('/api/platform/config',{headers:admin()})).status,200);
+      assert.equal((await call('/api/modules/image-host/list',{headers:admin()})).status,200);
+    } finally {security.clearLoginFailures('127.0.0.1');await patch({max_login_attempts:100});}
+  });
+
   await t.test('Form/raw configuration preserves secrets and rejects malformed input without writes', async () => {
     const redacted = await call('/api/platform/config', { headers: admin() });
     assert.ok(!redacted.text.includes(token)); assert.ok(!redacted.text.includes('scrypt:'));
@@ -376,6 +390,16 @@ test('HTTP functional regression across platform, assets, shares and recovery', 
     const saved=await call('/api/platform/config',{method:'PUT',headers:admin(),json:{mode:'raw',rawYaml:raw,revision:current.revision}});
     assert.equal(saved.status,200);saveCookie(saved);assert.equal(getConfig().api_token,token);
     assert.equal((await call('/api/platform/login',{method:'POST',json:credentials})).status,200);
+  });
+
+  await t.test('Conditional delete checks the full attachment hash at the server boundary',async()=>{
+    const bytes=await sharp({create:{width:20,height:20,channels:3,background:'#123456'}}).png().toBuffer();
+    const item=(await upload('conditional-router.png',bytes)).data;
+    const url=`/api/modules/image-host/item/${item.year}/${item.month}/${item.filename}`;
+    const wrong=await call(url,{method:'DELETE',headers:{...api,'If-Match':'"'+'0'.repeat(64)+'"'}});
+    assert.equal(wrong.status,412);assert.deepEqual(fs.readFileSync(assetPath(item)),bytes);
+    const removed=await call(url,{method:'DELETE',headers:{...api,'If-Match':'"'+item.sha256+'"'}});
+    assert.equal(removed.status,200);assert.equal(fs.existsSync(assetPath(item)),false);
   });
 
   await t.test('Metrics/update status are authenticated and logout revokes its session', async () => {

@@ -17,8 +17,9 @@ const { setBeforeMutation } = require('./mutation-queue');
 function registerImageHostModule(app) {
   checkStorageHealth();
   ensureDirs();
-  recoverPendingRename();
-  setBeforeMutation(recoverPendingRename);
+  const recover = () => { recoverPendingRename(); require('./trash').recoverPendingTrash(); };
+  recover();
+  setBeforeMutation(recover);
   warmShaIndexAsync();
   const initCfg = getConfig();
   const requestedWmPath = path.resolve(ROOT_DIR, initCfg.image_host.watermark_image || './wm-light.png');

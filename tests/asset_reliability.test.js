@@ -40,7 +40,7 @@ test('Concurrent cold-cache requests all succeed and thumbnails have bounded dim
     await Promise.all(Array.from({ length: 8 }, () => ensureThumbnail(raw, thumbnail)));
     const meta = await sharp(thumbnail).metadata();
     assert.ok(meta.width <= 320 && meta.height <= 240);
-    assert.deepEqual((await fs.readdir(dir)).sort(), ['cached.webp', 'source.png', 'thumbnail.webp']);
+    assert.deepEqual((await fs.readdir(dir)).sort(), ['cached.webp', 'cached.webp.source', 'source.png', 'thumbnail.webp', 'thumbnail.webp.source']);
   } finally { await fs.rm(dir, { recursive: true, force: true }); }
 });
 
@@ -119,4 +119,21 @@ test('Unsupported hard links fail without exposing a partial file or overwriting
     fs.copyFile = realCopy;
     await fs.rm(dir, { recursive: true, force: true });
   }
+});
+
+test('Replacing a source with an older mtime cannot reuse its previous optimized image or thumbnail',async()=>{
+  const dir=await fs.mkdtemp(path.join(os.tmpdir(),'fm-cache-source-'));
+  try {
+    const raw=path.join(dir,'source.png'),output=path.join(dir,'cached.webp'),thumb=path.join(dir,'thumb.webp');
+    const image=color=>sharp({create:{width:24,height:24,channels:3,background:color}}).png().toBuffer();
+    await fs.writeFile(raw,await image('#ff0000'));
+    await processAndCacheImage(raw,output,{watermark_enable:false});await ensureThumbnail(raw,thumb);
+    const old=await fs.readFile(output),oldThumb=await fs.readFile(thumb),sig=await fs.readFile(output+'.source','utf8');
+    // Valid warm hits keep the same file; changes must regenerate even with a backdated source timestamp.
+    await processAndCacheImage(raw,output,{watermark_enable:false});
+    assert.equal(await fs.readFile(output+'.source','utf8'),sig);
+    await fs.writeFile(raw,await image('#0000ff'));await fs.utimes(raw,new Date(1),new Date(1));
+    await processAndCacheImage(raw,output,{watermark_enable:false});await ensureThumbnail(raw,thumb);
+    assert.notDeepEqual(await fs.readFile(output),old);assert.notDeepEqual(await fs.readFile(thumb),oldThumb);
+  } finally {await fs.rm(dir,{recursive:true,force:true});}
 });

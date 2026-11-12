@@ -1,7 +1,7 @@
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
-const { DATA_DIR, getConfig, readJsonData, writeJsonData, isConfigInitialized } = require('./config');
+const { DATA_DIR, getConfig, readCriticalJsonData, writeJsonData, isRecord, isConfigInitialized } = require('./config');
 
 // In-memory IP brute-force protection map: ip -> { count, bannedUntil, lastAttempt }
 const ipFailures = new Map();
@@ -23,6 +23,8 @@ function createSessionCookie(req, token, maxAge = '') {
 // Load persisted bans from data/ip_bans.json on server boot and hot-reload when modified on disk
 const IP_BANS_PATH = path.join(DATA_DIR, 'ip_bans.json');
 let lastBansMtimeMs = -1;
+const validIpBans = value => isRecord(value) && Object.values(value).every(item =>
+  isRecord(item) && Number.isFinite(item.bannedUntil) && Number.isFinite(item.count));
 
 function loadPersistedBans() {
   try {
@@ -35,9 +37,8 @@ function loadPersistedBans() {
     }
     const stat = fs.statSync(IP_BANS_PATH);
     if (stat.mtimeMs === lastBansMtimeMs) return;
+    const data = readCriticalJsonData('ip_bans', {}, validIpBans);
     lastBansMtimeMs = stat.mtimeMs;
-
-    const data = readJsonData('ip_bans', {});
     const now = Date.now();
     // Remove bans that were deleted from disk while preserving non-banned in-memory attempt counters
     for (const [ip, item] of ipFailures.entries()) {
@@ -50,7 +51,7 @@ function loadPersistedBans() {
         ipFailures.set(ip, item);
       }
     }
-  } catch {}
+  } catch (error) { throw error; }
 }
 
 function syncPersistedBans() {
@@ -62,11 +63,12 @@ function syncPersistedBans() {
         data[ip] = item;
       }
     }
+    readCriticalJsonData('ip_bans', {}, validIpBans);
     writeJsonData('ip_bans', data);
     if (fs.existsSync(IP_BANS_PATH)) {
       lastBansMtimeMs = fs.statSync(IP_BANS_PATH).mtimeMs;
     }
-  } catch {}
+  } catch (error) { throw error; }
 }
 
 loadPersistedBans();
@@ -74,18 +76,12 @@ loadPersistedBans();
 // Persist instance salt in data/security_meta.json so hot updates & restarts keep active sessions alive,
 // while changing username, password, or admin_path still immediately invalidates older cookies.
 function loadOrCreateInstanceSalt() {
-  const fallbackRandomSalt = crypto.randomBytes(32).toString('hex');
-  try {
-    const meta = readJsonData('security_meta', null);
-    if (meta && typeof meta.instanceSalt === 'string' && meta.instanceSalt.length >= 16) {
-      return meta.instanceSalt;
-    }
-    writeJsonData('security_meta', { instanceSalt: fallbackRandomSalt, createdAt: Date.now() });
-    return fallbackRandomSalt;
-  } catch (err) {
-    console.warn('[Security] Could not persist security_meta.json, using ephemeral random salt:', err.message);
-    return fallbackRandomSalt;
-  }
+  const meta = readCriticalJsonData('security_meta', null,
+    value => isRecord(value) && typeof value.instanceSalt === 'string' && value.instanceSalt.length >= 16);
+  if (meta) return meta.instanceSalt;
+  const instanceSalt = crypto.randomBytes(32).toString('hex');
+  writeJsonData('security_meta', {instanceSalt,createdAt:Date.now()});
+  return instanceSalt;
 }
 
 const SERVER_BOOT_SALT = loadOrCreateInstanceSalt();
@@ -199,27 +195,18 @@ function createSessionToken(cfg) {
 }
 
 // Session revocation tracking
+const validRevocations = value => Array.isArray(value) && value.every(token => typeof token === 'string');
 function isSessionRevoked(token) {
-  try {
-    const revoked = readJsonData('revoked_sessions', []);
-    return Array.isArray(revoked) && revoked.includes(token);
-  } catch {
-    return false;
-  }
+  return readCriticalJsonData('revoked_sessions', [], validRevocations).includes(token);
 }
-
 function revokeSessionToken(token) {
   if (!token) return;
-  try {
-    const revoked = readJsonData('revoked_sessions', []);
-    const list = Array.isArray(revoked) ? revoked : [];
-    if (!list.includes(token)) {
-      list.push(token);
-      // Keep list bounded to last 500 revoked tokens
-      if (list.length > 500) list.shift();
-      writeJsonData('revoked_sessions', list);
-    }
-  } catch {}
+  const list = readCriticalJsonData('revoked_sessions', [], validRevocations);
+  if (!list.includes(token)) {
+    list.push(token);
+    if (list.length > 500) list.shift();
+    writeJsonData('revoked_sessions', list);
+  }
 }
 
 function verifySessionToken(token, cfg) {
@@ -263,27 +250,19 @@ function isAdminAuthenticated(req) {
  * 2. requireApiOrAdmin: Allows authenticated admins OR requests with valid api_token
  */
 function requireAdmin(req, res, next) {
-  const ip = getClientIp(req);
-  const ban = checkIpBan(ip);
-  if (ban.banned) {
-    return res.status(403).json({ error: `Your IP is banned. Try again in ${ban.hoursLeft} hours.` });
-  }
-  if (!isAdminAuthenticated(req)) {
-    return res.status(401).json({ error: 'Unauthorized: invalid or expired session' });
-  }
-  next();
+  if (isAdminAuthenticated(req)) return next();
+  const ban = checkIpBan(getClientIp(req));
+  if (ban.banned) return res.status(403).json({error:`Your IP is banned. Try again in ${ban.hoursLeft} hours.`});
+  return res.status(401).json({error:'Unauthorized: invalid or expired session'});
 }
 
 function requireApiOrAdmin(req, res, next) {
+  if (isAdminAuthenticated(req)) return next();
   const ip = getClientIp(req);
   const ban = checkIpBan(ip);
   if (ban.banned) {
     return res.status(403).json({ error: `Your IP is currently banned.` });
   }
-  if (isAdminAuthenticated(req)) {
-    return next();
-  }
-
   const cfg = getConfig();
   const authHeader = req.headers.authorization || '';
   const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : authHeader.trim();
@@ -296,7 +275,7 @@ function requireApiOrAdmin(req, res, next) {
     }
   }
 
-  recordLoginFailure(ip);
+  if (typeof token === 'string' && token.length > 0) recordLoginFailure(ip);
   return res.status(401).json({ error: 'Unauthorized: invalid API token or credentials' });
 }
 

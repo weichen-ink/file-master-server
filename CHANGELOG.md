@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Audit fixes
+- Validate cached image sources on every request, share cache invalidation across rename/delete/restore, and require clients to revalidate reused URLs.
+- Stop affected operations when critical state is unreadable or malformed instead of resetting locks, integrity baselines, shares, or session security data.
+- Do not count anonymous requests as failed authentication; allow valid administrator sessions through IP bans while retaining protection against credential guessing.
+- Verify fetched updates against the complete commit ID from GitHub's official HTTPS API before checking or installing them, including mirrored downloads.
+- Journal deletion and restoration so interrupted operations recover before scans and preserve original integrity baselines without overwriting conflicting files.
+- Support expected-hash conditions for remote duplicate deletion and reject changed attachments.
+- Refresh deployment and security guidance; validate with 156 isolated regression tests, including crash injection and corruption cases.
+
 ### Monitoring and startup
 - Add an optional public `/api/health` JSON endpoint with configurable service, resource, storage, file, and backup information.
 - Add bilingual monitoring controls, endpoint copying, and JSON preview in Site settings.

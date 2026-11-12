@@ -608,7 +608,7 @@ app.get('/:customAdminPath', (req, res, next) => {
   if (req.params.customAdminPath === cfg.admin_path) {
     const ip = getClientIp(req);
     const ban = checkIpBan(ip);
-    if (ban.banned) {
+    if (ban.banned && !isAdminAuthenticated(req)) {
       return res.status(403).send(`IP is currently banned. Try again in ${ban.hoursLeft} hours.`);
     }
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
