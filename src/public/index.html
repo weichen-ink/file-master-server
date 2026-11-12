@@ -110,7 +110,7 @@
 
     .heart {
       display: inline-block;
-      animation: heartbeat 1.3s ease-in-out infinite;
+      animation: heartbeat 2.4s ease-in-out infinite;
       transform-origin: center;
       vertical-align: baseline;
     }
@@ -119,16 +119,16 @@
       0%, 100% {
         transform: scale(1);
       }
-      14% {
-        transform: scale(1.28);
+      12% {
+        transform: scale(1.14);
       }
-      28% {
+      24% {
         transform: scale(1);
       }
-      42% {
-        transform: scale(1.22);
+      36% {
+        transform: scale(1.10);
       }
-      70% {
+      60% {
         transform: scale(1);
       }
     }
@@ -184,11 +184,11 @@
       <span id="statusText">服务正常运行</span>
     </div>
     <h1 class="title">File Master Server</h1>
-    <p class="subtitle" id="subtitleText">自建文件库与多媒体图床服务</p>
+    <p class="subtitle" id="subtitleText">自建知识资产管理服务器</p>
   </div>
 
   <div class="footer-copy">
-    © <span id="currentYear">2026</span> File Master · Made with <span class="heart">❤️</span> by <a href="https://weichen.ink/" target="_blank" rel="noopener noreferrer">微尘</a> · <a href="https://github.com/weichen-ink/file-master-server" target="_blank" rel="noopener noreferrer">GitHub</a>
+    © <span id="currentYear">2026</span> File Master · Made with <span class="heart">💗</span> by <a href="https://weichen.ink/" target="_blank" rel="noopener noreferrer">微尘</a> · <a href="https://github.com/weichen-ink/file-master-server" target="_blank" rel="noopener noreferrer">GitHub</a>
   </div>
 
   <script>
@@ -210,7 +210,7 @@
         var statusEl = document.getElementById('statusText');
         if (statusEl) statusEl.textContent = 'Service Active';
         var subEl = document.getElementById('subtitleText');
-        if (subEl) subEl.textContent = 'Self-hosted file repository and media asset service';
+        if (subEl) subEl.textContent = 'Self-hosted knowledge asset management server';
         document.documentElement.lang = 'en';
       }
     })();
