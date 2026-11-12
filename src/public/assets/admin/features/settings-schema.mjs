@@ -156,6 +156,10 @@ export const schemas = {
     field("rclone_target", "lblBackupRclone"),
     field("bark_url", "lblBackupBark", "password"),
   ],
+  monitoring: [
+    field('monitor_enabled','monitorEnabled','checkbox',{boolean:true}),
+    ...['service','resources','storage','files','backup'].map(key=>field('monitor_'+key,'monitor_'+key,'checkbox',{boolean:true,when:d=>d.monitor_enabled})),
+  ],
   updates: [
     bool("mirror_enabled", "enableUpdateProxy"),
     select("mirror_preset", "mirrorSource", [
@@ -176,7 +180,7 @@ schemas.compression = schemas.media.filter(
 schemas.watermark = schemas.media.filter((def) =>
   def.key.startsWith("watermark_"),
 );
-schemas.site = [...schemas.general, ...schemas.security];
+schemas.site = [...schemas.general, ...schemas.security, ...schemas.monitoring];
 export function sectionValues(name, cfg) {
   const source = ["media", "compression", "watermark"].includes(name)
     ? cfg.image_host
@@ -203,6 +207,10 @@ export function sectionValues(name, cfg) {
       card_copy_format: cfg.console?.card_copy_format || "raw",
       rename_alias_days: cfg.image_host.rename_alias_days ?? 7,
     });
+  if(name==='site') {
+    result.monitor_enabled=cfg.monitoring?.enabled===true;
+    for(const key of ['service','resources','storage','files','backup'])result['monitor_'+key]=cfg.monitoring?.sections?.[key] ?? key==='service';
+  }
   if (name === "updates") {
     result.mirror_enabled = Boolean(cfg.upstream_mirror);
     result.mirror_preset = !cfg.upstream_mirror ? "https://ghproxy.net/" : [
@@ -223,6 +231,11 @@ export function sectionPatch(name, values) {
   if (["general", "site"].includes(name)) {
     const { raw_secret_path, pub_secret_path, card_copy_format, rename_alias_days, ...base } =
       allowed;
+    const monitoringKeys=Object.keys(base).filter(key=>key.startsWith('monitor_'));
+    if(name==='site' && monitoringKeys.some(key=>base[key]!==undefined)) {
+      base.monitoring={enabled:base.monitor_enabled,sections:Object.fromEntries(['service','resources','storage','files','backup'].filter(key=>base['monitor_'+key]!==undefined).map(key=>[key,base['monitor_'+key]]))};
+    }
+    for(const key of monitoringKeys)delete base[key];
     if (!base.password) delete base.password;
     if (!base.api_token) delete base.api_token;
     return {

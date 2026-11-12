@@ -35,6 +35,8 @@ const {
   createRateLimiter
 } = require('./core/security');
 const { collectRuntimeMetrics } = require('./core/metrics');
+const { startupMessage } = require('./core/startup-message');
+const { registerMonitoringRoutes } = require('./core/monitoring');
 const {
   readPackageVersion,
   getUpdateStatus,
@@ -124,6 +126,8 @@ app.use((req, res, next) => {
   }
   next();
 });
+
+registerMonitoringRoutes(app,requireAdmin);
 
 // ================= 1. Platform Authentication and Status APIs =================
 // Public version contract for client plugin compatibility checks
@@ -661,94 +665,25 @@ function startServer(port, retriesLeft = 6) {
     httpServer = srv;
     const cfg = getConfig();
     const version = readPackageVersion() || '1.0.0';
-    const netAddr = getNetworkAddress(port);
-    const divider = '  ──────────────────────────────────────────────────────────';
-
-    const isZh = cfg.language === 'zh';
-
-    if (!isConfigInitialized()) {
-      console.log('');
-      console.log(divider);
-      console.log(`  🚀 File Master Server v${version}`);
-      console.log('');
-      console.log(isZh
-        ? `  ✨ [初始化向导] 尚未检测到 config.yaml，请访问以下地址完成初始化：`
-        : `  ✨ [Setup Wizard] No config.yaml detected. Open this URL to initialize:`);
-      console.log(`  💻 Local:      http://localhost:${port}/setup`);
-      if (netAddr) {
-        console.log(`  🌐 Network:    ${netAddr}/setup`);
-      }
-      console.log('');
-      console.log(isZh ? `  💡 提示: 按 Ctrl+C 可停止服务` : `  💡 Hint: Press Ctrl+C to stop`);
-      console.log(divider);
-      console.log('');
-    } else {
-      const siteName = cfg.site_name || 'File Master Server';
-      const isCustomBase = cfg.base_url && !cfg.base_url.includes('localhost') && !cfg.base_url.includes('127.0.0.1');
-      const origin = isCustomBase ? cfg.base_url : `http://localhost:${port}`;
-      const adminUrl = `${origin}/${cfg.admin_path}`;
-      const uploadUrl = `${origin}/api/image/upload`;
-      const webpStatus = cfg.image_host?.enable_optimization !== false
-        ? (isZh
-            ? `已开启 (质量: ${cfg.image_host?.webp_quality || 82}, 最大宽: ${cfg.image_host?.max_width || 1920}px)`
-            : `Enabled (Quality: ${cfg.image_host?.webp_quality || 82}, Max Width: ${cfg.image_host?.max_width || 1920}px)`)
-        : (isZh ? '未开启' : 'Disabled');
-
-      const posMapZh = {
-        'bottom-right': '右下角',
-        'bottom-left': '左下角',
-        'top-right': '右上角',
-        'top-left': '左上角',
-        'center': '居中'
-      };
-      const watermarkTypeStr = cfg.image_host?.watermark_type === 'image'
-        ? (isZh ? '图片水印' : 'Image')
-        : (isZh ? '文字水印' : 'Text');
-      const watermarkPosStr = isZh
-        ? (posMapZh[cfg.image_host?.watermark_pos] || cfg.image_host?.watermark_pos || '右下角')
-        : (cfg.image_host?.watermark_pos || 'bottom-right');
-      const watermarkStatus = cfg.image_host?.watermark_enable
-        ? (isZh
-            ? `已启用 (${watermarkTypeStr}, 位置: ${watermarkPosStr})`
-            : `Enabled (${watermarkTypeStr}, Position: ${watermarkPosStr})`)
-        : (isZh ? '未启用' : 'Disabled');
-
-      const relStorage = path.relative(process.cwd(), STORAGE_DIR) ? `./${path.relative(process.cwd(), STORAGE_DIR)}` : './storage';
-
-      console.log('');
-      console.log(divider);
-      console.log(`  🚀 ${siteName} v${version}`);
-      console.log('');
-      console.log(`  💻 Local:      http://localhost:${port}/`);
-      if (netAddr) {
-        console.log(`  🌐 Network:    ${netAddr}/`);
-      }
-      if (isCustomBase) {
-        console.log(`  🌍 Public:     ${cfg.base_url}/`);
-      }
-      console.log(`  🔐 Admin:      ${adminUrl}`);
-      console.log(`  📤 Upload:     ${uploadUrl}`);
-      console.log('');
-      console.log(`  📁 Storage:    ${relStorage}`);
-      console.log(`  ✨ WebP Opt:   ${webpStatus}`);
-      console.log(`  💧 Watermark:  ${watermarkStatus}`);
-      console.log('');
-      console.log(isZh ? `  💡 提示: 按 Ctrl+C 可停止运行` : `  💡 Hint: Press Ctrl+C to stop`);
-      console.log(divider);
-      console.log('');
-
-      if (isConfigInitialized()) {
-        startBackupScheduler();
-      }
-    }
+    const netAddr = getNetworkAddress(srv.address().port);
+    console.log(startupMessage(cfg, {
+      port: srv.address().port,
+      version,
+      networkAddress: netAddr,
+      initialized: isConfigInitialized(),
+      storageDir: STORAGE_DIR
+    }));
+    if (isConfigInitialized()) startBackupScheduler();
   });
 
   srv.on('error', (err) => {
     if (err.code === 'EADDRINUSE' && retriesLeft > 0) {
-      console.warn(`[Server] Port ${port} busy during restart handoff, retrying in 350ms (${retriesLeft} left)...`);
+      console.warn(getConfig().language === 'zh'
+        ? `[Server] 端口 ${port} 正被占用，350ms 后重试（剩余 ${retriesLeft} 次）…`
+        : `[Server] Port ${port} busy during restart handoff, retrying in 350ms (${retriesLeft} left)...`);
       setTimeout(() => startServer(port, retriesLeft - 1), 350);
     } else {
-      console.error(`[Server] Failed to bind port ${port}:`, err.message);
+      console.error(getConfig().language === 'zh' ? `[Server] 无法监听端口 ${port}：` : `[Server] Failed to bind port ${port}:`, err.message);
       process.exit(1);
     }
   });

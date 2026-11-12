@@ -836,3 +836,16 @@ a.brand .brand-mark { width: 30px; height: 30px; flex-basis: 30px; border-radius
 @media (max-width: 768px) {
   .sidebar-tools .icon-button { width: 44px; min-width: 44px; height: 44px; min-height: 44px; }
 }
+
+/* Monitoring stays within Site settings and uses the shared form and dialog. */
+.monitoring-settings > p { margin: 8px 0 0; font-size: 13px; line-height: 1.6; }
+.monitoring-settings .field[data-field="monitor_enabled"] { grid-column: 1/-1; }
+.monitoring-settings .monitor-option { margin: 0; }
+.monitoring-settings .check { display: flex; align-items: center; gap: 9px; min-height: 36px; margin: 0; font-size: 13px; font-weight: 400; cursor: pointer; }
+.monitoring-settings input[type="checkbox"] { flex: none; width: 16px; height: 16px; margin: 0; accent-color: var(--brand); }
+#monitor-details h3 { margin: 20px 0 10px; font-size: 13px; font-weight: 600; }
+.monitor-options { display: grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap: 4px 20px; padding: 12px 16px; border: 1px solid var(--border); border-radius: 12px; }
+.monitor-endpoint { margin-top: 20px; }
+.monitor-endpoint input { font-size: 13px; }
+.monitor-preview-action { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 16px; }
+.monitor-json { max-height: 55dvh; margin: 12px 0 0; font-size: 12px; }

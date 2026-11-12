@@ -410,6 +410,7 @@ async function performBackup({ manual = false } = {}) {
       logs
     };
 
+    result.lastSuccessAt = rcloneSuccess !== false ? result.completedAt : previousSuccessfulBackup();
     writeJsonData('backup_status', result);
     appendAuditLog({
       action: 'automated_backup',
@@ -434,6 +435,7 @@ async function performBackup({ manual = false } = {}) {
       logs
     };
 
+    failureRecord.lastSuccessAt = previousSuccessfulBackup();
     writeJsonData('backup_status', failureRecord);
 
     if (barkUrl) {
@@ -450,6 +452,25 @@ async function performBackup({ manual = false } = {}) {
     if (activeBackupJob?.archivePath) fs.rmSync(activeBackupJob.archivePath, {force:true});
     activeBackupJob = null;
   }
+}
+
+function previousSuccessfulBackup() {
+  const previous=readJsonData('backup_status',null);
+  return previous?.lastSuccessAt || (previous?.success && previous.rcloneSuccess !== false ? previous.completedAt : null);
+}
+
+// Monitoring deliberately excludes logs, archive paths and remote credentials.
+function getBackupMonitorState() {
+  const cfg=getConfig().backup || {};
+  const file=path.join(DATA_DIR,'backup_status.json');
+  const last=fs.existsSync(file)?JSON.parse(fs.readFileSync(file,'utf8')):null;
+  const status=activeBackupJob ? 'running' : cfg.enabled===false ? 'disabled' : !last ? 'never_run' : last.success===false ? 'failed' : last.rcloneSuccess===false ? 'partial' : last.success===true ? 'success' : 'unknown';
+  const iso=value=>value && Number.isFinite(new Date(value).getTime()) ? new Date(value).toISOString():null;
+  return {enabled:cfg.enabled!==false, status, isRunning:Boolean(activeBackupJob),
+    lastResult:!last?null:last.success===false?'failed':last.rcloneSuccess===false?'partial':last.success===true?'success':'unknown',
+    lastCompletedAt:iso(last?.completedAt),
+    lastSuccessAt:iso(last?.lastSuccessAt || (last?.success && last.rcloneSuccess!==false?last.completedAt:null)),
+    nextRunAt:cfg.enabled===false?null:iso(forecastBackup(cfg).nextRunAt)};
 }
 
 function getBackupStatus() {
@@ -495,6 +516,7 @@ function resolveBackupArchive(filename) {
 }
 
 module.exports = {
+  getBackupMonitorState,
   performBackup,
   listBackupArchives,
   resolveBackupArchive,

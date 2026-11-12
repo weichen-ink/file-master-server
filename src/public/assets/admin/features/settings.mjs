@@ -17,6 +17,7 @@ import {
 
 function fieldHtml(def, value) {
   const attrs = `id="f_${e(def.key)}" name="${e(def.key)}" ${def.required ? "required" : ""}`;
+  if(def.type==='checkbox')return `<div class="field monitor-option" data-field="${e(def.key)}"><label class="check"><input ${attrs} type="checkbox" ${value?'checked':''}><span>${e(t(def.label))}</span></label></div>`;
   const options = def.options?.map(([v,key])=>`<option value="${e(v)}" ${String(v)===String(value)?"selected":""}>${e(t(key))}</option>`).join("");
   const secret=def.type==='password';
   const input=`<input ${attrs} type="${def.type}" value="${e(value)}" ${secret?`autocomplete="${def.key==='password'?'new-password':'off'}" spellcheck="false" placeholder="${e(t('secretKeep'))}"`:""} ${def.min!=null?`min="${def.min}"`:""} ${def.max!=null?`max="${def.max}"`:""} ${def.step!=null?`step="${def.step}"`:""}>`;
@@ -27,10 +28,10 @@ function fieldHtml(def, value) {
 }
 const samplePreview = () => `<aside class="watermark-preview"><h3>${e(t("watermarkPreview"))}</h3><label class="sr-only" for="sample-select">${e(t("chooseSample"))}</label><select id="sample-select"><option value="">${e(t("chooseSample"))}</option></select><div id="sample-output" class="sample-output">${icon("image")}</div><p id="sample-state" class="muted" role="status"></p></aside>`;
 const watermarkFontTipHtml = () => `<div class="watermark-font-tip notice" id="watermark-font-tip"><div class="watermark-font-tip-header"><strong>💡 ${e(t("watermarkFontTipTitle"))}</strong></div><p class="watermark-font-tip-text">${e(t("watermarkFontTipDesc"))}</p><div class="watermark-font-tip-cmds"><div class="watermark-cmd-row"><span class="watermark-cmd-label">Debian / Ubuntu:</span><div class="watermark-cmd-code"><code>apt install -y fonts-noto-cjk fonts-wqy-zenhei</code><button type="button" class="icon-button" data-action="copy-font-cmd" data-cmd="apt install -y fonts-noto-cjk fonts-wqy-zenhei" title="${e(t("copy"))}" aria-label="${e(t("copy"))}">${icon("copy")}</button></div></div><div class="watermark-cmd-row"><span class="watermark-cmd-label">Alpine (Docker):</span><div class="watermark-cmd-code"><code>apk add font-noto-cjk</code><button type="button" class="icon-button" data-action="copy-font-cmd" data-cmd="apk add font-noto-cjk" title="${e(t("copy"))}" aria-label="${e(t("copy"))}">${icon("copy")}</button></div></div></div></div>`;
-function sectionFields(name,state) {
+function sectionFields(name,state,ctx) {
   const render=keys=>keys.map(key=>schemas[name].find(def=>def.key===key)).filter(Boolean).map(def=>fieldHtml(def,state.draft[def.key])).join('');
   const section=(title,keys,extra="")=>`<section class="form-section"><h2>${e(t(title))}</h2><div class="fields">${render(keys)}${extra}</div></section>`;
-  if(name==='site') return section('siteIdentity',['site_name'], `<div class="field"><label for="appearance-select">${e(t('theme'))}</label><select id="appearance-select" data-theme-select>${[['auto','themeAuto'],['light','themeLight'],['dark','themeDark']].map(([value,label])=>`<option value="${value}" ${getTheme()===value?'selected':''}>${e(t(label))}</option>`).join('')}</select></div>${render(['base_url','port'])}`) + section('accountAccess',['username','password','admin_path','max_login_attempts','api_token']) + section('fileLinks',['raw_secret_path','pub_secret_path','card_copy_format','rename_alias_days']);
+  if(name==='site') return section('siteIdentity',['site_name'], `<div class="field"><label for="appearance-select">${e(t('theme'))}</label><select id="appearance-select" data-theme-select>${[['auto','themeAuto'],['light','themeLight'],['dark','themeDark']].map(([value,label])=>`<option value="${value}" ${getTheme()===value?'selected':''}>${e(t(label))}</option>`).join('')}</select></div>${render(['base_url','port'])}`) + section('accountAccess',['username','password','admin_path','max_login_attempts','api_token']) + section('fileLinks',['raw_secret_path','pub_secret_path','card_copy_format','rename_alias_days']) + `<section class="form-section monitoring-settings"><h2>${e(t('monitorTitle'))}</h2><p class="muted">${e(t('monitorAccessHelp'))}</p><div class="fields">${render(['monitor_enabled'])}</div><div id="monitor-details"><h3>${e(t('monitorOutput'))}</h3><div class="monitor-options">${render(['monitor_service','monitor_resources','monitor_storage','monitor_files','monitor_backup'])}</div><div class="field monitor-endpoint"><label for="monitor-url">${e(t('monitorEndpoint'))}</label><div class="input-row"><input id="monitor-url" readonly value="${e(ctx.config.base_url+'/api/health')}">${button('copy','copy-monitor-url','secondary','copy')}</div><small class="muted">${e(t('monitorAuthHelp'))}</small></div><div class="monitor-preview-action">${button('monitorPreview','preview-monitor')}<small id="monitor-preview-hint" class="muted"></small></div></div></section>`;
   if(name==='media') {
     const wmFields = schemas.watermark.map(def => {
       const html = fieldHtml(def, state.draft[def.key]);
@@ -61,7 +62,7 @@ export async function mountSettings(ctx, root, route, signal) {
   const state = ctx.drafts.section(name, sectionValues(name, ctx.config));
   root.innerHTML =
     heading(name, help) +
-    `<div class="settings-layout"><div class="settings-content"><form id="section-form" class="panel" novalidate>${name === "backup" ? `<h2>${e(t("backupSettings"))}</h2>` : ""}${sectionFields(name,state)}<div id="section-error" role="alert"></div><footer class="save-bar"><strong id="save-state"></strong><div class="actions">${button("discard", "discard")}<button class="button primary" type="submit" id="save-section">${e(t("save"))}</button></div></footer></form>${name === "backup" ? `<section class="panel" id="backup-runtime"></section><section class="panel restore-guide"><h2>${e(t("restoreGuide"))}</h2><p>${e(t("restorePlain"))}</p></section>` : ""}</div></div>`;
+    `<div class="settings-layout"><div class="settings-content"><form id="section-form" class="panel" novalidate>${name === "backup" ? `<h2>${e(t("backupSettings"))}</h2>` : ""}${sectionFields(name,state,ctx)}<div id="section-error" role="alert"></div><footer class="save-bar"><strong id="save-state"></strong><div class="actions">${button("discard", "discard")}<button class="button primary" type="submit" id="save-section">${e(t("save"))}</button></div></footer></form>${name === "backup" ? `<section class="panel" id="backup-runtime"></section><section class="panel restore-guide"><h2>${e(t("restoreGuide"))}</h2><p>${e(t("restorePlain"))}</p></section>` : ""}</div></div>`;
   let schedulePreview = () => {};
   const form = root.querySelector("#section-form");
   const sync = () => {
@@ -70,6 +71,11 @@ export async function mountSettings(ctx, root, route, signal) {
       const visible = !def.when || def.when(state.draft);
       wrap.hidden = !visible;
       wrap.querySelector("input,select").disabled = !visible || state.saving;
+    }
+    if(name==='site') {
+      form.querySelector('#monitor-details').hidden=!state.draft.monitor_enabled;
+      form.querySelector('[data-action="preview-monitor"]').disabled=state.saving || ctx.drafts.dirty(name) || !ctx.config.monitoring?.enabled;
+      form.querySelector('#monitor-preview-hint').textContent=ctx.drafts.dirty(name)?t('monitorSaveFirst'):'';
     }
     if (isMedia) {
       form.querySelector(".watermark-preview").hidden = !state.draft.watermark_enable;
@@ -93,12 +99,12 @@ export async function mountSettings(ctx, root, route, signal) {
     (event) => {
       const def = schemas[name].find((f) => f.key === event.target.name);
       if (!def) return;
-      const raw = event.target.value;
+      const raw = event.target.type==='checkbox'?event.target.checked:event.target.value;
       ctx.drafts.edit(
         name,
         def.key,
         def.boolean
-          ? raw === "true"
+          ? def.type==='checkbox' ? raw : raw === "true"
           : def.type === "number" || def.numeric
             ? raw === ""
               ? ""
@@ -177,6 +183,11 @@ export async function mountSettings(ctx, root, route, signal) {
       "copy-current-token": async () => {
         const result = await ctx.api.config(true);
         if (!signal.aborted) await copy(result.config.api_token);
+      },
+      'copy-monitor-url':()=>copy(ctx.config.base_url+'/api/health'),
+      'preview-monitor':async()=>{
+        const result=await ctx.api.healthPreview({signal});
+        if(!signal.aborted)await dialog(t('monitorPreview'),`<p class="muted">${e(t('monitorPreviewHelp'))} · HTTP ${e(result.httpStatus)}</p><pre class="code-panel monitor-json">${e(JSON.stringify(result.data,null,2))}</pre>`);
       },
       "test-rclone": async () => {
         if (!state.draft.rclone_target) throw new Error(t("required"));

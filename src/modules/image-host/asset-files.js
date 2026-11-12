@@ -14,7 +14,7 @@ function hashFileSha256(filename, options = {}) {
   });
 }
 
-async function* walkOriginalFiles(directory) {
+async function* walkOriginalFiles(directory, { checkCollisions = true } = {}) {
   for (const year of await fs.promises.readdir(directory, { withFileTypes: true })) {
     if (!year.isDirectory() || !isValidYearSeg(year.name)) continue;
     const yearPath = path.join(directory, year.name);
@@ -33,7 +33,7 @@ async function* walkOriginalFiles(directory) {
           throw err;
         });
         if (stat) yield { year: year.name, month: month.name, filename: entry.name, fullPath, stat,
-          hasBasenameCollision: counts.get(basename(entry.name)) > 1 || hasOptimizedNameConflict(year.name, month.name, entry.name) };
+          hasBasenameCollision: checkCollisions && (counts.get(basename(entry.name)) > 1 || hasOptimizedNameConflict(year.name, month.name, entry.name)) };
       }
     }
   }

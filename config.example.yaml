@@ -5,6 +5,8 @@
 # ----------------- 1. Core Settings -----------------
 site_name: File Master Server
 port: 3210
+# Terminal startup language: en | zh (independent of the browser language)
+language: en
 base_url: http://localhost:3210
 
 # Reverse proxy trust setting (e.g. loopback, 127.0.0.1, or false if directly exposed)
@@ -33,6 +35,16 @@ max_login_attempts: 3
 
 # Global API token for File Master plugin, PicList, scripts, and CLI tools
 api_token: ""
+
+# Public read-only JSON monitoring at /api/health. Select which groups to expose.
+monitoring:
+  enabled: false
+  sections:
+    service: true
+    resources: false
+    storage: false
+    files: false
+    backup: false
 
 # =====================================================================
 # Module Configuration

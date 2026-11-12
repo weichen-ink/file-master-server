@@ -11,6 +11,7 @@ A self-hosted home for your images, attachments, and shared links.
 - **Image optimization**: compress, resize, and watermark images while keeping originals.
 - **Sharing and trash**: create expiring shares and restore accidentally deleted files.
 - **Server management**: view resource use, schedule and download backups, and install updates.
+- **Monitoring**: connect monitoring tools to a read-only JSON endpoint and choose which statistics to share.
 
 Use it on its own or connect Obsidian or PicList. Supports Chinese and English, with light, dark, and system themes.
 
@@ -68,5 +69,19 @@ The service is named `fms` and remains available at `http://localhost:3210`. To 
 Enter the console from the homepage (default: `/admin`) to upload and manage files. To connect a client, use the site URL and upload API token from Site settings. Use HTTPS for public access.
 
 This is version **1.1**. Connecting Obsidian requires plugin **1.1 or later**. Before updating, save a full backup in Backup & recovery.
+
+## Connect a monitoring tool
+
+In **Site settings → Monitoring**, enable the endpoint, select the information to include, and save. Copy the fixed endpoint URL into your monitoring tool. No login or token is needed; only the selected information is public.
+
+```bash
+curl https://your-site.example/api/health
+```
+
+When enabled, the server also prints the monitoring URL on startup. Set `language: en` or `language: zh` in `config.yaml` to choose the startup language; the browser language is independent.
+
+Choose service status, CPU and memory, storage usage, file counts, or backup status. Preview JSON in settings before connecting. HTTP `200` means the service is available; `503` means its core storage is unavailable. Check JSON `status` and `warnings` for issues such as a failed backup. Backup states distinguish disabled, never run, running, successful, partially successful, and failed backups.
+
+Poll every 30–60 seconds. Resources refresh at most every 15 seconds, backup status every 5 seconds, and storage/file statistics every 60 seconds; `collectedAt` shows when each snapshot was taken. CPU and memory reflect what the server operating system exposes. Unavailable groups return `status: "unknown"`; they are never reported as zero usage. Disabling the endpoint returns `404`. Use HTTPS for remote monitoring.
 
 [Changelog](CHANGELOG.md) · [Report an issue](https://github.com/weichen-ink/file-master-server/issues) · [MIT license](LICENSE)

@@ -25,6 +25,7 @@ export function createApi(request) {
         json: { mode: "raw", rawYaml, revision },
       }),
     validateRaw: (rawYaml, revision) => post("/api/platform/config/preview", { rawYaml, revision }),
+    healthPreview: (options) => get("/api/platform/health-preview",options),
     metrics: (options) => get("/api/platform/metrics", options),
     files: () => get("/api/modules/image-host/list"),
     trash: () => get("/api/modules/image-host/trash"),

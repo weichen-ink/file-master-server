@@ -216,4 +216,7 @@ function warmShaIndexAsync() {
   timer.unref?.();
 }
 
-module.exports = { scanAllImages, invalidateScanCache, clearCacheDir, warmShaIndexAsync };
+function cachedCatalogSummary() {
+  return cachedScanData && Date.now()-cachedScanTime<SCAN_CACHE_TTL_MS ? {...cachedScanData.stats} : null;
+}
+module.exports = { cachedCatalogSummary, scanAllImages, invalidateScanCache, clearCacheDir, warmShaIndexAsync };

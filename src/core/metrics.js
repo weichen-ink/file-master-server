@@ -20,7 +20,7 @@ function getDiskUsage(dirPath) {
     const usagePercent = total > 0 ? Math.round((used / total) * 1000) / 10 : 0;
     return { total, free, used, usagePercent };
   } catch {
-    return { total: 0, free: 0, used: 0, usagePercent: 0 };
+    return null;
   }
 }
 
@@ -45,12 +45,8 @@ async function getDirSize(dirPath) {
   return total;
 }
 
-/**
- * Collects runtime host metrics, process memory, and site storage stats.
- */
-async function collectRuntimeMetrics(revealSecrets = false) {
+async function collectResourceMetrics() {
   const cpuUsage = sampleCpuUsage();
-  const cfg = getConfig();
   const cpus = os.cpus() || [];
   const cpuCount = cpus.length || 1;
   const cpuModel = cpus[0]?.model || 'Unknown CPU';
@@ -72,7 +68,19 @@ async function collectRuntimeMetrics(revealSecrets = false) {
   const memUsed = Math.max(0, memTotal - memFree);
   const memPercent = memTotal > 0 ? Math.round((memUsed / memTotal) * 1000) / 10 : 0;
 
-  const disk = getDiskUsage(fs.existsSync(STORAGE_DIR) ? STORAGE_DIR : ROOT_DIR);
+  return {
+    cpu:{model:cpuModel, cores:cpuCount, usagePercent:await cpuUsage, loadAvg:loadAvg.map(n=>Number(n.toFixed(2))), loadPercent1m},
+    memory:{total:memTotal, used:memUsed, free:memFree, usagePercent:memPercent}
+  };
+}
+
+/**
+ * Collects runtime host metrics, process memory, and site storage stats.
+ */
+async function collectRuntimeMetrics(revealSecrets = false) {
+  const cfg = getConfig();
+  const resources = await collectResourceMetrics();
+  const disk = getDiskUsage(fs.existsSync(STORAGE_DIR) ? STORAGE_DIR : ROOT_DIR) || {total:0, free:0, used:0, usagePercent:0};
   const procMem = process.memoryUsage();
   const imgData = await scanAllImages(cfg);
   const dataDirBytes = await getDirSize(DATA_DIR);
@@ -83,19 +91,7 @@ async function collectRuntimeMetrics(revealSecrets = false) {
       hostname: os.hostname(),
       platform: `${os.type()} ${os.release()} (${os.arch()})`,
       uptimeSec: Math.floor(os.uptime()),
-      cpu: {
-        model: cpuModel,
-        cores: cpuCount,
-        usagePercent: await cpuUsage,
-        loadAvg: loadAvg.map((n) => Number(n.toFixed(2))),
-        loadPercent1m
-      },
-      memory: {
-        total: memTotal,
-        used: memUsed,
-        free: memFree,
-        usagePercent: memPercent
-      },
+      ...resources,
       disk
     },
     site: {
@@ -140,5 +136,5 @@ async function collectRuntimeMetrics(revealSecrets = false) {
 }
 
 module.exports = {
-  collectRuntimeMetrics
+  collectRuntimeMetrics, collectResourceMetrics, getDiskUsage, getDirSize
 };

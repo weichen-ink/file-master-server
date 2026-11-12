@@ -1,6 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { RAW_DIR } = require('./asset-paths');
+const { getConfig } = require('../../core/config');
 
 let storageHealth = { checked: false, atomicUploads: false };
 
@@ -36,9 +37,11 @@ function probeAtomicUploads(directory, io = fs) {
 function checkStorageHealth() {
   storageHealth = probeAtomicUploads(RAW_DIR);
   if (!storageHealth.atomicUploads) {
-    console.warn(`[ImageHost] Storage probe failed (${storageHealth.errorCode}) in ${RAW_DIR}. Uploads require writable storage with exclusive hard-link support. Fix permissions or move storage to a compatible filesystem, then restart.`);
+    console.warn(getConfig().language === 'zh'
+      ? `[ImageHost] 存储检查失败（${storageHealth.errorCode}）：${RAW_DIR}。上传需要可写且支持硬链接的存储，请修复权限或更换文件系统后重启。`
+      : `[ImageHost] Storage probe failed (${storageHealth.errorCode}) in ${RAW_DIR}. Uploads require writable storage with exclusive hard-link support. Fix permissions or move storage to a compatible filesystem, then restart.`);
   } else {
-    console.log('[ImageHost] Storage probe passed: atomic upload publication available.');
+    console.log(getConfig().language === 'zh' ? '[ImageHost] 存储检查通过，可以安全接收上传文件。' : '[ImageHost] Storage probe passed: atomic upload publication available.');
   }
   return storageHealth;
 }

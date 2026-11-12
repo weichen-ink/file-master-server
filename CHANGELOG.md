@@ -1,5 +1,14 @@
 # Changelog (file-master-server)
 
+## Unreleased
+
+### Monitoring and startup
+- Add an optional public `/api/health` JSON endpoint with configurable service, resource, storage, file, and backup information.
+- Add bilingual monitoring controls, endpoint copying, and JSON preview in Site settings.
+- Cache statistics and coalesce simultaneous polls; report unavailable data and backup failures explicitly without exposing credentials or filenames.
+- Show the monitoring URL at startup when enabled and fix `config.yaml` language preferences being discarded during configuration loading.
+- Preserve the last successful backup timestamp after a later failure.
+
 ## [1.1.5] - 2026-11-11
 
 ### Web Console & Asset Management

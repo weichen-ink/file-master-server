@@ -7,6 +7,7 @@ const {
   performBackup,
   resolveBackupDir,
   getBackupStatus,
+  getBackupMonitorState,
   sendBarkNotification
 } = require('../src/core/backup-service');
 const { ROOT_DIR, DATA_DIR, getConfig, setConfigOverride } = require('../src/core/config');
@@ -71,6 +72,13 @@ test('performBackup executes full archive, applies local retention and records s
     assert.equal(status.config.retention, 2);
     assert.equal(status.lastBackup.success, true);
     assert.equal(status.localBackupsCount, 2);
+    assert.equal(getBackupMonitorState().lastSuccessAt,b3.completedAt);
+    const blockedDir=path.join(tmpBackupDir,'blocked');
+    fs.writeFileSync(blockedDir,'not a directory');
+    setConfigOverride({...getConfig(),backup:{...getConfig().backup,local_dir:blockedDir}});
+    await assert.rejects(performBackup({manual:true}));
+    assert.equal(getBackupMonitorState().status,'failed');
+    assert.equal(getBackupMonitorState().lastSuccessAt,b3.completedAt,'A failed backup must preserve the previous success');
   } finally {
     setConfigOverride(null);
     fs.rmSync(tmpBackupDir, { recursive: true, force: true });

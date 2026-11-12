@@ -2,6 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const YAML = require('yaml');
+const { MONITOR_SECTIONS, normalizeMonitoring, validateMonitoring } = require('./monitor-config');
 const { isPathWithin } = require('./file-security');
 
 const ROOT_DIR = path.resolve(__dirname, '../..');
@@ -32,6 +33,7 @@ function getExampleConfigTemplate() {
   }
   return `site_name: File Master Server
 port: 3210
+language: en
 base_url: http://localhost:3210
 trust_proxy: loopback
 hot_update: true
@@ -43,6 +45,14 @@ username: admin
 password: ""
 max_login_attempts: 3
 api_token: ""
+monitoring:
+  enabled: false
+  sections:
+    service: true
+    resources: false
+    storage: false
+    files: false
+    backup: false
 image_host:
   raw_secret_path: raw
   pub_secret_path: pub
@@ -118,6 +128,7 @@ function normalizeParsedConfig(parsed = {}, needsSetup = false) {
 
   return {
     needsSetup,
+    language: /^zh(?:-|$)/i.test(String(parsed.language || defaults.language || 'en')) ? 'zh' : 'en',
     site_name: parsed.site_name || defaults.site_name || 'File Master Server',
     port: Number(parsed.port) || Number(defaults.port) || 3210,
     base_url: String(parsed.base_url || defaults.base_url || 'http://localhost:3210').replace(/\/+$/, ''),
@@ -136,6 +147,7 @@ function normalizeParsedConfig(parsed = {}, needsSetup = false) {
     password: String(parsed.password || ''),
     max_login_attempts: Number(parsed.max_login_attempts) || Number(defaults.max_login_attempts) || 3,
     api_token: String(parsed.api_token || ''),
+    monitoring: normalizeMonitoring(parsed.monitoring),
     console: { card_copy_format: ["raw", "webp", "markdown_raw", "markdown_webp"].includes(parsed.console?.card_copy_format) ? parsed.console.card_copy_format : "raw" },
     image_host: {
       ...defImg,
@@ -354,6 +366,8 @@ function prepareRawConfigYaml(rawText) {
     throw new Error('Old filename retention must be a whole number from 1 to 365 days');
   }
 
+  if(parsed.language !== undefined && !['en','zh','en-US','zh-CN'].includes(parsed.language))throw new Error('Terminal language must be en or zh');
+  if(parsed.monitoring !== undefined)validateMonitoring(parsed.monitoring);
   const existingCfg = isConfigInitialized() ? getConfig() : null;
 
   // 1. Enforce password hashing & preserve existing password if submitted blank on an initialized server
@@ -437,6 +451,7 @@ function prepareConfigPatch(patch = {}) {
 
   const topKeys = [
     'site_name',
+    'language',
     'port',
     'base_url',
     'trust_proxy',
@@ -471,6 +486,12 @@ function prepareConfigPatch(patch = {}) {
         doc.setIn(['image_host', k], patch.image_host[k]);
       }
     }
+  }
+
+  if(patch.monitoring !== undefined) {
+    validateMonitoring(patch.monitoring);
+    if(patch.monitoring.enabled !== undefined)doc.setIn(['monitoring','enabled'],patch.monitoring.enabled);
+    for(const key of MONITOR_SECTIONS)if(patch.monitoring.sections?.[key] !== undefined)doc.setIn(['monitoring','sections',key],patch.monitoring.sections[key]);
   }
 
   if (patch.console?.card_copy_format !== undefined) {
