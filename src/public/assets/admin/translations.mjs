@@ -78,6 +78,7 @@ const I18N = {
     // 隐蔽登录面板
     loginEyebrow: "私有化文件工作空间",
     loginSub: "为保障安全，连续登录失败将临时锁定当前 IP（24 小时）",
+    authorName: "微尘",
     loginUsername: "管理员账号",
     loginPassword: "密码",
     loginRemember: "保持登录 30 天",
@@ -526,6 +527,7 @@ const I18N = {
     // Login View
     loginEyebrow: "YOUR PERSONAL FILE WORKSPACE",
     loginSub: "Repeated failed sign-ins will temporarily lock this IP (24h)",
+    authorName: "Weichen",
     loginUsername: "Admin username",
     loginPassword: "Password",
     loginRemember: "Keep me signed in for 30 days",

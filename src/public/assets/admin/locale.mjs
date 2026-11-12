@@ -368,6 +368,7 @@ export const messages = {
   ],
   moveUp: ["返回", "Back"],
   welcome: ["文件与外链，尽在掌控", "Files and links, in one place"],
+  authorName: ["微尘", "Weichen"],
 };
 Object.assign(messages, {
   "ghproxy.net": ["ghproxy.net", "ghproxy.net"],

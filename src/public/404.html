@@ -93,7 +93,7 @@
       letter-spacing: 0.02em;
       padding: 4px 12px;
       border-radius: 9999px;
-      margin-bottom: 16px;
+      margin-bottom: 20px;
     }
 
     .status-dot {
@@ -135,18 +135,10 @@
       }
     }
 
-    .title {
-      font-size: 22px;
-      font-weight: 700;
-      letter-spacing: -0.02em;
-      color: var(--text-main);
-      margin-bottom: 8px;
-    }
-
     .subtitle {
-      font-size: 13.5px;
+      font-size: 14px;
       color: var(--text-muted);
-      line-height: 1.5;
+      line-height: 1.6;
     }
 
     .action-row {
@@ -198,9 +190,32 @@
       color: var(--text-main);
       opacity: 1;
     }
+
+    .lang-toggle {
+      position: absolute;
+      top: 24px;
+      right: 24px;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 9999px;
+      padding: 6px 14px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    }
+
+    .lang-toggle:hover {
+      color: var(--text-main);
+      border-color: var(--text-muted);
+    }
   </style>
 </head>
 <body>
+
+  <button type="button" class="lang-toggle" id="btnLang" onclick="toggleLanguage()">English</button>
 
   <div class="status-card">
     <div class="brand-icon">404</div>
@@ -208,7 +223,6 @@
       <span class="status-dot"></span>
       <span id="statusText">页面未找到</span>
     </div>
-    <h1 class="title" id="titleText">资源不存在</h1>
     <p class="subtitle" id="subtitleText">你访问的页面不存在、已被移除或链接有误。</p>
     <div class="action-row">
       <a href="/" class="btn-home" id="btnHome">返回首页</a>
@@ -216,7 +230,7 @@
   </div>
 
   <div class="footer-copy">
-    © <span id="currentYear">2026</span> File Master · Made with <span class="heart">💗</span> by <a href="https://weichen.ink/" target="_blank" rel="noopener noreferrer">微尘</a> · <a href="https://github.com/weichen-ink/file-master-server" target="_blank" rel="noopener noreferrer">GitHub</a>
+    © <span id="currentYear">2026</span> File Master · Made with <span class="heart">💗</span> by <a href="https://weichen.ink/" target="_blank" rel="noopener noreferrer" id="authorLink">微尘</a> · <a href="https://github.com/weichen-ink/file-master-server" target="_blank" rel="noopener noreferrer">GitHub</a>
   </div>
 
   <script>
@@ -224,29 +238,45 @@
       var yearEl = document.getElementById('currentYear');
       if (yearEl) yearEl.textContent = new Date().getFullYear();
 
-      var lang = 'zh';
+      var currentLang = 'zh';
       try {
         var stored = localStorage.getItem('filemaster_lang');
         if (stored === 'en' || stored === 'zh') {
-          lang = stored;
+          currentLang = stored;
         } else if (navigator.language && !navigator.language.toLowerCase().startsWith('zh')) {
-          lang = 'en';
+          currentLang = 'en';
         }
       } catch (e) {}
 
-      if (lang === 'en') {
+      function updateUI(lang) {
+        var isEn = lang === 'en';
         var statusEl = document.getElementById('statusText');
-        if (statusEl) statusEl.textContent = 'Page Not Found';
-        var titleEl = document.getElementById('titleText');
-        if (titleEl) titleEl.textContent = 'Resource Not Found';
+        if (statusEl) statusEl.textContent = isEn ? 'Page Not Found' : '页面未找到';
         var subEl = document.getElementById('subtitleText');
-        if (subEl) subEl.textContent = 'The page you requested does not exist, has been removed, or the link is incorrect.';
+        if (subEl) subEl.textContent = isEn
+          ? 'The page you requested does not exist, has been removed, or the link is incorrect.'
+          : '你访问的页面不存在、已被移除或链接有误。';
         var btnEl = document.getElementById('btnHome');
-        if (btnEl) btnEl.textContent = 'Back to Home';
-        document.documentElement.lang = 'en';
-        document.title = '404 - Page Not Found';
+        if (btnEl) btnEl.textContent = isEn ? 'Back to Home' : '返回首页';
+        var authorEl = document.getElementById('authorLink');
+        if (authorEl) authorEl.textContent = isEn ? 'Weichen' : '微尘';
+        var langBtn = document.getElementById('btnLang');
+        if (langBtn) langBtn.textContent = isEn ? '简体中文' : 'English';
+        document.documentElement.lang = isEn ? 'en' : 'zh-CN';
+        document.title = isEn ? '404 - Page Not Found' : '404 - 页面未找到';
       }
+
+      updateUI(currentLang);
+
+      window.toggleLanguage = function() {
+        currentLang = currentLang === 'zh' ? 'en' : 'zh';
+        try {
+          localStorage.setItem('filemaster_lang', currentLang);
+        } catch (e) {}
+        updateUI(currentLang);
+      };
     })();
   </script>
 </body>
 </html>
+
