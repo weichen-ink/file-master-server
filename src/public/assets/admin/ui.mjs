@@ -60,6 +60,7 @@ const paths = {
   lock: '<rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>',
   list: '<path d="M8 6h13M8 12h13M8 18h13M3 6h1M3 12h1M3 18h1"/>',
   check: '<path d="m4 12 5 5L20 6"/>',
+  alert: '<path d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/>',
   menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
   tasks:
     '<rect x="4" y="4" width="16" height="17" rx="2"/><path d="M8 2v4h8V2M8 11h8M8 15h6"/>',
@@ -101,6 +102,7 @@ export async function copy(value) {
     await dialog(
       t("copyManually"),
       `<textarea readonly aria-label="${e(t("copy"))}">${e(value)}</textarea>`,
+      { className: "dialog-compact" },
     );
   }
 }
@@ -118,12 +120,12 @@ export function downloadJson(value, filename) {
 export function dialog(
   title,
   content,
-  { submit, cancel, danger = false, onMount } = {},
+  { submit, cancel, danger = false, className = "", onMount } = {},
 ) {
   return new Promise((resolve) => {
     const previous = document.activeElement;
     const el = document.createElement("dialog");
-    el.className = "dialog";
+    el.className = className ? `dialog ${className}` : "dialog";
     el.innerHTML = `<form method="dialog"><header><h2 id="dialog-title">${e(title)}</h2><button type="button" data-dialog-cancel class="icon-button" aria-label="${e(t("close"))}">${icon("close")}</button></header><div class="dialog-content">${content}</div><footer><button type="button" data-dialog-cancel class="button secondary">${e(cancel || t(submit ? "cancel" : "close"))}</button>${submit ? `<button value="confirm" class="button ${danger ? "danger" : "primary"}">${e(submit)}</button>` : ""}</footer></form>`;
     el.setAttribute("aria-labelledby", "dialog-title");
     document.body.append(el);
@@ -151,10 +153,15 @@ export function dialog(
 }
 export async function confirm(title, body, danger = false) {
   return (
-    (await dialog(title, `<p>${e(body)}</p>`, {
-      submit: t("confirm"),
-      danger,
-    })) !== null
+    (await dialog(
+      title,
+      `<div class="confirm-body"><span class="confirm-icon ${danger ? "is-danger" : "is-warn"}">${icon(danger ? "trash" : "alert")}</span><p class="confirm-message">${e(body)}</p></div>`,
+      {
+        submit: t("confirm"),
+        danger,
+        className: "dialog-compact",
+      },
+    )) !== null
   );
 }
 export function actions(root, handlers, signal) {

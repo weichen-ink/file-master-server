@@ -1,5 +1,5 @@
 import { t } from "../locale.mjs";
-import { e, button, notice, dialog, downloadJson, toast } from "../ui.mjs";
+import { e, icon, button, notice, dialog, downloadJson, toast } from "../ui.mjs";
 
 export function createTasks(api, onFilesChanged) {
   const listeners = new Set();
@@ -138,10 +138,38 @@ export function createTasks(api, onFilesChanged) {
     report() {
       const data = jobs.integrity;
       if (!data) return;
+      const issueCount = data.issues?.length || 0;
+      const isHealthy = !data.error && issueCount === 0;
+      const tone = isHealthy ? "ok" : "warn";
+      const badgeIcon = isHealthy ? "check" : "close";
       return dialog(
         t("integrityModalTitle"),
-        `<p>${e(t("integrityDetail", { checked: data.checked || 0, matched: data.matched || 0, issues: data.issues?.length || 0 }))}</p>${data.error ? notice(data.error, "danger") : ""}<div class="table-wrap"><table><thead><tr><th>${e(t("lblPath"))}</th><th>${e(t("lblIssueType"))}</th><th>${e(t("lblIssueDetail"))}</th></tr></thead><tbody>${(data.issues || []).map((i) => `<tr><td class="break-all">${e(i.path)}</td><td>${e(i.type)}</td><td class="break-all">${e(i.error || i.actual || "—")}</td></tr>`).join("")}</tbody></table></div>`,
-        { submit: t("btnDownloadCheck") },
+        `<div class="activity-result">
+          <div class="integrity-status-banner is-${tone}">
+            <span class="integrity-status-icon">${icon(badgeIcon)}</span>
+            <div class="integrity-status-text">
+              <strong>${e(t(data.state || (isHealthy ? "completed" : "error")))}</strong>
+              <span>${e(t("integrityDetail", { checked: data.checked || 0, matched: data.matched || 0, issues: issueCount }))}</span>
+            </div>
+          </div>
+          <div class="integrity-metrics">
+            <div class="integrity-metric">
+              <span>${e(t("integrityChecked"))}</span>
+              <strong>${e(String(data.checked || 0))}</strong>
+            </div>
+            <div class="integrity-metric ${data.matched ? "is-ok" : ""}">
+              <span>${e(t("integrityMatched"))}</span>
+              <strong>${e(String(data.matched || 0))}</strong>
+            </div>
+            <div class="integrity-metric ${issueCount ? "is-danger" : ""}">
+              <span>${e(t("integrityIssues"))}</span>
+              <strong>${e(String(issueCount))}</strong>
+            </div>
+          </div>
+          ${data.error ? notice(data.error, "danger") : ""}
+          ${issueCount ? `<div class="table-wrap"><table><thead><tr><th>${e(t("lblPath"))}</th><th>${e(t("lblIssueType"))}</th><th>${e(t("lblIssueDetail"))}</th></tr></thead><tbody>${data.issues.map((i) => `<tr><td class="break-all">${e(i.path)}</td><td>${e(i.type)}</td><td class="break-all">${e(i.error || i.actual || "—")}</td></tr>`).join("")}</tbody></table></div>` : ""}
+        </div>`,
+        { submit: t("btnDownloadCheck"), className: issueCount ? "" : "dialog-medium" },
       ).then((ok) => ok && downloadJson(data, "file-master-integrity.json"));
     },
     clear() {

@@ -1,5 +1,11 @@
 # Changelog (file-master-server)
 
+## [1.2.1] - 2026-11-13
+
+### Admin console UI & modal polish
+- Polish modal close button, header/footer hierarchy, and brand accent bars across admin dialogs.
+- Add inline copy icon for share links and auto-sizing collection tables.
+
 ## [1.2.0] - 2026-11-13
 
 ### Admin settings layout, navigation, and backup throttling

@@ -265,9 +265,14 @@ export async function start() {
   }
   const confirmLogout = async () =>
     Boolean(
-      await dialog(t("unsaved"), `<p>${e(t("draftKept"))}</p>`, {
-        submit: t("navLogout"),
-      }),
+      await dialog(
+        t("unsaved"),
+        `<div class="confirm-body"><span class="confirm-icon is-warn">${icon("alert")}</span><p class="confirm-message">${e(t("draftKept"))}</p></div>`,
+        {
+          submit: t("navLogout"),
+          className: "dialog-compact",
+        },
+      ),
     );
   actions(
     document.body,

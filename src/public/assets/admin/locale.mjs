@@ -308,6 +308,8 @@ export const messages = {
   expired: ["已过期", "Expired"],
   quotaUsed: ["次数已用尽", "Limit reached"],
   shareCreated: ["分享链接已创建", "Share link created"],
+  shareLink: ["分享链接", "Share link"],
+  done: ["完成", "Done"],
   integrationHelp: [
     "选择客户端，使用同一套上传接口与原文件存储。",
     "Connect your client to the same upload endpoint and original storage.",
@@ -348,6 +350,9 @@ export const messages = {
     "已检查 {checked} · 相符 {matched} · 异常 {issues}",
     "{checked} checked · {matched} matched · {issues} issues",
   ],
+  integrityChecked: ["已检查", "Checked"],
+  integrityMatched: ["相符", "Matched"],
+  integrityIssues: ["异常", "Issues"],
   clearCacheConfirm: [
     "清除所有派生图片缓存？原文件会保留，后续访问将重新生成缓存。",
     "Clear all derivative image caches? Originals are preserved and derivatives regenerate on access.",

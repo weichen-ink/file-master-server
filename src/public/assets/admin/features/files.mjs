@@ -167,7 +167,7 @@ export async function mountFiles(ctx, root, route, signal) {
                 { key: "size", label: "sizeColumn" },
                 { key: "date", label: "date" },
                 { key: "protection", label: "protectionColumn" },
-                { key: "actions", label: "shareColActions", width: "68px" },
+                { key: "actions", label: "shareColActions" },
               ],
               visible.map((item, index) =>
                 fileRow(item, index, filesHref(query)),
@@ -282,8 +282,8 @@ export async function mountFiles(ctx, root, route, signal) {
 export async function createShare(ctx, item, signal) {
   const values = await dialog(
     t("share"),
-    `<p class="break-all">${e(item.filename)}</p><div class="field"><label for="share-hours">${e(t("shareExpiryLabel"))}</label><input id="share-hours" name="hours" type="number" min="0" value="24" required></div><div class="field"><label for="share-max">${e(t("shareMaxDlLabel"))}</label><input id="share-max" name="max" type="number" min="0" step="1" value="0" required></div>${notice(t("sharesHelp"))}`,
-    { submit: t("share") },
+    `<div class="share-target-name">${e(item.filename)}</div><div class="field"><label for="share-hours">${e(t("shareExpiryLabel"))}</label><input id="share-hours" name="hours" type="number" min="0" value="24" required></div><div class="field"><label for="share-max">${e(t("shareMaxDlLabel"))}</label><input id="share-max" name="max" type="number" min="0" step="1" value="0" required></div>${notice(t("sharesHelp"))}`,
+    { submit: t("share"), className: "dialog-compact" },
   );
   if (!values || signal?.aborted) return;
   const { share } = await ctx.api.share(item, {
@@ -293,15 +293,21 @@ export async function createShare(ctx, item, signal) {
   if (signal?.aborted) return;
   await dialog(
     t("shareCreated"),
-    `<label>${e(t("copyLink"))}<input readonly value="${e(share.shareUrl)}" id="created-share"></label>`,
+    `<div class="field"><label for="created-share">${e(t("shareLink"))}</label><div class="input-with-action"><input readonly value="${e(share.shareUrl)}" id="created-share">${button("copy", "copy-created-share", "icon-button", "copy")}</div></div>`,
     {
-      submit: t("copyLink"),
-      onMount: (el) =>
-        el
-          .querySelector("input")
-          .addEventListener("click", (event) => event.target.select()),
+      cancel: t("done"),
+      className: "dialog-compact",
+      onMount: (el) => {
+        el.querySelector("input").addEventListener("click", (event) =>
+          event.target.select(),
+        );
+        el.querySelector('[data-action="copy-created-share"]').addEventListener(
+          "click",
+          () => copy(share.shareUrl),
+        );
+      },
     },
-  ).then((ok) => ok && copy(share.shareUrl));
+  );
 }
 
 export async function mountDetail(ctx, root, route, signal) {

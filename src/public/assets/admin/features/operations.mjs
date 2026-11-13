@@ -36,10 +36,10 @@ export async function mountShares(ctx, root, route, signal) {
     root.querySelector("#shares-results").innerHTML = collection(
       [
         { key: "file", label: "file" },
-        { key: "expires", label: "shareColExpires", width: "156px" },
-        { key: "downloads", label: "shareColDownloads", width: "136px" },
-        { key: "state", label: "shareColStatus", width: "132px" },
-        { key: "actions", label: "shareColActions", className: "share-actions", width: "156px" },
+        { key: "expires", label: "shareColExpires" },
+        { key: "downloads", label: "shareColDownloads" },
+        { key: "state", label: "shareColStatus" },
+        { key: "actions", label: "shareColActions", className: "share-actions" },
       ],
       items.map((i) => ({
         file: fileIdentity(fileFor(i) || i, {
@@ -87,7 +87,7 @@ export async function mountTrash(ctx, root, route, signal) {
         { key: "file", label: "file" },
         { key: "size", label: "sizeColumn" },
         { key: "deleted", label: "deletedAt" },
-        { key: "actions", label: "shareColActions", width: "220px" },
+        { key: "actions", label: "shareColActions" },
       ],
       items.map((i) => ({
         file: fileIdentity(i, {previewId: i.isImage ? i.id : "", thumbnail: i.isImage ? `<img src="/api/modules/image-host/trash/${e(i.id)}/preview?thumbnail=1" alt="" loading="lazy">` : "", summary: `<span>${e(bytes(i.size))}</span><span>${e(t("deletedAt"))} ${e(compactDate(i.deletedAt))}</span>`}),
@@ -238,7 +238,7 @@ export function mountBackup(ctx, root, signal) {
               { key: "file", label: "file" },
               { key: "date", label: "backupCreated" },
               { key: "size", label: "archiveSize" },
-              { key: "actions", label: "shareColActions", width: "220px" },
+              { key: "actions", label: "shareColActions" },
             ],
             files.map((i) => ({
               file: fileIdentity(i, {summary: `<span>${e(bytes(i.size))}</span><time>${e(compactDate(i.createdAt))}</time>`}),

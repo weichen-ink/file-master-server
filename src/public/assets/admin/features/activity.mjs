@@ -1,5 +1,5 @@
 import { t } from "../locale.mjs";
-import { e, button, dialog, actions, notice, downloadJson } from "../ui.mjs";
+import { e, icon, button, dialog, actions, notice, downloadJson } from "../ui.mjs";
 
 // Jobs survive route changes; controls and drop targets exist only in an explicit dialog.
 export function openUpload(ctx) {
@@ -87,14 +87,51 @@ export function openIntegrity(ctx) {
     t("btnIntegrity"),
     '<div class="activity-result" aria-live="polite"></div>',
     {
+      className: "dialog-medium",
       onMount(el) {
         const controller = new AbortController(),
           { signal } = controller;
         const unsubscribe = ctx.tasks.subscribe(({ integrity: job }) => {
-          el.querySelector(".activity-result").innerHTML =
-            job && job.state !== "idle"
-              ? `<p><strong>${e(t(job.state))}</strong></p><p>${e(t("integrityDetail", { checked: job.checked || 0, matched: job.matched || 0, issues: job.issues?.length || 0 }))}</p>${job.state === "running" ? "<progress></progress>" : ""}${job.error ? notice(job.error, "danger") : ""}${job.pollError ? notice(job.pollError, "warning") : ""}${job.issues?.length ? `<div class="issue-list">${job.issues.map((i) => `<p><strong>${e(i.path)}</strong><br>${e(i.error || i.type)}</p>`).join("")}</div>` : ""}<div class="actions">${job.state === "running" ? button("stop", "stop-integrity") : button("runAgain", "start-integrity")}${job.state !== "running" ? button("btnDownloadCheck", "download-report") : ""}</div>`
-              : `<p>${e(t("loading"))}</p>`;
+          const elResult = el.querySelector(".activity-result");
+          if (!job || job.state === "idle") {
+            elResult.innerHTML = `<p class="muted">${e(t("loading"))}</p>`;
+            return;
+          }
+          const issueCount = job.issues?.length || 0;
+          const isRunning = job.state === "running";
+          const isHealthy = !isRunning && job.state !== "failed" && job.state !== "cancelled" && issueCount === 0;
+          const tone = isRunning ? "running" : isHealthy ? "ok" : "warn";
+          const badgeIcon = isRunning ? "clock" : isHealthy ? "check" : "close";
+          elResult.innerHTML = `
+            <div class="integrity-status-banner is-${tone}">
+              <span class="integrity-status-icon">${icon(badgeIcon)}</span>
+              <div class="integrity-status-text">
+                <strong>${e(t(job.state))}</strong>
+                <span>${e(t("integrityDetail", { checked: job.checked || 0, matched: job.matched || 0, issues: issueCount }))}</span>
+              </div>
+            </div>
+            ${isRunning ? "<progress></progress>" : ""}
+            <div class="integrity-metrics">
+              <div class="integrity-metric">
+                <span>${e(t("integrityChecked"))}</span>
+                <strong>${e(String(job.checked || 0))}</strong>
+              </div>
+              <div class="integrity-metric ${job.matched ? "is-ok" : ""}">
+                <span>${e(t("integrityMatched"))}</span>
+                <strong>${e(String(job.matched || 0))}</strong>
+              </div>
+              <div class="integrity-metric ${issueCount ? "is-danger" : ""}">
+                <span>${e(t("integrityIssues"))}</span>
+                <strong>${e(String(issueCount))}</strong>
+              </div>
+            </div>
+            ${job.error ? notice(job.error, "danger") : ""}
+            ${job.pollError ? notice(job.pollError, "warning") : ""}
+            ${issueCount ? `<div class="issue-list">${job.issues.map((i) => `<div class="issue-item"><strong>${e(i.path)}</strong><span>${e(i.error || i.type)}</span></div>`).join("")}</div>` : ""}
+            <div class="actions integrity-actions">
+              ${isRunning ? button("stop", "stop-integrity") : button("runAgain", "start-integrity", isHealthy ? "secondary" : "primary")}
+              ${!isRunning ? button("btnDownloadCheck", "download-report") : ""}
+            </div>`;
         });
         actions(
           el,
