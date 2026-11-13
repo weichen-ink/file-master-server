@@ -137,7 +137,7 @@ export async function mountFiles(ctx, root, route, signal) {
       ? ""
       : notice(t("storageWarning"), "warning")) +
     `<div class="explorer"><aside class="archive-panel"><details class="archive-root" ${matchMedia("(max-width:600px)").matches ? "" : "open"}><summary><span class="archive-label">${icon("clock")}${e(t("archive"))}</span><span class="archive-current">${e(currentArchive)}</span>${icon("chevron")}</summary><nav aria-label="${e(t("archive"))}">${archiveHtml}</nav></details></aside><section class="file-results"><div class="file-toolbar"><label class="search-field" for="file-search">${icon("search")}<input type="search" id="file-search" placeholder="${e(t("search"))}" value="${e(query.q || "")}"></label><div class="filter-controls"><select id="type-filter" aria-label="${e(t("type"))}"><option value="">${e(t("allTypes"))}</option><option value="image" ${selected(query.type, "image")}>${e(t("images"))}</option><option value="other" ${selected(query.type, "other")}>${e(t("otherFiles"))}</option></select><select id="protection-filter" aria-label="${e(t("protection"))}"><option value="">${e(t("allProtection"))}</option><option value="1" ${selected(query.protected, "1")}>${e(t("protected"))}</option></select><div class="library-display-controls"><div class="sort-controls" role="group" aria-label="${e(t("sort"))}">${[
-      ["time", "sortTime", "desc"], ["size", "sortSize", "desc"], ["name", "sortName", "asc"],
+      ["time", "sortTime", "desc"], ["size", "sortSize", "desc"], ["name", "sortName", "asc"], ["hits", "sortHits", "desc"],
     ].map(([field,label,initial]) => {
       const [active,order] = (query.sort || "time-desc").split("-");
       const next = active === field ? (order === "desc" ? "asc" : "desc") : initial;
