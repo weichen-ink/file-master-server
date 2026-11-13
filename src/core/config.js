@@ -15,7 +15,7 @@ const UPLOAD_TMP_DIR = path.join(STORAGE_DIR, 'tmp');
 const OFFICIAL_UPSTREAM_REPO = 'https://github.com/weichen-ink/file-master-server.git';
 
 let cachedConfig = null;
-let lastMtimeMs = 0;
+let lastConfigRevision = '';
 
 function isConfigInitialized() {
   return fs.existsSync(CONFIG_PATH);
@@ -253,11 +253,12 @@ function getConfig() {
   }
   try {
     const stat = fs.statSync(CONFIG_PATH);
-    if (!cachedConfig || stat.mtimeMs !== lastMtimeMs) {
+    const rev = `${stat.ino}:${stat.size}:${stat.mtimeMs}:${stat.ctimeMs}`;
+    if (!cachedConfig || rev !== lastConfigRevision) {
       const raw = fs.readFileSync(CONFIG_PATH, 'utf8');
       const parsed = YAML.parse(raw) || {};
       cachedConfig = normalizeParsedConfig(parsed, false);
-      lastMtimeMs = stat.mtimeMs;
+      lastConfigRevision = rev;
     }
     return cachedConfig;
   } catch (err) {
@@ -436,7 +437,7 @@ function writePreparedConfig(prepared) {
   const tmpPath = `${CONFIG_PATH}.tmp`;
   fs.writeFileSync(tmpPath, prepared.yaml, 'utf8');
   fs.renameSync(tmpPath, CONFIG_PATH);
-  lastMtimeMs = 0;
+  lastConfigRevision = '';
   return getConfig();
 }
 

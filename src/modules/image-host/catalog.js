@@ -1,6 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
-const { getConfig } = require('../../core/config');
+const { getConfig, isConfigInitialized } = require('../../core/config');
 const { buildAssetUrlsAndMeta } = require('../../core/file-security');
 const { walkOriginalFiles } = require('./asset-files');
 const { invalidateProcessingCache } = require('./processor');
@@ -195,7 +195,9 @@ function clearCacheDir() {
 }
 
 function warmShaIndexAsync() {
+  if (process.env.FILE_MASTER_TEST_ROOT) return;
   const timer = setTimeout(() => {
+    if (!isConfigInitialized()) return;
     scanAllImages(getConfig()).catch((err) => console.warn('[ImageHost] Index warmup:', err.message));
   }, 200);
   timer.unref?.();
