@@ -2192,8 +2192,18 @@
   min-width: 240px;
   align-items: center;
   gap: 12px;
+  padding: 8px 12px;
+  margin: -8px -12px;
+  border-radius: 12px;
   color: var(--text);
   text-decoration: none;
+  transition: background .15s ease, color .15s ease;
+}
+
+.update-repository:hover,
+.update-repository:focus-visible {
+  text-decoration: none;
+  background: var(--surface-hover);
 }
 
 .update-repository-icon {
@@ -2204,6 +2214,12 @@
   flex: 0 0 36px;
   border-radius: 10px;
   background: var(--surface-hover);
+  transition: background .15s ease, color .15s ease;
+}
+
+.update-repository:hover .update-repository-icon {
+  background: rgba(133, 91, 251, .12);
+  color: var(--brand);
 }
 
 .update-repository-icon .icon {
@@ -2225,6 +2241,11 @@
   line-height: 22px;
   font-weight: 600;
   overflow-wrap: anywhere;
+  transition: color .15s ease;
+}
+
+.update-repository:hover .update-repository-name>strong {
+  color: var(--brand);
 }
 
 .update-repository-name>strong>.icon {
@@ -2232,6 +2253,12 @@
   height: 14px;
   color: var(--muted);
   flex: none;
+  transition: color .15s ease, transform .15s ease;
+}
+
+.update-repository:hover .update-repository-name>strong>.icon {
+  color: var(--brand);
+  transform: translate(1px, -1px);
 }
 
 .update-repository-name>span {
