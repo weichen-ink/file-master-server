@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Progressive file browsing and audit follow-up
+- Filter and sort the complete file catalog before returning each page, including directory/type multi-selection and sorting by upload time, name, size, or views.
+- Return complete directory choices with each filtered page while retaining the complete-list endpoint behavior for vault-wide operations.
+- Serialize catalog scans with asset mutations because scans also update the shared hash index.
+- Honor the configured optimized-link prefix without exposing legacy `/pub/` aliases alongside a custom prefix.
+- Refresh revoked-session caches using persistent data revisions so rapid revocations are not missed when filesystem timestamps coincide.
+- Support administrator-configured private Bark notification endpoints while retaining URL scheme validation.
+- Generate backup exports before sending response headers, then stream the completed archive and remove temporary files when the transfer finishes or disconnects.
+- Validate with 160 passing server tests in isolated projects, including real HTTP pagination and session-revocation regressions.
+
 ### Audit fixes
 - Validate cached image sources on every request, share cache invalidation across rename/delete/restore, and require clients to revalidate reused URLs.
 - Stop affected operations when critical state is unreadable or malformed instead of resetting locks, integrity baselines, shares, or session security data.

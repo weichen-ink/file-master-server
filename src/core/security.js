@@ -1,7 +1,7 @@
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
-const { DATA_DIR, getConfig, readCriticalJsonData, writeJsonData, isRecord, isConfigInitialized } = require('./config');
+const { DATA_DIR, getConfig, readCriticalJsonData, writeJsonData, isRecord, dataRevision } = require('./config');
 
 // In-memory IP brute-force protection map: ip -> { count, bannedUntil, lastAttempt }
 const ipFailures = new Map();
@@ -203,9 +203,8 @@ function createSessionToken(cfg) {
   return `${payload}.${sig}`;
 }
 
-// Session revocation tracking (mtime-cached Set + expiration pruning)
-const REVOKED_SESSIONS_PATH = path.join(DATA_DIR, 'revoked_sessions.json');
-let lastRevokedMtimeMs = -1;
+// Session revocation tracking (dataRevision-cached Set + expiration pruning)
+let lastRevokedRevision = null;
 let cachedRevokedSet = new Set();
 const validRevocations = value => Array.isArray(value) && value.every(token => typeof token === 'string');
 
@@ -221,11 +220,11 @@ function isRevokedTokenExpired(token, now = Date.now()) {
 }
 
 function getRevokedSessionSet() {
-  const mtimeMs = fs.existsSync(REVOKED_SESSIONS_PATH) ? fs.statSync(REVOKED_SESSIONS_PATH).mtimeMs : 0;
-  if (mtimeMs === lastRevokedMtimeMs) return cachedRevokedSet;
+  const revision = dataRevision('revoked_sessions');
+  if (revision === lastRevokedRevision) return cachedRevokedSet;
   const list = readCriticalJsonData('revoked_sessions', [], validRevocations);
   cachedRevokedSet = new Set(list);
-  lastRevokedMtimeMs = mtimeMs;
+  lastRevokedRevision = revision;
   return cachedRevokedSet;
 }
 
@@ -243,11 +242,7 @@ function revokeSessionToken(token) {
   }
   writeJsonData('revoked_sessions', list);
   cachedRevokedSet = new Set(list);
-  try {
-    lastRevokedMtimeMs = fs.existsSync(REVOKED_SESSIONS_PATH) ? fs.statSync(REVOKED_SESSIONS_PATH).mtimeMs : 0;
-  } catch {
-    lastRevokedMtimeMs = -1;
-  }
+  lastRevokedRevision = dataRevision('revoked_sessions');
 }
 
 function verifySessionToken(token, cfg) {

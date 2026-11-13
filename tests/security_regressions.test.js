@@ -192,3 +192,27 @@ test('404 page is served without leaking admin_path', () => {
   assert.ok(!content.includes('admin_path'), '404.html must not contain admin_path references');
   assert.ok(content.includes('404'), '404.html must display 404');
 });
+
+test('Session revocation cache detects same-mtime file replacement via dataRevision', () => {
+  const { DATA_DIR, getConfig } = require('../src/core/config');
+  const { createSessionToken, verifySessionToken } = require('../src/core/security');
+  const cfg = getConfig();
+  const token = createSessionToken(cfg);
+  const revFile = path.join(DATA_DIR, 'revoked_sessions.json');
+  const original = fs.existsSync(revFile) ? fs.readFileSync(revFile, 'utf8') : null;
+  try {
+    fs.writeFileSync(revFile, '[]');
+    const stat = fs.statSync(revFile);
+    assert.ok(verifySessionToken(token, cfg));
+
+    const replacement = path.join(DATA_DIR, 'revoked_sessions.replace.tmp');
+    fs.writeFileSync(replacement, JSON.stringify([token]));
+    fs.utimesSync(replacement, stat.atime, stat.mtime);
+    fs.renameSync(replacement, revFile);
+
+    assert.equal(verifySessionToken(token, cfg), false);
+  } finally {
+    if (original !== null) fs.writeFileSync(revFile, original);
+    else fs.rmSync(revFile, { force: true });
+  }
+});

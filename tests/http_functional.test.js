@@ -178,6 +178,21 @@ test('HTTP functional regression across platform, assets, shares and recovery', 
     assert.equal(localPreview.status, 200); assert.equal((await sharp(localPreview.buffer).metadata()).format, 'jpeg');
   });
 
+  await t.test('Catalog API filters and sorts before slicing pages while retaining all directory choices', async () => {
+    const full=(await call('/api/modules/image-host/list',{headers:api})).data.images;
+    assert.ok(full.length>=2);
+    const query=new URLSearchParams({types:'image',sort:'name_asc',limit:'1',offset:'0'});
+    const first=await call(`/api/modules/image-host/list?${query}`,{headers:api});
+    assert.equal(first.status,200);assert.equal(first.data.images.length,1);assert.equal(first.data.totalCount,full.length);
+    query.set('offset','1');
+    const second=(await call(`/api/modules/image-host/list?${query}`,{headers:api})).data;
+    assert.notEqual(first.data.images[0].filename,second.images[0].filename);
+    assert.deepEqual(first.data.buckets,[...new Set(full.map(item=>`${item.year}/${item.month}`))].sort().reverse());
+    query.set('q','camera.tiff');query.set('offset','0');
+    const searched=(await call(`/api/modules/image-host/list?${query}`,{headers:api})).data;
+    assert.equal(searched.totalCount,1);assert.equal(searched.images[0].filename,'camera.tiff');
+  });
+
   await t.test('Shares serve exact bytes, enforce quotas/expiry and can be revoked', async () => {
     const create = async (options) => {
       const result = await call('/api/modules/share/create', { method: 'POST', headers: api, json: { ...asset, ...options } });

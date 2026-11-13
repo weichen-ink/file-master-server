@@ -1,7 +1,5 @@
 const { forecastBackup } = require('./backup-schedule');
 const fs = require('node:fs');
-const net = require('node:net');
-const dns = require('node:dns');
 const path = require('node:path');
 const { spawn, execFile } = require('node:child_process');
 const { promisify } = require('node:util');
@@ -41,34 +39,7 @@ function formatBytes(bytes) {
   return (bytes / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 2) + ' ' + units[i];
 }
 
-function isPrivateOrLocalIp(ip) {
-  const normalized = String(ip || '').trim().toLowerCase();
-  if (!normalized) return true;
-  if (normalized.startsWith('::ffff:')) {
-    return isPrivateOrLocalIp(normalized.slice(7));
-  }
-  const version = net.isIP(normalized);
-  if (version === 4) {
-    const parts = normalized.split('.').map(Number);
-    if (parts.length !== 4 || parts.some((n) => Number.isNaN(n) || n < 0 || n > 255)) return true;
-    const [a, b] = parts;
-    if (a === 0 || a === 10 || a === 127) return true;
-    if (a === 169 && b === 254) return true;
-    if (a === 172 && b >= 16 && b <= 31) return true;
-    if (a === 192 && b === 168) return true;
-    if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT
-    return false;
-  }
-  if (version === 6) {
-    if (normalized === '::' || normalized === '::1') return true;
-    if (normalized.startsWith('fc') || normalized.startsWith('fd')) return true; // ULA fc00::/7
-    if (/^fe[89ab]/.test(normalized)) return true; // Link-local fe80::/10
-    return false;
-  }
-  return true;
-}
-
-async function validateSafeBarkUrl(rawUrl) {
+function validateSafeBarkUrl(rawUrl) {
   let parsed;
   try {
     parsed = new URL(rawUrl);
@@ -80,25 +51,6 @@ async function validateSafeBarkUrl(rawUrl) {
   }
   if (!parsed.hostname) {
     throw new Error('Bark URL 缺少主机名');
-  }
-  const host = parsed.hostname.replace(/^\[|\]$/g, '');
-  if (host.toLowerCase() === 'localhost') {
-    throw new Error('Bark URL 不允许指向本地或内网地址');
-  }
-  if (net.isIP(host)) {
-    if (isPrivateOrLocalIp(host)) {
-      throw new Error('Bark URL 不允许指向内网或保留 IP 地址');
-    }
-    return parsed.href.replace(/\/+$/, '');
-  }
-  let records;
-  try {
-    records = await dns.promises.lookup(host, { all: true });
-  } catch {
-    throw new Error(`无法解析 Bark 主机名: ${host}`);
-  }
-  if (!records || records.length === 0 || records.some((r) => isPrivateOrLocalIp(r.address))) {
-    throw new Error('Bark URL 解析到了内网或受限 IP 地址');
   }
   return parsed.href.replace(/\/+$/, '');
 }
@@ -121,7 +73,7 @@ async function sendBarkNotification({ barkUrl, title, body, isError = false }) {
 
   let cleanUrl;
   try {
-    cleanUrl = await validateSafeBarkUrl(barkUrl.trim());
+    cleanUrl = validateSafeBarkUrl(barkUrl.trim());
   } catch (err) {
     console.warn('[Backup] Blocked unsafe Bark URL:', err.message);
     return { success: false, error: err.message };

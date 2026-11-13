@@ -3,7 +3,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const os = require('node:os');
-const { spawn } = require('node:child_process');
+const { execFile } = require('node:child_process');
+const { pipeline } = require('node:stream');
 const {
   ROOT_DIR,
   STORAGE_DIR,
@@ -479,49 +480,37 @@ app.get('/api/platform/backup/download', requireAdmin, (req, res) => {
     return res.status(400).json({ error: 'No backup targets found on disk' });
   }
 
-  appendAuditLog({
-    action: 'backup_export',
-    ip: getClientIp(req),
-    scope
-  });
+  fs.mkdirSync(UPLOAD_TMP_DIR, { recursive: true });
+  const tmpArchivePath = path.join(UPLOAD_TMP_DIR, `${Date.now()}_${crypto.randomBytes(6).toString('hex')}.tar.gz`);
 
-  res.setHeader('Content-Type', 'application/gzip');
-  res.setHeader('Content-Disposition', `attachment; filename="${archiveName}"`);
-
-  const tarProc = spawn('tar', ['-czf', '-', '-C', ROOT_DIR, ...targets], {
-    stdio: ['ignore', 'pipe', 'pipe']
-  });
-
-  let stderrText = '';
-  tarProc.stderr.on('data', (chunk) => {
-    if (stderrText.length < 2048) stderrText += chunk.toString();
-  });
-
-  const abortTar = () => {
-    if (!tarProc.killed) tarProc.kill('SIGTERM');
-  };
-  req.on('close', abortTar);
-
-  tarProc.on('error', (err) => {
-    if (!res.headersSent) {
-      res.status(500).json({ error: 'Failed to create tar.gz archive: ' + err.message });
-    } else {
-      res.destroy(err);
-    }
-  });
-
-  tarProc.stdout.pipe(res);
-
-  tarProc.on('close', (code) => {
-    req.off('close', abortTar);
-    if (code !== 0 && code !== null) {
-      console.error('[BackupExport] tar exited with code', code, stderrText);
-      if (!res.headersSent) {
-        res.status(500).json({ error: 'Failed to create tar.gz archive: ' + (stderrText || `exit ${code}`) });
-      } else if (!res.writableEnded) {
-        res.end();
+  execFile('tar', ['-czf', tmpArchivePath, '-C', ROOT_DIR, ...targets], { timeout: 120000 }, (err) => {
+    if (err || !fs.existsSync(tmpArchivePath)) {
+      if (fs.existsSync(tmpArchivePath)) {
+        try { fs.unlinkSync(tmpArchivePath); } catch {}
       }
+      return res.status(500).json({ error: 'Failed to create tar.gz archive: ' + (err ? err.message : 'unknown error') });
     }
+
+    appendAuditLog({
+      action: 'backup_export',
+      ip: getClientIp(req),
+      scope
+    });
+
+    res.setHeader('Content-Type', 'application/gzip');
+    res.setHeader('Content-Disposition', `attachment; filename="${archiveName}"`);
+    const stream = fs.createReadStream(tmpArchivePath);
+    pipeline(stream, res, (pipeErr) => {
+      try { if (fs.existsSync(tmpArchivePath)) fs.unlinkSync(tmpArchivePath); } catch {}
+      if (pipeErr && pipeErr.code !== 'ERR_STREAM_PREMATURE_CLOSE') {
+        console.error('[Backup Export] Stream error:', pipeErr.message);
+        if (!res.headersSent) {
+          res.status(500).json({ error: 'Backup download failed' });
+        } else if (!res.destroyed) {
+          res.destroy(pipeErr);
+        }
+      }
+    });
   });
 });
 

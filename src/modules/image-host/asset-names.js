@@ -89,7 +89,7 @@ function assetLinkMappings(cfg, year, month, filename, item, state = readNameSta
   const bucket = `${year}/${month}/`, result = new Map();
   for (const [kind, prefixes, to] of [
     ['raw', [cfg.image_host?.raw_secret_path || 'raw'], item.rawUrl],
-    ['pub', [...new Set(['pub', cfg.image_host?.pub_secret_path || 'pub'])], item.pubUrl]
+    ['pub', [cfg.image_host?.pub_secret_path || 'pub'], item.pubUrl]
   ]) {
     for (const [key, target] of Object.entries(state[kind])) {
       if (!key.startsWith(bucket) || target !== filename) continue;
@@ -100,8 +100,6 @@ function assetLinkMappings(cfg, year, month, filename, item, state = readNameSta
 }
 function assetReferenceUrls(cfg, year, month, filename, item) {
   const urls = new Set([item.rawUrl, item.pubUrl, ...assetLinkMappings(cfg, year, month, filename, item).map(mapping => mapping.from)]);
-  // /pub remains supported alongside a custom optimized-link prefix.
-  try { const url = new URL(item.pubUrl); urls.add(`${cfg.base_url}/pub/${url.pathname.split('/').slice(-3).join('/')}`); } catch {}
   return [...urls];
 }
 module.exports = { aliasRetentionDays, assetLinkMappings, assetReferenceUrls, hasOptimizedNameConflict, keyOf, foldName, conflict, routeNames, readNameState, saveNameState, resolveAlias, assertNameAvailable };
