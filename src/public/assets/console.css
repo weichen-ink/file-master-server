@@ -155,7 +155,9 @@ pre {
   background: var(--surface-hover);
   color: var(--text);
 }
-.button.selected {
+.button.selected,
+.button.selected:hover,
+.button[aria-pressed="true"]:hover {
   background: var(--surface);
   color: var(--brand);
   box-shadow: var(--shadow-card);
@@ -441,15 +443,26 @@ pre {
 .filter-controls .segmented {
   margin-left: auto;
 }
+.segmented a,
+.segmented .button {
+  transition: background .15s ease, color .15s ease, box-shadow .15s ease;
+}
 .segmented a {
   display: flex;
   padding: 6px;
   color: var(--muted);
   border-radius: 8px;
 }
-.segmented a[aria-current] {
+.segmented a:not([aria-current]):hover,
+.segmented .button:not(.selected):not([aria-pressed="true"]):hover {
+  background: color-mix(in srgb, var(--surface) 65%, transparent);
+  color: var(--text);
+}
+.segmented a[aria-current],
+.segmented a[aria-current]:hover {
   background: var(--surface);
   color: var(--brand);
+  box-shadow: var(--shadow-card);
 }
 .result-summary {
   display: flex;
