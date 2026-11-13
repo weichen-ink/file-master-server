@@ -1,23 +1,35 @@
 # File Master Server
 
-A self-hosted home for your images, attachments, and shared links.
+**A lightweight, self-hosted file and attachment server**: manage files, create expiring shares, process media on demand, schedule low-overhead backups, and monitor health—standalone or paired with the [Obsidian File Master plugin](https://github.com/weichen-ink/file-master) and PicList.
 
-[简体中文](README.zh-CN.md) · **English** · [Obsidian plugin](https://github.com/weichen-ink/file-master)
+[简体中文](README.zh-CN.md) · **English** · [Obsidian Plugin](https://github.com/weichen-ink/file-master) · [Changelog](CHANGELOG.md)
 
-## Features
+---
 
-- **File management**: upload, search, browse by date, and switch between grid and list views.
-- **Image previews**: zoom, pan, and copy original, WebP, or Markdown links.
-- **Image optimization**: compress, resize, and watermark images while keeping originals.
-- **Sharing and trash**: create expiring shares and restore accidentally deleted files.
-- **Server management**: view resource use, schedule and download backups, and install updates.
-- **Monitoring**: connect monitoring tools to a read-only JSON endpoint and choose which statistics to share.
+## Why File Master Server?
 
-Use it on its own or connect Obsidian or PicList. Supports Chinese and English, with light, dark, and system themes.
+Instead of relying on third-party image hosts or heavy cloud suites, File Master Server gives you a **clean, self-owned file backend built for long-term maintenance**:
+- **You own your files**: originals stay organized by year/month on disk without lock-in or heavy external databases.
+- **Non-destructive media processing**: WebP variants and watermarks are generated and cached separately—originals in `storage/raw/` stay untouched.
+- **Graceful file renames**: renaming a file keeps an alias grace period for old URLs so published blog posts don't immediately 404.
+- **Built-in operations**: low-CPU scheduled backups, `rclone` sync, Bark notifications, recycle bin recovery, and a configurable `/api/health` endpoint come out of the box.
 
-## Deploy
+---
 
-### Docker Compose
+## Core Capabilities
+
+- **File Library & Browser**: filter by directory, type, search query, and sort by date, name, size, or views; switch between grid and list views with zoomable previews.
+- **Media Processing (Compression + Adaptive Watermarks)**: automatic WebP conversion, max-width resizing, and image/text/tiled watermarks with auto-contrast and live console preview.
+- **Safety & Deduplication**: SHA-256 deduplication on upload, file lock protection, safe renames with URL alias grace periods, and a recycle bin for accidental deletions.
+- **Expiring Shares**: generate share links with custom expiration dates and download limits, revocable anytime.
+- **Operations & Monitoring**: runtime status overview, CPU-throttled `.tar.gz` backups (with `rclone` sync and Bark alerts), one-click updates, and a read-only `/api/health` endpoint.
+- **Themes & Languages**: English and Simplified Chinese UI with light, dark, and system theme support.
+
+---
+
+## Deployment
+
+### Option 1: Docker Compose (Recommended)
 
 ```bash
 git clone https://github.com/weichen-ink/file-master-server.git
@@ -25,13 +37,13 @@ cd file-master-server
 docker compose up -d --build
 ```
 
-Open `http://localhost:3210/setup` to set up your site and administrator account. For a remote deployment, replace `localhost` with your server address.
+Open `http://localhost:3210/setup` (replace `localhost` with your server address for remote deployments) to finish initial setup.
 
-After setup, follow the [deployment guide](docs/DEPLOYMENT.md#english) to save and mount your site configuration. Keep your files and configuration when updating the container.
+> After setup, follow the [deployment guide](docs/DEPLOYMENT.md#english) to persist your configuration and storage volumes across container updates.
 
-### Node.js
+### Option 2: Node.js
 
-Requires Node.js 18 or later.
+Requires **Node.js 18** or later:
 
 ```bash
 git clone https://github.com/weichen-ink/file-master-server.git
@@ -42,9 +54,9 @@ npm start
 
 Open `http://localhost:3210/setup` to finish setup.
 
-### Run in the background with PM2
+### Option 3: Background Service with PM2
 
-Use PM2 to keep a Node.js deployment running after you close the terminal. After cloning the project and running `npm ci` above, run these commands from the project directory. If `npm start` is already running, stop it with `Ctrl+C` first.
+For Node.js deployments that stay running after closing your terminal (run inside the project directory after `npm ci`; stop `npm start` with `Ctrl+C` first if running):
 
 ```bash
 npm install -g pm2
@@ -52,36 +64,41 @@ npm run pm2
 pm2 save
 ```
 
-The service is named `fms` and remains available at `http://localhost:3210`. To start it automatically after a reboot, run `pm2 startup` and follow the command it prints.
+The PM2 process name is `fms` on port `3210`. Run `pm2 startup` and follow its instructions to enable auto-start on reboot.
 
 | Action | Command |
-|---|---|
+| --- | --- |
 | Check status | `pm2 status fms` |
 | View logs | `pm2 logs fms` |
 | Restart | `pm2 restart fms` |
 | Stop | `pm2 stop fms` |
 
 > [!TIP]
-> **Chinese Text Watermarks on Linux**: If you use Chinese text watermarks on a Linux server or VPS, install CJK fonts to ensure glyph rendering: `sudo apt-get install -y fonts-noto-cjk fonts-wqy-zenhei fontconfig` (or equivalent for your distribution). Docker containers built with the latest Dockerfile include these fonts automatically.
+> **Chinese Text Watermarks on Linux**: If you render Chinese text watermarks on a Linux VPS, install CJK fonts to avoid tofu boxes: `sudo apt-get install -y fonts-noto-cjk fonts-wqy-zenhei fontconfig` (or equivalent for your distro). Containers built from the included `Dockerfile` ship with CJK fonts pre-installed.
 
-## Start using it
+---
 
-Enter the console from the homepage (default: `/admin`) to upload and manage files. To connect a client, use the site URL and upload API token from Site settings. Use HTTPS for public access.
+## Quick Start
 
-This is version **1.1**. Connecting Obsidian requires plugin **1.1 or later**. Before updating, save a full backup in Backup & recovery.
+1. Open the admin console (default `/admin`) to upload, browse, and share files.
+2. To connect **Obsidian File Master** or **PicList**, copy your site URL and API token from **Settings → Site settings** (HTTPS is recommended for public deployments).
+3. This is version **1.2.0**; when connecting Obsidian, use plugin version **1.1 or later** (**1.2.0+** recommended).
 
-## Connect a monitoring tool
+---
 
-In **Site settings → Monitoring**, enable the endpoint, select the information to include, and save. Copy the fixed endpoint URL into your monitoring tool. No login or token is needed; only the selected information is public.
+## External Monitoring (`/api/health`)
+
+In **Site settings → Monitoring**, enable the endpoint, select the groups you want to expose, and save. Copy the endpoint URL into Uptime Kuma or any monitoring tool (no auth required; only selected groups are exposed, and you can preview the JSON in settings):
 
 ```bash
 curl https://your-site.example/api/health
 ```
 
-When enabled, the server also prints the monitoring URL on startup. Set `language: en` or `language: zh` in `config.yaml` to choose the startup language; the browser language is independent.
+- **Available groups**: service status, CPU & memory, storage usage, file counts, and backup status.
+- **Status codes**: `200` when available, `503` when core storage is unavailable, and `404` when the endpoint is disabled.
+- **Polling**: recommended every 30–60s (resources refresh at most every 15s, backup status every 5s, storage/file counts every 60s; unreadable groups report `status: "unknown"`).
+- Set `language: en` or `language: zh` in `config.yaml` to control startup terminal log language independently from browser UI language.
 
-Choose service status, CPU and memory, storage usage, file counts, or backup status. Preview JSON in settings before connecting. HTTP `200` means the service is available; `503` means its core storage is unavailable. Check JSON `status` and `warnings` for issues such as a failed backup. Backup states distinguish disabled, never run, running, successful, partially successful, and failed backups.
-
-Poll every 30–60 seconds. Resources refresh at most every 15 seconds, backup status every 5 seconds, and storage/file statistics every 60 seconds; `collectedAt` shows when each snapshot was taken. CPU and memory reflect what the server operating system exposes. Unavailable groups return `status: "unknown"`; they are never reported as zero usage. Disabling the endpoint returns `404`. Use HTTPS for remote monitoring.
+---
 
 [Changelog](CHANGELOG.md) · [Report an issue](https://github.com/weichen-ink/file-master-server/issues) · [MIT license](LICENSE)

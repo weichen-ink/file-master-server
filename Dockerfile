@@ -1,8 +1,9 @@
 FROM node:20-slim
 
-# Install git, libheif-examples, ffmpeg, fontconfig, and CJK fonts for text watermarking
+# Install git, cpulimit, libheif-examples, ffmpeg, fontconfig, and CJK fonts for text watermarking
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
+    cpulimit \
     ca-certificates \
     libheif-examples \
     ffmpeg \
