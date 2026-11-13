@@ -12,14 +12,21 @@ export const groups = [
     ],
   },
   {
-    key: "system",
-    label: "systemManagement",
+    key: "config",
+    label: "serviceConfig",
     icon: "settings",
     children: [
-      ["status", "#/status"],
       ["site", "#/settings/site"],
-      ["navIntegration", "#/settings/integration"],
       ["media", "#/settings/media"],
+      ["navIntegration", "#/settings/integration"],
+    ],
+  },
+  {
+    key: "ops",
+    label: "systemOps",
+    icon: "activity",
+    children: [
+      ["status", "#/status"],
       ["backup", "#/settings/backup"],
       ["updates", "#/settings/updates"],
       ["advanced", "#/settings/advanced"],

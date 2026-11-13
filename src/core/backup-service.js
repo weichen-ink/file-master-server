@@ -368,10 +368,16 @@ async function performBackup({ manual = false } = {}) {
     const archivePath = path.join(localDir, archiveFilename);
 
     activeBackupJob.archivePath = archivePath + '.tmp';
-    logStep(`Packing targets into ${archiveFilename}...`);
-    // Tar exclude internal backups directory if targets contains 'data'
+    logStep(`Targets (${targets.length}): ${targets.join(', ')}`);
+    // Tar exclude internal backups directory if targets contains 'data'; throttle CPU/I/O priority & use fastest gzip (-1)
     const tarArgs = ['-czf', activeBackupJob.archivePath, '--exclude=data/backups', '--exclude=*.tmp', '-C', ROOT_DIR, ...targets];
-    await execFileAsync('tar', tarArgs, { timeout: 30 * 60 * 1000 });
+    const hasCpulimit = process.platform === 'linux' && (fs.existsSync('/usr/bin/cpulimit') || fs.existsSync('/bin/cpulimit'));
+    logStep(`Packing into ${archiveFilename} (gzip=-1, priority=low${hasCpulimit ? ', cpulimit=50%' : ''})...`);
+    const cmd = hasCpulimit ? 'cpulimit' : (process.platform === 'win32' ? 'tar' : 'nice');
+    const args = hasCpulimit
+      ? ['-l', '50', '-f', '--', 'nice', '-n', '19', 'tar', ...tarArgs]
+      : (process.platform === 'win32' ? tarArgs : ['-n', '19', 'tar', ...tarArgs]);
+    await execFileAsync(cmd, args, { timeout: 30 * 60 * 1000, env: { ...process.env, GZIP: '-1' } });
 
     if (fs.existsSync(activeBackupJob.archivePath)) fs.renameSync(activeBackupJob.archivePath, archivePath);
     if (!fs.existsSync(archivePath)) {
@@ -382,11 +388,12 @@ async function performBackup({ manual = false } = {}) {
     const archiveSize = stat.size;
     const formattedSize = formatBytes(archiveSize);
     const durationSec = ((Date.now() - startedAt) / 1000).toFixed(1);
-    logStep(`Archive created successfully (${formattedSize}, ${durationSec}s).`);
+    logStep(`Archive created: ${archivePath} (${formattedSize}, ${durationSec}s).`);
 
     // Rotate local backups
     const rotation = rotateLocalBackups(localDir, retentionLimit);
-    logStep(`Local retention applied: kept ${rotation.kept} backup(s), pruned ${rotation.deleted.length} old backup(s).`);
+    const prunedHint = rotation.deleted.length ? ` (removed: ${rotation.deleted.join(', ')})` : '';
+    logStep(`Local retention (limit ${retentionLimit}): kept ${rotation.kept}, pruned ${rotation.deleted.length}${prunedHint}.`);
 
     let rcloneSuccess = null;
     let rcloneError = null;

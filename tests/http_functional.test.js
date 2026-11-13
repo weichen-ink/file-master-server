@@ -335,19 +335,6 @@ test('HTTP functional regression across platform, assets, shares and recovery', 
     assert.equal((await call(`/api/image/probe?sha256=${asset.sha256}`, { headers: api })).data.exists, false);
   });
 
-  await t.test('Config/full backups include config, index and originals, then remove temporary archives', async () => {
-    for (const scope of ['config', 'full']) {
-      const backup = await call(`/api/platform/backup/download?scope=${scope}`, { headers: admin() });
-      assert.equal(backup.status, 200, backup.text.slice(0, 200));
-      const archive = path.join(root, `${scope}-test.tar.gz`); fs.writeFileSync(archive, backup.buffer);
-      const names = execFileSync('tar', ['-tzf', archive], { encoding: 'utf8' });
-      assert.match(names, /config.yaml/); assert.match(names, /data\/sha_index.json/);
-      assert.equal(names.includes('storage/raw/'), scope === 'full');
-      if (scope === 'full') assert.ok(names.includes(tiffAsset.filename));
-      fs.unlinkSync(archive);
-    }
-  });
-
   await t.test('Saved backup listing and downloads expose completed archives only and require admin access',async()=>{
     const backupDir=path.join(root,'data','backups');fs.mkdirSync(backupDir,{recursive:true});
     const filename='filemaster-full-fixture.tar.gz',archive=Buffer.from('fixture-archive');
@@ -428,7 +415,7 @@ test('HTTP functional regression across platform, assets, shares and recovery', 
     assert.equal(exited.status, 200);
     assert.equal((await call('/api/platform/config', { headers: admin() })).status, 401);
     const actions = fs.readFileSync(path.join(root, 'data/audit.log'), 'utf8').trim().split('\n').map((line) => JSON.parse(line).action);
-    for (const action of ['initial_setup', 'upload', 'share_create', 'backup_export', 'lock', 'delete_to_trash']) assert.ok(actions.includes(action), action);
+    for (const action of ['initial_setup', 'upload', 'share_create', 'lock', 'delete_to_trash']) assert.ok(actions.includes(action), action);
     assert.equal(fs.readdirSync(path.join(STORAGE_DIR, 'tmp')).length, 0);
   });
 });

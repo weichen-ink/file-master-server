@@ -1,5 +1,12 @@
 # Changelog (file-master-server)
 
+## [1.2.0] - 2026-11-13
+
+### Admin settings layout, navigation, and backup throttling
+- Reorganize sidebar navigation into three 4-character groups (`文件管理`, `系统设置`, `运维管理`) with refreshed Chinese/English copy (`媒体处理`, `运行状态`, `链接规则`, `备份状态`).
+- Polish settings pages: split `site` and `media` sections into cards with quick-jump anchors, sticky watermark preview, sticky save bar, and two-column short fields.
+- Reorder the backup page to show Backup Status first (with richer execution logs), remove redundant config/full export modal & route, and throttle `tar` backup archives with `GZIP=-1`, `nice -n 19`, and `cpulimit` (when available).
+
 ## Unreleased
 
 ### Progressive file browsing and audit follow-up

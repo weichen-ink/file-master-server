@@ -206,12 +206,19 @@ function duration(seconds) {
 }
 
 export function mountBackup(ctx, root, signal) {
-  root.innerHTML = `<div class="section-heading"><h2>${e(t("backupActivity"))}</h2>${button("backupRun", "run-backup", "primary")}</div><div id="backup-details"></div><div class="actions">${button("viewBackups", "view-backups")}${button("viewConfigExports", "config-exports")}</div>`;
+  root.innerHTML = `<div class="section-heading"><h2>${e(t("backupActivity"))}</h2><div class="section-actions">${button("viewBackups", "view-backups")}${button("backupRun", "run-backup", "primary")}</div></div><div id="backup-details"></div>`;
   const unsubscribe = ctx.tasks.subscribe(({ backup: data }) => {
     if (!data) return;
     const last = data.lastBackup;
+    const lastMeta = data.isBackingUp
+      ? data.currentStep || ""
+      : last
+        ? [date(last.completedAt), last.archiveSizeFormatted, last.durationSec ? `${last.durationSec}s` : ""].filter(Boolean).join(" · ")
+        : t("startFirstBackup");
+    const logs = data.liveLogs || [];
+    const expandLogs = data.isBackingUp || last?.success === false;
     root.querySelector("#backup-details").innerHTML =
-      `${data.pollError ? notice(data.pollError, "warning") : ""}<div class="backup-facts"><div><span>${e(t("nextBackup"))}</span><strong>${e(data.config.enabled === false ? t("scheduleOff") : data.nextRunAt ? date(data.nextRunAt) : t("scheduleNeedsReview"))}</strong><small>${e(t("timezoneLabel"))} ${e(data.timezone || "UTC")}</small></div><div><span>${e(t("lastBackup"))}</span><strong>${e(data.isBackingUp ? t("running") : !last ? t("neverBackedUp") : t(last.success ? "completed" : "error"))}</strong><small>${e(data.isBackingUp ? data.currentStep || "" : last ? date(last.completedAt) : t("startFirstBackup"))}</small></div></div>${data.isBackingUp ? "<progress></progress>" : ""}${last?.error ? notice(last.error, "danger") : ""}${last?.rcloneError ? notice(last.rcloneError, "warning") : ""}${data.liveLogs?.length ? `<details><summary>${e(t("executionLog"))}</summary><pre class="code-panel">${e(data.liveLogs.join("\n"))}</pre></details>` : ""}`;
+      `${data.pollError ? notice(data.pollError, "warning") : ""}<div class="backup-facts"><div class="backup-fact-card"><span>${e(t("lastBackup"))}</span><strong>${e(data.isBackingUp ? t("running") : !last ? t("neverBackedUp") : t(last.success ? "completed" : "error"))}</strong><small>${e(lastMeta)}</small></div><div class="backup-fact-card"><span>${e(t("nextBackup"))}</span><strong>${e(data.config.enabled === false ? t("scheduleOff") : data.nextRunAt ? date(data.nextRunAt) : t("scheduleNeedsReview"))}</strong><small>${e(t("timezoneLabel"))} ${e(data.timezone || "UTC")}</small></div></div>${data.isBackingUp ? "<progress></progress>" : ""}${last?.error ? notice(last.error, "danger") : ""}${last?.rcloneError ? notice(last.rcloneError, "warning") : ""}${logs.length ? `<details class="backup-log-panel"${expandLogs ? " open" : ""}><summary>${e(t("executionLog"))} (${logs.length})</summary><pre class="code-panel">${e(logs.join("\n"))}</pre></details>` : ""}`;
     const run = root.querySelector('[data-action="run-backup"]');
     run.disabled = Boolean(data.isBackingUp);
     run.setAttribute("aria-disabled", String(Boolean(data.isBackingUp)));
@@ -246,11 +253,6 @@ export function mountBackup(ctx, root, signal) {
           ),
         );
       },
-      "config-exports": () =>
-        dialog(
-          t("viewConfigExports"),
-          `<p>${e(t("exportConfigHelp"))}</p><div class="export-choice"><strong>${e(t("configAndIndex"))}</strong><a class="button secondary" download href="/api/platform/backup/download?scope=config">${e(t("exportConfig"))}</a></div><div class="export-choice"><div><strong>${e(t("freshFullBackup"))}</strong><p>${e(t("freshFullHelp"))}</p></div><a class="button secondary" download href="/api/platform/backup/download?scope=full">${e(t("exportFull"))}</a></div>`,
-        ),
     },
     signal,
   );

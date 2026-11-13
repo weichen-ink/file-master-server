@@ -30,14 +30,17 @@ const samplePreview = () => `<aside class="watermark-preview"><h3>${e(t("waterma
 const watermarkFontTipHtml = () => `<div class="watermark-font-tip notice" id="watermark-font-tip"><div class="watermark-font-tip-header"><strong>💡 ${e(t("watermarkFontTipTitle"))}</strong></div><p class="watermark-font-tip-text">${e(t("watermarkFontTipDesc"))}</p><div class="watermark-font-tip-cmds"><div class="watermark-cmd-row"><span class="watermark-cmd-label">Debian / Ubuntu:</span><div class="watermark-cmd-code"><code>apt install -y fonts-noto-cjk fonts-wqy-zenhei</code><button type="button" class="icon-button" data-action="copy-font-cmd" data-cmd="apt install -y fonts-noto-cjk fonts-wqy-zenhei" title="${e(t("copy"))}" aria-label="${e(t("copy"))}">${icon("copy")}</button></div></div><div class="watermark-cmd-row"><span class="watermark-cmd-label">Alpine (Docker):</span><div class="watermark-cmd-code"><code>apk add font-noto-cjk</code><button type="button" class="icon-button" data-action="copy-font-cmd" data-cmd="apk add font-noto-cjk" title="${e(t("copy"))}" aria-label="${e(t("copy"))}">${icon("copy")}</button></div></div></div></div>`;
 function sectionFields(name,state,ctx) {
   const render=keys=>keys.map(key=>schemas[name].find(def=>def.key===key)).filter(Boolean).map(def=>fieldHtml(def,state.draft[def.key])).join('');
-  const section=(title,keys,extra="")=>`<section class="form-section"><h2>${e(t(title))}</h2><div class="fields">${render(keys)}${extra}</div></section>`;
-  if(name==='site') return section('siteIdentity',['site_name'], `<div class="field"><label for="appearance-select">${e(t('theme'))}</label><select id="appearance-select" data-theme-select>${[['auto','themeAuto'],['light','themeLight'],['dark','themeDark']].map(([value,label])=>`<option value="${value}" ${getTheme()===value?'selected':''}>${e(t(label))}</option>`).join('')}</select></div>${render(['base_url','port'])}`) + section('accountAccess',['username','password','admin_path','max_login_attempts','api_token']) + section('fileLinks',['raw_secret_path','pub_secret_path','card_copy_format','rename_alias_days']) + `<section class="form-section monitoring-settings"><h2>${e(t('monitorTitle'))}</h2><p class="muted">${e(t('monitorAccessHelp'))}</p><div class="fields">${render(['monitor_enabled'])}</div><div id="monitor-details"><h3>${e(t('monitorOutput'))}</h3><div class="monitor-options">${render(['monitor_service','monitor_resources','monitor_storage','monitor_files','monitor_backup'])}</div><div class="field monitor-endpoint"><label for="monitor-url">${e(t('monitorEndpoint'))}</label><div class="input-row"><input id="monitor-url" readonly value="${e(ctx.config.base_url+'/api/health')}">${button('copy','copy-monitor-url','secondary','copy')}</div><small class="muted">${e(t('monitorAuthHelp'))}</small></div><div class="monitor-preview-action">${button('monitorPreview','preview-monitor')}<small id="monitor-preview-hint" class="muted"></small></div></div></section>`;
+  const section=(title,keys,extra="",id="")=>`<section ${id?`id="${id}" `:""}class="panel form-section"><h2>${e(t(title))}</h2><div class="fields">${render(keys)}${extra}</div></section>`;
+  if(name==='site') {
+    const nav=`<nav class="settings-anchors" aria-label="${e(t('site'))}">${[['sec-identity','siteIdentity'],['sec-account','accountAccess'],['sec-links','fileLinks'],['sec-monitor','monitorTitle']].map(([id,key])=>`<a class="settings-anchor" href="#${id}" data-anchor="${id}">${e(t(key))}</a>`).join('')}</nav>`;
+    return nav + section('siteIdentity',['site_name'], `<div class="field"><label for="appearance-select">${e(t('theme'))}</label><select id="appearance-select" data-theme-select>${[['auto','themeAuto'],['light','themeLight'],['dark','themeDark']].map(([value,label])=>`<option value="${value}" ${getTheme()===value?'selected':''}>${e(t(label))}</option>`).join('')}</select></div>${render(['base_url','port'])}`,'sec-identity') + section('accountAccess',['username','password','admin_path','max_login_attempts','api_token'],'','sec-account') + section('fileLinks',['raw_secret_path','pub_secret_path','card_copy_format','rename_alias_days'],'','sec-links') + `<section id="sec-monitor" class="panel form-section monitoring-settings"><h2>${e(t('monitorTitle'))}</h2><p class="muted">${e(t('monitorAccessHelp'))}</p><div class="fields">${render(['monitor_enabled'])}</div><div id="monitor-details"><h3>${e(t('monitorOutput'))}</h3><div class="monitor-options">${render(['monitor_service','monitor_resources','monitor_storage','monitor_files','monitor_backup'])}</div><div class="field monitor-endpoint"><label for="monitor-url">${e(t('monitorEndpoint'))}</label><div class="input-row"><input id="monitor-url" readonly value="${e(ctx.config.base_url+'/api/health')}">${button('copy','copy-monitor-url','secondary','copy')}</div><small class="muted">${e(t('monitorAuthHelp'))}</small></div><div class="monitor-preview-action">${button('monitorPreview','preview-monitor')}<small id="monitor-preview-hint" class="muted"></small></div></div></section>`;
+  }
   if(name==='media') {
     const wmFields = schemas.watermark.map(def => {
       const html = fieldHtml(def, state.draft[def.key]);
       return def.key === 'watermark_font' ? html + watermarkFontTipHtml() : html;
     }).join('');
-    return section('compression',schemas.compression.map(def=>def.key)) + `<section class="form-section"><h2>${e(t('watermark'))}</h2><div class="watermark-workspace"><div class="fields">${wmFields}</div>${samplePreview()}</div></section>`;
+    return section('compression',schemas.compression.map(def=>def.key)) + `<section class="panel form-section"><h2>${e(t('watermark'))}</h2><div class="watermark-workspace"><div class="fields">${wmFields}</div>${samplePreview()}</div></section>`;
   }
   return `<div class="fields">${schemas[name].map(def=>fieldHtml(def,state.draft[def.key])).join('')}</div>`;
 }
@@ -60,9 +63,19 @@ export async function mountSettings(ctx, root, route, signal) {
   if (name === "advanced") return mountAdvanced(ctx, root, signal);
   if (name === "updates") return ctx.mountUpdates(root, signal);
   const state = ctx.drafts.section(name, sectionValues(name, ctx.config));
+  const stacked = name === "site" || name === "media";
+  const formHtml = `<form id="section-form" class="${stacked ? "settings-form-stack" : "panel"}" novalidate>${name === "backup" ? `<h2>${e(t("backupSettings"))}</h2>` : ""}${sectionFields(name,state,ctx)}<div id="section-error" role="alert"></div><footer class="save-bar"><strong id="save-state"></strong><div class="actions">${button("discard", "discard")}<button class="button primary" type="submit" id="save-section">${e(t("save"))}</button></div></footer></form>`;
   root.innerHTML =
     heading(name, help) +
-    `<div class="settings-layout"><div class="settings-content"><form id="section-form" class="panel" novalidate>${name === "backup" ? `<h2>${e(t("backupSettings"))}</h2>` : ""}${sectionFields(name,state,ctx)}<div id="section-error" role="alert"></div><footer class="save-bar"><strong id="save-state"></strong><div class="actions">${button("discard", "discard")}<button class="button primary" type="submit" id="save-section">${e(t("save"))}</button></div></footer></form>${name === "backup" ? `<section class="panel" id="backup-runtime"></section><section class="panel restore-guide"><h2>${e(t("restoreGuide"))}</h2><p>${e(t("restorePlain"))}</p></section>` : ""}</div></div>`;
+    `<div class="settings-layout"><div class="settings-content">${name === "backup" ? `<section class="panel" id="backup-runtime"></section>${formHtml}<section class="panel restore-guide"><h2>${e(t("restoreGuide"))}</h2><p>${e(t("restorePlain"))}</p></section>` : formHtml}</div></div>`;
+  if (name === "site") {
+    for (const link of root.querySelectorAll("[data-anchor]")) {
+      link.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        root.querySelector(`#${link.dataset.anchor}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    }
+  }
   let schedulePreview = () => {};
   const form = root.querySelector("#section-form");
   const sync = () => {
