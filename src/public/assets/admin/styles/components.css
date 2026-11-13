@@ -78,22 +78,68 @@
   background: var(--brand-subtle);
   color: var(--brand);
 }
+.file-card {
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
 .file-caption {
-  padding: 12px 44px 12px 12px;
+  padding: 12px 14px;
 }
 .file-caption h3 {
   min-height: 0;
   padding: 0;
+  margin: 0;
   display: block;
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.4;
+  overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 .file-caption p {
-  margin-top: 3px;
-  gap: 6px;
-  line-height: 1.4;
+  margin: 5px 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
-.card-copy { bottom: 15px; right: 8px; width: 30px; min-width: 30px; min-height: 30px; height: 30px; border-radius: 8px; }
+.card-copy {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  bottom: auto;
+  width: 30px;
+  min-width: 30px;
+  min-height: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  border: 1px solid var(--border);
+  color: var(--text);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+  opacity: 0;
+  transition: opacity 0.15s ease, background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.file-card:hover .card-copy,
+.file-card:focus-within .card-copy {
+  opacity: 1;
+}
+.card-copy:hover {
+  background: var(--surface);
+  border-color: var(--brand);
+  color: var(--brand);
+}
+@media (hover: none) {
+  .card-copy {
+    opacity: 1;
+  }
+}
 .trash-collection {
   --columns: minmax(160px, 1.4fr) minmax(90px, 0.6fr) minmax(130px, 1fr)
     minmax(185px, 1fr);

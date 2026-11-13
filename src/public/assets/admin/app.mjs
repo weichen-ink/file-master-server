@@ -63,7 +63,7 @@ export async function start() {
     const data = await ctx.api.status();
     if (data.endpoints) delete data.endpoints.apiToken;
     ctx.status = data;
-    document.title = (data.siteName || "File Master") + " · File Master";
+    document.title = data.siteName || "File Master";
     document.getElementById("mobile-heading").textContent =
       data.siteName || "File Master";
     document
