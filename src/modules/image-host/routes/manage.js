@@ -87,7 +87,32 @@ function registerManageRoutes(app) {
   // 4. Console & File Master Plugin Management API
   app.get('/api/modules/image-host/list', requireApiOrAdmin, async (req, res) => {
     try {
-      res.json(await scanAllImages(getConfig()));
+      const data = await scanAllImages(getConfig());
+      const hasQuery = req.query.q !== undefined || req.query.limit !== undefined || req.query.offset !== undefined;
+      if (!hasQuery) {
+        return res.json(data);
+      }
+      const q = String(req.query.q || '').trim().toLowerCase();
+      const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
+      const rawLimit = parseInt(req.query.limit, 10);
+      const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 500) : 0;
+
+      let images = data.images || [];
+      if (q) {
+        images = images.filter((item) => {
+          const name = String(item.filename || '').toLowerCase();
+          const rel = `${item.year || ''}/${item.month || ''}/${name}`;
+          return name.includes(q) || rel.includes(q);
+        });
+      }
+      const totalCount = images.length;
+      const sliced = limit > 0 ? images.slice(offset, offset + limit) : images.slice(offset);
+      return res.json({
+        images: sliced,
+        totalCount,
+        optimizationEnabled: data.optimizationEnabled,
+        stats: data.stats
+      });
     } catch (err) {
       res.status(500).json({ error: 'Unable to list assets: ' + err.message });
     }
