@@ -220,8 +220,20 @@ function registerShareModule(app) {
   });
 }
 
+function flushSharesMap() {
+  if (!flushTimer || !cachedSharesMap) return;
+  clearTimeout(flushTimer);
+  flushTimer = null;
+  try {
+    saveSharesMap(cachedSharesMap);
+  } catch (err) {
+    console.warn('[Share] Failed to flush shares.json:', err.message);
+  }
+}
+
 module.exports = {
   saveSharesMap,
+  flushSharesMap,
   registerShareModule,
   createShareRecord,
   getSharesMap

@@ -22,6 +22,16 @@ const { invalidateScanCache } = require('../catalog');
 const { processAndCacheImage, ensureThumbnail, ensureTranscodedPreviewJpeg } = require('../processor');
 const { recordHit } = require('../stats');
 
+function isRealPathWithin(filePath, rootDir) {
+  try {
+    const realFile = fs.realpathSync(filePath);
+    const realRoot = fs.realpathSync(rootDir);
+    return isPathWithin(realFile, realRoot);
+  } catch {
+    return false;
+  }
+}
+
 /** Public optimized-image route and secret-path raw file route. */
 function registerPublicRoutes(app) {
   // 2. Public / Optimized route: GET /:pubSecretPath/:year/:month/:filename
@@ -29,7 +39,7 @@ function registerPublicRoutes(app) {
     try {
       const cfg = getConfig();
       const pubSecret = cfg.image_host?.pub_secret_path || 'pub';
-      if (req.params.pubSecretPath && req.params.pubSecretPath !== pubSecret && req.params.pubSecretPath !== 'pub') {
+      if (req.params.pubSecretPath && req.params.pubSecretPath !== pubSecret) {
         if (typeof next === 'function') return next();
         return res.status(404).send('Not Found');
       }
@@ -44,7 +54,7 @@ function registerPublicRoutes(app) {
       }
 
       const rawFilePath = findRawFile(year, month, filename);
-      if (!rawFilePath || !isPathWithin(rawFilePath, RAW_DIR)) {
+      if (!rawFilePath || !isPathWithin(rawFilePath, RAW_DIR) || !isRealPathWithin(rawFilePath, RAW_DIR)) {
         return res.status(404).send('Not Found');
       }
 
@@ -106,7 +116,6 @@ function registerPublicRoutes(app) {
     }
   };
 
-  app.get('/pub/:year/:month/:filename', handleOptimizedPublicRequest);
   app.get('/:pubSecretPath/:year/:month/:filename', handleOptimizedPublicRequest);
 
   // 3. Raw file access via secret path: GET /:rawSecretPath/:year/:month/:filename
@@ -125,7 +134,7 @@ function registerPublicRoutes(app) {
       }
 
       const rawFilePath = findRawFile(year, month, filename, true);
-      if (!rawFilePath || !isPathWithin(rawFilePath, RAW_DIR)) {
+      if (!rawFilePath || !isPathWithin(rawFilePath, RAW_DIR) || !isRealPathWithin(rawFilePath, RAW_DIR)) {
         return res.status(404).send('Not Found');
       }
 

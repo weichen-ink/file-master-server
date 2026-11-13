@@ -5,8 +5,8 @@ const os = require('node:os');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { Readable } = require('node:stream');
-const { UPLOAD_TMP_DIR, isConfigInitialized } = require('../src/core/config');
-const { SETUP_TOKEN, requireSetupToken, createSessionCookie } = require('../src/core/security');
+const { UPLOAD_TMP_DIR } = require('../src/core/config');
+const { createSessionCookie } = require('../src/core/security');
 const { acceptSingleUpload, moveFileToTrash } = require('../src/modules/image-host');
 
 test('Gallery treats uploaded filenames as data without executable click handlers', async () => {
@@ -93,23 +93,7 @@ test('Failed trash move keeps the original; successful move removes it', async (
   }
 });
 
-test('First-time setup checks initialized state without requiring token; HTTPS cookies are Secure', () => {
-  const makeRes = () => ({
-    statusCode: 200,
-    status(code) { this.statusCode = code; return this; },
-    json(data) { this.data = data; return this; }
-  });
-  let allowed = false;
-  const res = makeRes();
-  requireSetupToken({ headers: {} }, res, () => { allowed = true; });
-  // If config is already initialized on disk, 403 is returned; if uninitialized, next() is called
-  if (isConfigInitialized()) {
-    assert.equal(res.statusCode, 403);
-    assert.equal(allowed, false);
-  } else {
-    assert.equal(allowed, true);
-  }
-
+test('HTTPS cookies are Secure while HTTP cookies omit Secure flag', () => {
   assert.match(createSessionCookie({ secure: true }, 'token'), /; Secure(?:;|$)/);
   assert.doesNotMatch(createSessionCookie({ secure: false }, 'token'), /; Secure(?:;|$)/);
 });

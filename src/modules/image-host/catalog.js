@@ -44,8 +44,9 @@ function scanAllImages(cfg, forceRefresh = false) {
   const generation = scanGeneration;
   const key = `${cfgKey}:${generation}`;
   if (pendingScan?.key === key) return pendingScan.promise;
-  // Catalog scans also update the hash index, so share the mutation queue.
-  const promise = mutateAssets(() => collectImages(cfg)).then((result) => {
+  // Run directory walk concurrently without holding the asset mutation lock;
+  // mutations bump scanGeneration via invalidateScanCache() to discard stale results.
+  const promise = collectImages(cfg).then((result) => {
     if (generation === scanGeneration) {
       cachedScanData = result;
       cachedScanTime = Date.now();

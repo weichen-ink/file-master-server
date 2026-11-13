@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const os = require('node:os');
-const { execFile } = require('node:child_process');
+const { spawn } = require('node:child_process');
 const {
   ROOT_DIR,
   STORAGE_DIR,
@@ -27,7 +27,6 @@ const {
   recordLoginFailure,
   clearLoginFailures,
   createSessionToken,
-  requireSetupToken,
   createSessionCookie,
   revokeSessionToken,
   isAdminAuthenticated,
@@ -199,7 +198,7 @@ app.get('/api/platform/setup-defaults', (req, res) => {
   });
 });
 
-app.post('/api/platform/setup', requireSetupToken, (req, res) => {
+app.post('/api/platform/setup', (req, res) => {
   if (isConfigInitialized()) {
     return res.status(403).json({ error: 'Server is already initialized' });
   }
@@ -453,9 +452,6 @@ app.get('/api/platform/backup/download', requireAdmin, (req, res) => {
   const scope = req.query.scope === 'full' ? 'full' : 'config';
   const dateStr = new Date().toISOString().slice(0, 10);
   const archiveName = `filemaster-backup-${scope}-${dateStr}.tar.gz`;
-  fs.mkdirSync(UPLOAD_TMP_DIR, { recursive: true });
-  const tmpArchivePath = path.join(UPLOAD_TMP_DIR, `${Date.now()}_${crypto.randomBytes(6).toString('hex')}.tar.gz`);
-
   const targets = [];
   const backupCandidates = new Set(['config.yaml', 'config.example.yaml', 'wm-light.png', 'wm-dark.png', 'watermark.png', 'watermark-dark.png', 'data']);
   try {
@@ -483,27 +479,49 @@ app.get('/api/platform/backup/download', requireAdmin, (req, res) => {
     return res.status(400).json({ error: 'No backup targets found on disk' });
   }
 
-  execFile('tar', ['-czf', tmpArchivePath, '-C', ROOT_DIR, ...targets], { timeout: 120000 }, (err) => {
-    if (err || !fs.existsSync(tmpArchivePath)) {
-      if (fs.existsSync(tmpArchivePath)) {
-        try { fs.unlinkSync(tmpArchivePath); } catch {}
-      }
-      return res.status(500).json({ error: 'Failed to create tar.gz archive: ' + (err ? err.message : 'unknown error') });
+  appendAuditLog({
+    action: 'backup_export',
+    ip: getClientIp(req),
+    scope
+  });
+
+  res.setHeader('Content-Type', 'application/gzip');
+  res.setHeader('Content-Disposition', `attachment; filename="${archiveName}"`);
+
+  const tarProc = spawn('tar', ['-czf', '-', '-C', ROOT_DIR, ...targets], {
+    stdio: ['ignore', 'pipe', 'pipe']
+  });
+
+  let stderrText = '';
+  tarProc.stderr.on('data', (chunk) => {
+    if (stderrText.length < 2048) stderrText += chunk.toString();
+  });
+
+  const abortTar = () => {
+    if (!tarProc.killed) tarProc.kill('SIGTERM');
+  };
+  req.on('close', abortTar);
+
+  tarProc.on('error', (err) => {
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Failed to create tar.gz archive: ' + err.message });
+    } else {
+      res.destroy(err);
     }
+  });
 
-    appendAuditLog({
-      action: 'backup_export',
-      ip: getClientIp(req),
-      scope
-    });
+  tarProc.stdout.pipe(res);
 
-    res.setHeader('Content-Type', 'application/gzip');
-    res.setHeader('Content-Disposition', `attachment; filename="${archiveName}"`);
-    const stream = fs.createReadStream(tmpArchivePath);
-    stream.on('close', () => {
-      try { if (fs.existsSync(tmpArchivePath)) fs.unlinkSync(tmpArchivePath); } catch {}
-    });
-    stream.pipe(res);
+  tarProc.on('close', (code) => {
+    req.off('close', abortTar);
+    if (code !== 0 && code !== null) {
+      console.error('[BackupExport] tar exited with code', code, stderrText);
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Failed to create tar.gz archive: ' + (stderrText || `exit ${code}`) });
+      } else if (!res.writableEnded) {
+        res.end();
+      }
+    }
   });
 });
 
@@ -691,5 +709,23 @@ function startServer(port, retriesLeft = 6) {
 
 // Importing the app allows integration tests to exercise real HTTP middleware on
 // an ephemeral loopback port. CLI startup keeps the existing behavior.
-if (require.main === module) startServer(PORT);
+function flushPendingState() {
+  try { require('./modules/image-host/stats').flushAccessStats(); } catch {}
+  try { require('./modules/share').flushSharesMap(); } catch {}
+}
+
+if (require.main === module) {
+  for (const sig of ['SIGINT', 'SIGTERM']) {
+    process.on(sig, () => {
+      flushPendingState();
+      if (httpServer) {
+        httpServer.close(() => process.exit(0));
+        setTimeout(() => process.exit(0), 2000).unref();
+      } else {
+        process.exit(0);
+      }
+    });
+  }
+  startServer(PORT);
+}
 module.exports = { app };

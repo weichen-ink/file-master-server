@@ -13,7 +13,6 @@ assert.equal(process.env.FILE_MASTER_TEST_ROOT, root, 'Run npm test: HTTP tests 
 // Exercise real router order, middleware, multipart parsing, cookies and response bytes.
 test('HTTP functional regression across platform, assets, shares and recovery', async (t) => {
   const { app } = require('../src/server');
-  const { SETUP_TOKEN } = require('../src/core/security');
   const { CONFIG_PATH, STORAGE_DIR, getConfig } = require('../src/core/config');
   const server = app.listen(0, '127.0.0.1');
   await once(server, 'listening');

@@ -7,14 +7,7 @@ const { DATA_DIR, getConfig, readCriticalJsonData, writeJsonData, isRecord, isCo
 const ipFailures = new Map();
 const BAN_DURATION_MS = 24 * 60 * 60 * 1000; // 24-hour lockout
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30-day session retention
-const SETUP_TOKEN = '';
-
-function requireSetupToken(req, res, next) {
-  if (isConfigInitialized()) {
-    return res.status(403).json({ error: 'Server is already initialized' });
-  }
-  next();
-}
+const MAX_IP_FAILURES = 2000;
 
 function createSessionCookie(req, token, maxAge = '') {
   return `filemaster_session=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax${req.secure ? '; Secure' : ''}${maxAge}`;
@@ -148,23 +141,39 @@ function checkIpBan(ip) {
   return { banned: false, remainingAttempts: Math.max(0, max - record.count) };
 }
 
+function pruneIpFailures(now = Date.now()) {
+  if (ipFailures.size <= 1000) return;
+  for (const [k, v] of ipFailures.entries()) {
+    const expiredBan = v.bannedUntil && v.bannedUntil <= now;
+    const staleFailure = !v.bannedUntil && v.lastAttempt && (now - v.lastAttempt > BAN_DURATION_MS);
+    if (expiredBan || staleFailure) ipFailures.delete(k);
+  }
+  while (ipFailures.size > MAX_IP_FAILURES) {
+    const oldestKey = ipFailures.keys().next().value;
+    if (oldestKey === undefined) break;
+    ipFailures.delete(oldestKey);
+  }
+}
+
 /**
  * Records a failed authentication attempt; triggers a 24h ban if threshold is exceeded.
  */
 function recordLoginFailure(ip) {
   const max = getConfig().max_login_attempts;
+  const now = Date.now();
   const record = ipFailures.get(ip) || { count: 0, bannedUntil: 0 };
   record.count += 1;
-  record.lastAttempt = Date.now();
+  record.lastAttempt = now;
 
   if (record.count >= max) {
-    record.bannedUntil = Date.now() + BAN_DURATION_MS;
+    record.bannedUntil = now + BAN_DURATION_MS;
     console.warn(`[Security] IP ${ip} failed ${record.count} consecutive attempts; banned for 24 hours`);
     ipFailures.set(ip, record);
     syncPersistedBans();
   } else {
     ipFailures.set(ip, record);
   }
+  pruneIpFailures(now);
   return Math.max(0, max - record.count);
 }
 
@@ -194,18 +203,50 @@ function createSessionToken(cfg) {
   return `${payload}.${sig}`;
 }
 
-// Session revocation tracking
+// Session revocation tracking (mtime-cached Set + expiration pruning)
+const REVOKED_SESSIONS_PATH = path.join(DATA_DIR, 'revoked_sessions.json');
+let lastRevokedMtimeMs = -1;
+let cachedRevokedSet = new Set();
 const validRevocations = value => Array.isArray(value) && value.every(token => typeof token === 'string');
-function isSessionRevoked(token) {
-  return readCriticalJsonData('revoked_sessions', [], validRevocations).includes(token);
+
+function isRevokedTokenExpired(token, now = Date.now()) {
+  try {
+    const [payload] = String(token || '').split('.');
+    if (!payload) return false;
+    const data = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+    return Number.isFinite(data?.exp) && data.exp <= now;
+  } catch {
+    return false;
+  }
 }
+
+function getRevokedSessionSet() {
+  const mtimeMs = fs.existsSync(REVOKED_SESSIONS_PATH) ? fs.statSync(REVOKED_SESSIONS_PATH).mtimeMs : 0;
+  if (mtimeMs === lastRevokedMtimeMs) return cachedRevokedSet;
+  const list = readCriticalJsonData('revoked_sessions', [], validRevocations);
+  cachedRevokedSet = new Set(list);
+  lastRevokedMtimeMs = mtimeMs;
+  return cachedRevokedSet;
+}
+
+function isSessionRevoked(token) {
+  return getRevokedSessionSet().has(token);
+}
+
 function revokeSessionToken(token) {
   if (!token) return;
-  const list = readCriticalJsonData('revoked_sessions', [], validRevocations);
+  const now = Date.now();
+  const list = readCriticalJsonData('revoked_sessions', [], validRevocations)
+    .filter((t) => !isRevokedTokenExpired(t, now));
   if (!list.includes(token)) {
     list.push(token);
-    if (list.length > 500) list.shift();
-    writeJsonData('revoked_sessions', list);
+  }
+  writeJsonData('revoked_sessions', list);
+  cachedRevokedSet = new Set(list);
+  try {
+    lastRevokedMtimeMs = fs.existsSync(REVOKED_SESSIONS_PATH) ? fs.statSync(REVOKED_SESSIONS_PATH).mtimeMs : 0;
+  } catch {
+    lastRevokedMtimeMs = -1;
   }
 }
 
@@ -310,8 +351,6 @@ function createRateLimiter({ windowMs = 60 * 1000, max = 30, message = 'Too many
 }
 
 module.exports = {
-  SETUP_TOKEN,
-  requireSetupToken,
   createSessionCookie,
   hashPassword,
   verifyPassword,
