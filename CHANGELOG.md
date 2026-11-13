@@ -1,5 +1,10 @@
 # Changelog (file-master-server)
 
+## [1.2.2] - 2026-11-13
+
+### Version alignment
+- Align server release version to `1.2.2` alongside the Obsidian plugin.
+
 ## [1.2.1] - 2026-11-13
 
 ### Admin console UI & modal polish
