@@ -455,6 +455,33 @@ Object.assign(messages, {
   ],
   restored: ["文件已恢复", "File restored"],
   deletedForever: ["文件已永久删除", "File permanently deleted"],
+  selectAll: ["全选", "Select all"],
+  clearSelection: ["取消选择", "Clear selection"],
+  trashSummary: ["共 {count} 项 · {size}", "{count} items · {size}"],
+  selectedSummary: ["已选 {count} 项 · {size}", "{count} selected · {size}"],
+  batchRestore: ["批量恢复", "Restore selected"],
+  batchDeleteForever: ["批量永久删除", "Delete selected"],
+  emptyTrash: ["清空回收站", "Empty trash"],
+  batchDeleteConfirm: [
+    "永久删除所选 {count} 个文件（共 {size}）？此操作无法撤销。",
+    "Permanently delete {count} selected items ({size})? This cannot be undone.",
+  ],
+  emptyTrashConfirm: [
+    "清空回收站中的全部 {count} 个文件（共 {size}）？此操作无法撤销。",
+    "Empty all {count} items ({size}) from trash? This cannot be undone.",
+  ],
+  batchRestoredResult: [
+    "已恢复 {count} 个文件",
+    "Restored {count} items",
+  ],
+  batchDeletedResult: [
+    "已永久删除 {count} 个文件",
+    "Permanently deleted {count} items",
+  ],
+  batchPartialFailure: [
+    "成功 {ok} 项，失败 {failed} 项",
+    "{ok} succeeded, {failed} failed",
+  ],
   trashEmpty: ["回收站为空", "Trash is empty"],
   trashEmptyHelp: [
     "移入回收站的文件会显示在这里。",

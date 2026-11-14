@@ -65,9 +65,17 @@ const paths = {
   tasks:
     '<rect x="4" y="4" width="16" height="17" rx="2"/><path d="M8 2v4h8V2M8 11h8M8 15h6"/>',
   logout: '<path d="M9 3H4v18h5m6-14 5 5-5 5M8 12h12"/>',
+  calendar:
+    '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+  download:
+    '<path d="M12 3v13m-5-5 5 5 5-5M3 16v4a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1v-4"/>',
+  hardDrive:
+    '<rect x="2" y="13" width="20" height="8" rx="2"/><path d="M5.5 13 7 6a2 2 0 0 1 2-1.5h6A2 2 0 0 1 17 6l1.5 7M6 17h.01M10 17h.01"/>',
 };
 export const icon = (name) =>
   `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name] || paths.file}</svg>`;
+export const metaItem = (symbol, text, { cls = "", title = "" } = {}) =>
+  `<span class="${cls ? `meta-item ${e(cls)}` : "meta-item"}"${title ? ` title="${e(title)}"` : ""}>${symbol ? icon(symbol) : ""}<span>${e(text)}</span></span>`;
 export const button = (label, action, variant = "secondary", symbol = "", attrs = "") => {
   const iconOnly = variant.split(" ").includes("icon-button");
   return `<button type="button" class="${iconOnly ? variant : "button " + variant}" data-action="${e(action)}" ${iconOnly ? `title="${e(t(label))}" aria-label="${e(t(label))}"` : ""} ${attrs}>${symbol ? icon(symbol) : ""}${iconOnly ? "" : e(t(label))}</button>`;

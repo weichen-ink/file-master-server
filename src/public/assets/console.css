@@ -163,12 +163,13 @@ pre {
   box-shadow: var(--shadow-card);
 }
 .button.danger {
-  color: var(--danger);
-  background: var(--danger-bg);
-  border-color: var(--danger-bg);
+  color: #fff;
+  background: var(--danger-solid, #b42338);
+  border-color: var(--danger-solid, #b42338);
 }
 .button.danger:hover {
-  border-color: var(--danger);
+  background: color-mix(in srgb, var(--danger-solid, #b42338) 88%, black);
+  border-color: color-mix(in srgb, var(--danger-solid, #b42338) 88%, black);
 }
 .icon-button {
   display: inline-flex;

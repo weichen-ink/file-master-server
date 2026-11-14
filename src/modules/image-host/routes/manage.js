@@ -57,6 +57,75 @@ function registerManageRoutes(app) {
     } catch(error) { res.status(error.status || (error.code === 'ENOENT' ? 404 : 422)).json({error: error.status ? error.message : 'Unable to preview this file'}); }
     finally { if (dir) fs.rmSync(dir,{recursive:true,force:true}); }
   });
+  const normalizeBatchIds = (body) => {
+    const raw = body && Array.isArray(body.ids) ? body.ids : null;
+    if (!raw) throw Object.assign(new Error('Expected ids array'), { status: 400 });
+    return [...new Set(raw.map((id) => String(id || '').trim()).filter(Boolean))];
+  };
+  app.post('/api/modules/image-host/trash/batch/restore', requireApiOrAdmin, serializeMutation(async (req, res) => {
+    try {
+      const ids = normalizeBatchIds(req.body);
+      const restored = [];
+      const failed = [];
+      for (const id of ids) {
+        try {
+          const result = await restoreTrash(id);
+          restored.push({ id, ...result });
+        } catch (error) {
+          failed.push({ id, error: error.message, status: error.status || 500 });
+        }
+      }
+      if (restored.length) {
+        invalidateScanCache();
+        appendAuditLog({ action: 'batch_restore_from_trash', ip: getClientIp(req), count: restored.length, failedCount: failed.length });
+      }
+      res.json({ restored, failed });
+    } catch (error) {
+      res.status(error.status || 500).json({ error: error.message });
+    }
+  }));
+  app.post('/api/modules/image-host/trash/batch/delete', requireApiOrAdmin, serializeMutation(async (req, res) => {
+    try {
+      const ids = normalizeBatchIds(req.body);
+      const deleted = [];
+      const failed = [];
+      for (const id of ids) {
+        try {
+          deleteTrash(id);
+          deleted.push({ id });
+        } catch (error) {
+          failed.push({ id, error: error.message, status: error.status || 500 });
+        }
+      }
+      if (deleted.length) {
+        appendAuditLog({ action: 'batch_permanent_delete', ip: getClientIp(req), count: deleted.length, failedCount: failed.length });
+      }
+      res.json({ deleted, failed });
+    } catch (error) {
+      res.status(error.status || 500).json({ error: error.message });
+    }
+  }));
+  app.post('/api/modules/image-host/trash/empty', requireApiOrAdmin, serializeMutation(async (req, res) => {
+    try {
+      const items = publicTrashEntries();
+      const deleted = [];
+      const failed = [];
+      for (const item of items) {
+        try {
+          deleteTrash(item.id);
+          deleted.push({ id: item.id });
+        } catch (error) {
+          failed.push({ id: item.id, error: error.message, status: error.status || 500 });
+        }
+      }
+      if (deleted.length) {
+        appendAuditLog({ action: 'empty_trash', ip: getClientIp(req), count: deleted.length, failedCount: failed.length });
+      }
+      res.json({ deleted, failed });
+    } catch (error) {
+      res.status(error.status || 500).json({ error: error.message });
+    }
+  }));
   app.post('/api/modules/image-host/trash/:id/restore', requireApiOrAdmin, serializeMutation(async (req,res) => {
     try { const result=await restoreTrash(req.params.id); invalidateScanCache(); appendAuditLog({action:'restore_from_trash',ip:getClientIp(req),...result}); res.json(result); }
     catch(error) { res.status(error.status || 500).json({error:error.message}); }

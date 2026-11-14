@@ -2,6 +2,7 @@ import { t, getLocale } from "../locale.mjs";
 import {
   e,
   icon,
+  metaItem,
   button,
   heading,
   notice,
@@ -44,7 +45,7 @@ export async function mountShares(ctx, root, route, signal) {
       items.map((i) => ({
         file: fileIdentity(fileFor(i) || i, {
           href: i.fileExists === false ? '' : detailHref(i),
-          summary: `<span>${e(t('shareColExpires'))} ${e(i.expiresAt ? compactDate(i.expiresAt) : t('shareNeverExpire'))}</span><span>${e(t('downloadCount',{count:i.downloads}))}${i.maxDownloads ? ' / '+e(i.maxDownloads) : ''}</span><span class="collection-status ${state(i) === 'active' ? 'success' : ''}">${e(t(state(i)))}</span>`,
+          summary: `${metaItem("clock", i.expiresAt ? compactDate(i.expiresAt) : t("shareNeverExpire"))}${metaItem("download", `${t("downloadCount", { count: i.downloads })}${i.maxDownloads ? " / " + i.maxDownloads : ""}`)}<span class="collection-status ${state(i) === "active" ? "success" : ""}">${e(t(state(i)))}</span>`,
           thumbnail: fileFor(i)?.isImage ? `<img src="${e(fileFor(i).thumbnailUrl || fileFor(i).rawPreviewPath)}" alt="" loading="lazy">` : '',
         }),
         expires: i.expiresAt ? `<time class="share-expiry" datetime="${e(new Date(i.expiresAt).toISOString())}">${e(compactDate(i.expiresAt))}</time>` : e(t('shareNeverExpire')),
@@ -80,17 +81,60 @@ export async function mountShares(ctx, root, route, signal) {
 export async function mountTrash(ctx, root, route, signal) {
   const { items } = await ctx.api.trash();
   if (signal.aborted) return;
+
+  const selected = new Set();
+  let lastIndex = null;
+  let busy = false;
+  const totalBytes = items.reduce((sum, item) => sum + (Number(item.size) || 0), 0);
+
+  const selectedItems = () => items.filter((item) => selected.has(item.id));
+  const selectedBytes = () => selectedItems().reduce((sum, item) => sum + (Number(item.size) || 0), 0);
+
+  const toolbarHtml = () => {
+    if (!items.length) return "";
+    const count = selected.size;
+    return `<div class="trash-toolbar" role="region" aria-label="${e(t("trash"))}">
+      <label class="trash-select-all-label">
+        <input type="checkbox" class="trash-select-all" ${count === items.length ? "checked" : ""} aria-label="${e(t("selectAll"))}">
+        <span>${e(t("selectAll"))}</span>
+      </label>
+      <span class="trash-selection-summary">${e(
+        count > 0
+          ? t("selectedSummary", { count, size: bytes(selectedBytes()) })
+          : t("trashSummary", { count: items.length, size: bytes(totalBytes) }),
+      )}</span>
+      <div class="trash-toolbar-actions">
+        ${
+          count > 0
+            ? `<button type="button" class="button quiet" data-action="clear-selection">${e(t("clearSelection"))}</button>` +
+              `<button type="button" class="button secondary" data-action="batch-restore">${e(t("batchRestore"))} (${count})</button>` +
+              `<button type="button" class="button danger" data-action="batch-delete">${e(t("batchDeleteForever"))} (${count})</button>`
+            : `<button type="button" class="button destructive secondary" data-action="empty-trash">${e(t("emptyTrash"))}</button>`
+        }
+      </div>
+    </div>`;
+  };
+
   root.innerHTML =
     heading("trash", "", button("refresh", "refresh")) +
+    toolbarHtml() +
     collection(
       [
+        {
+          key: "select",
+          label: "",
+          headerHtml: items.length
+            ? `<input type="checkbox" class="trash-head-check" aria-label="${e(t("selectAll"))}">`
+            : "",
+        },
         { key: "file", label: "file" },
         { key: "size", label: "sizeColumn" },
         { key: "deleted", label: "deletedAt" },
         { key: "actions", label: "shareColActions" },
       ],
-      items.map((i) => ({
-        file: fileIdentity(i, {previewId: i.isImage ? i.id : "", thumbnail: i.isImage ? `<img src="/api/modules/image-host/trash/${e(i.id)}/preview?thumbnail=1" alt="" loading="lazy">` : "", summary: `<span>${e(bytes(i.size))}</span><span>${e(t("deletedAt"))} ${e(compactDate(i.deletedAt))}</span>`}),
+      items.map((i, idx) => ({
+        select: `<label class="trash-check-hit"><input type="checkbox" class="trash-row-check" data-id="${e(i.id)}" data-index="${idx}" aria-label="${e(i.filename)}"></label>`,
+        file: fileIdentity(i, {previewId: i.isImage ? i.id : "", thumbnail: i.isImage ? `<img src="/api/modules/image-host/trash/${e(i.id)}/preview?thumbnail=1" alt="" loading="lazy">` : "", summary: `${metaItem("hardDrive", bytes(i.size))}${metaItem("trash", compactDate(i.deletedAt))}`}),
         size: e(bytes(i.size)),
         deleted: e(compactDate(i.deletedAt)),
         actions: `<div class="actions">${button("restore", "restore", "quiet", "", `data-id="${e(i.id)}"`)}${button("deleteForever", "delete-forever", "quiet destructive", "", `data-id="${e(i.id)}"`)}</div>`,
@@ -100,10 +144,162 @@ export async function mountTrash(ctx, root, route, signal) {
         empty: empty("trashEmpty", "trashEmptyHelp", "", "trash"),
       },
     );
+
+  const syncSelectionUi = () => {
+    const count = selected.size;
+    const allChecked = items.length > 0 && count === items.length;
+    const partial = count > 0 && count < items.length;
+    for (const check of root.querySelectorAll(".trash-select-all, .trash-head-check")) {
+      check.checked = allChecked;
+      check.indeterminate = partial;
+      check.disabled = busy;
+    }
+    for (const check of root.querySelectorAll(".trash-row-check")) {
+      const checked = selected.has(check.dataset.id);
+      check.checked = checked;
+      check.disabled = busy;
+      check.closest(".collection-row")?.classList.toggle("is-selected", checked);
+    }
+    const toolbar = root.querySelector(".trash-toolbar");
+    if (toolbar) {
+      toolbar.outerHTML = toolbarHtml();
+      const newCheck = root.querySelector(".trash-select-all");
+      if (newCheck) {
+        newCheck.checked = allChecked;
+        newCheck.indeterminate = partial;
+        newCheck.disabled = busy;
+      }
+      for (const btn of root.querySelectorAll(".trash-toolbar-actions button")) {
+        btn.disabled = busy;
+      }
+    }
+  };
+
+  const setBusy = (nextBusy) => {
+    busy = nextBusy;
+    syncSelectionUi();
+  };
+
+  root.addEventListener(
+    "click",
+    (event) => {
+      const check = event.target.closest(".trash-row-check");
+      if (!check) return;
+      const idx = Number(check.dataset.index);
+      const checked = check.checked;
+      if (event.shiftKey && lastIndex !== null && Number.isFinite(idx)) {
+        const start = Math.min(lastIndex, idx);
+        const end = Math.max(lastIndex, idx);
+        for (let i = start; i <= end; i++) {
+          const item = items[i];
+          if (!item) continue;
+          if (checked) selected.add(item.id);
+          else selected.delete(item.id);
+        }
+      } else {
+        if (checked) selected.add(check.dataset.id);
+        else selected.delete(check.dataset.id);
+      }
+      lastIndex = Number.isFinite(idx) ? idx : lastIndex;
+      syncSelectionUi();
+    },
+    { signal },
+  );
+
+  root.addEventListener(
+    "change",
+    (event) => {
+      if (!event.target.matches(".trash-select-all, .trash-head-check")) return;
+      if (event.target.checked) {
+        for (const item of items) selected.add(item.id);
+      } else {
+        selected.clear();
+      }
+      lastIndex = null;
+      syncSelectionUi();
+    },
+    { signal },
+  );
+
   actions(
     root,
     {
       refresh: () => ctx.render(),
+      "clear-selection": () => {
+        selected.clear();
+        lastIndex = null;
+        syncSelectionUi();
+      },
+      "batch-restore": async () => {
+        const ids = selectedItems().map((item) => item.id);
+        if (!ids.length || busy) return;
+        setBusy(true);
+        try {
+          const res = await ctx.api.restoreTrashBatch(ids);
+          const okCount = res.restored?.length || 0;
+          const failCount = res.failed?.length || 0;
+          if (okCount) ctx.invalidateFiles();
+          if (failCount) {
+            toast(t("batchPartialFailure", { ok: okCount, failed: failCount }), "warning");
+          } else {
+            toast(t("batchRestoredResult", { count: okCount }));
+          }
+          ctx.render();
+        } finally {
+          if (!signal.aborted) setBusy(false);
+        }
+      },
+      "batch-delete": async () => {
+        const picked = selectedItems();
+        if (!picked.length || busy) return;
+        if (
+          !(await confirm(
+            t("batchDeleteForever"),
+            t("batchDeleteConfirm", { count: picked.length, size: bytes(selectedBytes()) }),
+            true,
+          ))
+        )
+          return;
+        setBusy(true);
+        try {
+          const res = await ctx.api.deleteTrashBatch(picked.map((item) => item.id));
+          const okCount = res.deleted?.length || 0;
+          const failCount = res.failed?.length || 0;
+          if (failCount) {
+            toast(t("batchPartialFailure", { ok: okCount, failed: failCount }), "warning");
+          } else {
+            toast(t("batchDeletedResult", { count: okCount }));
+          }
+          ctx.render();
+        } finally {
+          if (!signal.aborted) setBusy(false);
+        }
+      },
+      "empty-trash": async () => {
+        if (!items.length || busy) return;
+        if (
+          !(await confirm(
+            t("emptyTrash"),
+            t("emptyTrashConfirm", { count: items.length, size: bytes(totalBytes) }),
+            true,
+          ))
+        )
+          return;
+        setBusy(true);
+        try {
+          const res = await ctx.api.emptyTrash();
+          const okCount = res.deleted?.length || 0;
+          const failCount = res.failed?.length || 0;
+          if (failCount) {
+            toast(t("batchPartialFailure", { ok: okCount, failed: failCount }), "warning");
+          } else {
+            toast(t("batchDeletedResult", { count: okCount }));
+          }
+          ctx.render();
+        } finally {
+          if (!signal.aborted) setBusy(false);
+        }
+      },
       "preview-trash": target => {
         const item = items.find(item => item.id === target.dataset.id);
         if (item?.isImage) openImagePreview({src:`/api/modules/image-host/trash/${item.id}/preview`,filename:item.filename,signal});
@@ -241,7 +437,7 @@ export function mountBackup(ctx, root, signal) {
               { key: "actions", label: "shareColActions" },
             ],
             files.map((i) => ({
-              file: fileIdentity(i, {summary: `<span>${e(bytes(i.size))}</span><time>${e(compactDate(i.createdAt))}</time>`}),
+              file: fileIdentity(i, {summary: `${metaItem("hardDrive", bytes(i.size))}${metaItem("calendar", compactDate(i.createdAt))}`}),
               date: e(date(i.createdAt)),
               size: e(bytes(i.size)),
               actions: `<a class="button secondary" download href="/api/platform/backup/files/${encodeURIComponent(i.filename)}">${e(t("downloadArchive"))}</a>`,

@@ -277,6 +277,44 @@ test('HTTP functional regression across platform, assets, shares and recovery', 
     assert.equal((await call('/api/modules/image-host/trash',{headers:admin()})).data.items.some(i=>i.id===second.id),false);
   });
 
+  await t.test('Trash batch restore, batch delete and empty endpoints handle partial failures', async () => {
+    const a = (await upload('batch-a.json', Buffer.from('{"k":"a"}'))).data;
+    const b = (await upload('batch-b.json', Buffer.from('{"k":"b"}'))).data;
+    const c = (await upload('batch-c.json', Buffer.from('{"k":"c"}'))).data;
+    for (const item of [a, b, c]) {
+      assert.equal((await call(`/api/modules/image-host/item/${item.year}/${item.month}/${encodeURIComponent(item.filename)}`, { method: 'DELETE', headers: api })).status, 200);
+    }
+    const listed = await call('/api/modules/image-host/trash', { headers: api });
+    const idA = listed.data.items.find((i) => i.filename === a.filename).id;
+    const idB = listed.data.items.find((i) => i.filename === b.filename).id;
+    const idC = listed.data.items.find((i) => i.filename === c.filename).id;
+
+    assert.equal((await call('/api/modules/image-host/trash/batch/restore', { method: 'POST', headers: api, json: {} })).status, 400);
+    const restoreRes = await call('/api/modules/image-host/trash/batch/restore', {
+      method: 'POST',
+      headers: api,
+      json: { ids: [idA, '0'.repeat(64)] }
+    });
+    assert.equal(restoreRes.status, 200, restoreRes.text);
+    assert.equal(restoreRes.data.restored.length, 1);
+    assert.equal(restoreRes.data.restored[0].id, idA);
+    assert.equal(restoreRes.data.failed.length, 1);
+
+    const deleteRes = await call('/api/modules/image-host/trash/batch/delete', {
+      method: 'POST',
+      headers: api,
+      json: { ids: [idB] }
+    });
+    assert.equal(deleteRes.status, 200);
+    assert.equal(deleteRes.data.deleted.length, 1);
+    assert.equal(deleteRes.data.failed.length, 0);
+
+    const emptyRes = await call('/api/modules/image-host/trash/empty', { method: 'POST', headers: api });
+    assert.equal(emptyRes.status, 200);
+    assert.ok(emptyRes.data.deleted.some((d) => d.id === idC));
+    assert.equal((await call('/api/modules/image-host/trash', { headers: api })).data.items.length, 0);
+  });
+
   await t.test('Deleted image previews require authentication and disappear after restore or permanent deletion', async () => {
     const image = await sharp({create:{width:640,height:480,channels:3,background:'#7132f5'}}).png().toBuffer();
     const uploaded = await upload('trash-preview-regression.png',image);assert.equal(uploaded.status,200,uploaded.text);const saved=uploaded.data;

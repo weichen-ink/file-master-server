@@ -1,5 +1,12 @@
 # Changelog (file-master-server)
 
+## [1.2.3] - 2026-11-14
+
+### Batch trash management & unified UI polish
+- Add batch trash endpoints (`POST /api/modules/image-host/trash/batch/restore`, `/trash/batch/delete`, `/trash/empty`) with partial-failure reporting.
+- Upgrade Web Admin Trash with always-visible multi-select checkboxes, `Shift+click` range selection, and context-aware batch actions.
+- Standardize solid `.button.danger` styling and unified `icon + text` metadata across Files, Shares, Trash, and Backups lists.
+
 ## [1.2.2] - 2026-11-13
 
 ### Version alignment

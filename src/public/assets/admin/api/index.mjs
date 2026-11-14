@@ -37,6 +37,11 @@ export function createApi(request) {
       request("/api/modules/image-host/trash/" + encodeURIComponent(id), {
         method: "DELETE",
       }),
+    restoreTrashBatch: (ids) =>
+      post("/api/modules/image-host/trash/batch/restore", { ids }),
+    deleteTrashBatch: (ids) =>
+      post("/api/modules/image-host/trash/batch/delete", { ids }),
+    emptyTrash: () => post("/api/modules/image-host/trash/empty"),
     backupFiles: () => get("/api/platform/backup/files"),
     previewDraft: (data, signal) =>
       post("/api/modules/image-host/preview", data, {

@@ -15,6 +15,7 @@ import { t } from "../locale.mjs";
 import {
   e,
   icon,
+  metaItem,
   button,
   heading,
   bytes,
@@ -97,14 +98,14 @@ const previewThumb = (item) =>
     ? `<img src="${e(item.thumbnailUrl || item.rawPreviewPath)}" alt="" loading="lazy"><span class="thumbnail-fallback" hidden>${icon("image")}</span>`
     : `<span class="file-type-icon">${icon("file")}<span>${e(item.ext?.replace(".", "").toUpperCase())}</span></span>`;
 export function fileCard(item, index, from = "") {
-  return `<article class="file-card"><a href="${e(detailHref(item, { from }))}" class="file-open"><div class="file-thumbnail">${previewThumb(item)}${item.locked ? `<span class="protection-badge" aria-label="${e(t("protected"))}">${icon("lock")}</span>` : ""}</div><div class="file-caption"><h3 title="${e(item.filename)}">${e(item.filename)}</h3><p><span class="meta-item">${e(bytes(item.size))}</span><span class="meta-sep" aria-hidden="true"></span><span class="meta-item" title="${e(t("sortHits"))}: ${item.hits || 0}">${icon("eye")}<span>${item.hits || 0}</span></span></p></div></a><button type="button" class="card-copy icon-button" data-action="copy-raw" data-index="${index}" title="${e(t("copy"))}" aria-label="${e(t("copy"))}">${icon("copy")}</button></article>`;
+  return `<article class="file-card"><a href="${e(detailHref(item, { from }))}" class="file-open"><div class="file-thumbnail">${previewThumb(item)}${item.locked ? `<span class="protection-badge" aria-label="${e(t("protected"))}">${icon("lock")}</span>` : ""}</div><div class="file-caption"><h3 title="${e(item.filename)}">${e(item.filename)}</h3><p>${metaItem("hardDrive", bytes(item.size))}<span class="meta-sep" aria-hidden="true"></span>${metaItem("eye", item.hits || 0, { title: `${t("sortHits")}: ${item.hits || 0}` })}</p></div></a><button type="button" class="card-copy icon-button" data-action="copy-raw" data-index="${index}" title="${e(t("copy"))}" aria-label="${e(t("copy"))}">${icon("copy")}</button></article>`;
 }
 function fileRow(item, index, from = "") {
   return {
     file: fileIdentity(item, {
       href: detailHref(item, { from }),
       thumbnail: previewThumb(item),
-      summary: `<span>${e(bytes(item.size))}</span><time>${e(compactDate(item.createdAt))}</time>${item.locked ? `<span>${e(t("protected"))}</span>` : ""}`,
+      summary: `${metaItem("hardDrive", bytes(item.size))}${metaItem("calendar", compactDate(item.createdAt))}${item.locked ? metaItem("lock", t("protected")) : ""}`,
     }),
     size: e(bytes(item.size)),
     date: e(compactDate(item.createdAt)),

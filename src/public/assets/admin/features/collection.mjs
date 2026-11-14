@@ -5,7 +5,7 @@ import { t } from "../locale.mjs";
 export function collection(columns, rows, { className = "", empty = "" } = {}) {
   if (!rows.length) return empty;
   const columnClass = column => `column-${column.key} ${column.className || ''}`;
-  return `<div class="collection-shell"><table class="collection ${e(className)}"><thead><tr class="collection-head">${columns.map(column => `<th scope="col" class="${e(columnClass(column))}">${e(t(column.label))}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr class="collection-row">${columns.map((column) => `<td class="collection-cell ${e(columnClass(column))}" data-label="${e(t(column.label))}">${row[column.key] ?? '—'}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+  return `<div class="collection-shell"><table class="collection ${e(className)}"><thead><tr class="collection-head">${columns.map(column => `<th scope="col" class="${e(columnClass(column))}">${column.headerHtml ?? e(t(column.label))}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr class="collection-row ${e(row._rowClass || '')}">${columns.map((column) => `<td class="collection-cell ${e(columnClass(column))}" data-label="${column.label ? e(t(column.label)) : ''}">${row[column.key] ?? '—'}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
 }
 export function fileIdentity(item, { href = "", meta = "", thumbnail = "", previewId = "", summary = "" } = {}) {
   const content = `<span class="row-thumbnail">${thumbnail || icon(item.isImage ? 'image' : 'file')}</span><span class="identity-text"><strong title="${e(item.filename)}">${e(item.filename)}</strong>${meta ? `<small>${e(meta)}</small>` : ''}${summary ? `<span class="collection-summary">${summary}</span>` : ''}</span>`;
