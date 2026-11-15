@@ -17,7 +17,7 @@ function invalidateProcessingCache() {
   cacheGeneration++;
 }
 
-const sourceSignature = stat => `${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeMs}:${stat.ctimeMs}`;
+const sourceSignature = stat => `${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeMs}`;
 function runImageCacheJob(rawPath, cachePath, build, generation = cacheGeneration) {
   const key = `${generation}:${cachePath}`;
   if (imageJobs.has(key)) return imageJobs.get(key);

@@ -43,7 +43,7 @@ Open `http://localhost:3210/setup` (replace `localhost` with your server address
 
 ### Option 2: Node.js
 
-Requires **Node.js 18** or later:
+Requires **Node.js 20** (`>= 20.9.0`) or later:
 
 ```bash
 git clone https://github.com/weichen-ink/file-master-server.git

@@ -1,6 +1,6 @@
 {
   "name": "file-master-server",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "description": "Self-hosted file and image management with a web library, sharing, backups, and WebP links.",
   "main": "src/server.js",
   "scripts": {
@@ -12,11 +12,11 @@
   "dependencies": {
     "express": "^4.21.2",
     "multer": "^1.4.5-lts.1",
-    "sharp": "^0.33.5",
+    "sharp": "^0.35.5",
     "yaml": "^2.7.0"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.9.0"
   },
   "author": "weichen-ink <https://github.com/weichen-ink>",
   "license": "MIT"

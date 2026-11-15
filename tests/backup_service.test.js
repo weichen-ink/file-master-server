@@ -159,3 +159,75 @@ test('Backup forecast uses scheduler semantics and server timezone without chang
   assert.equal(forecastBackup({...daily, enabled:false}, now).nextRunAt, null);
   assert.deepEqual(daily, {enabled:true, frequency:'daily', schedule:'03:00'});
 });
+
+test('performBackup excludes custom local_dir inside data so previous archives are not nested', async () => {
+  const { execFileSync } = require('node:child_process');
+  const { performBackup } = require('../src/core/backup-service');
+  const { DATA_DIR, getConfig, setConfigOverride } = require('../src/core/config');
+  const customDir = path.join(DATA_DIR, 'custom-backups-test');
+  fs.rmSync(customDir, { recursive: true, force: true });
+  fs.mkdirSync(customDir, { recursive: true });
+  const sentinelArchive = path.join(customDir, 'filemaster-full-20200101-000000.tar.gz');
+  fs.writeFileSync(sentinelArchive, 'sentinel');
+
+  try {
+    setConfigOverride({
+      ...getConfig(),
+      backup: { ...getConfig().backup, enabled: false, local_dir: './data/custom-backups-test', retention: 5, rclone_target: '', bark_url: '' }
+    });
+    const res = await performBackup({ manual: true });
+    assert.equal(res.success, true);
+    const listOut = execFileSync('tar', ['-tzf', res.archivePath], { encoding: 'utf8' });
+    assert.equal(listOut.includes('custom-backups-test'), false, 'Custom local_dir must not be archived recursively');
+  } finally {
+    setConfigOverride(null);
+    fs.rmSync(customDir, { recursive: true, force: true });
+  }
+});
+
+test('performBackup snapshots watermark files matching the queued config.yaml version', async () => {
+  const { execFileSync } = require('node:child_process');
+  const { performBackup } = require('../src/core/backup-service');
+  const { ROOT_DIR, CONFIG_PATH, getConfig, setConfigOverride } = require('../src/core/config');
+  const { mutateAssets } = require('../src/modules/image-host/mutation-queue');
+  const os = require('node:os');
+
+  const tmpBackupDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fm-backup-wm-'));
+  const wmBefore = path.join(ROOT_DIR, 'custom-wm-before-test.png');
+  const wmAfter = path.join(ROOT_DIR, 'custom-wm-after-test.png');
+  const hadConfig = fs.existsSync(CONFIG_PATH);
+  const origConfig = hadConfig ? fs.readFileSync(CONFIG_PATH, 'utf8') : null;
+  fs.writeFileSync(wmBefore, 'before');
+  fs.writeFileSync(wmAfter, 'after');
+
+  try {
+    setConfigOverride({
+      ...getConfig(),
+      backup: { ...getConfig().backup, enabled: false, local_dir: tmpBackupDir, retention: 2, rclone_target: '', bark_url: '' },
+      image_host: { ...getConfig().image_host, watermark_image: './custom-wm-before-test.png' }
+    });
+    fs.writeFileSync(CONFIG_PATH, 'image_host:\n  watermark_image: ./custom-wm-before-test.png\n', 'utf8');
+
+    let releaseQueue;
+    const queueGate = new Promise((r) => { releaseQueue = r; });
+    const queuedChange = mutateAssets(async () => {
+      await queueGate;
+      fs.writeFileSync(CONFIG_PATH, 'image_host:\n  watermark_image: ./custom-wm-after-test.png\n', 'utf8');
+    });
+
+    const backupPromise = performBackup({ manual: true });
+    releaseQueue();
+    await queuedChange;
+    const res = await backupPromise;
+
+    const listOut = execFileSync('tar', ['-tzf', res.archivePath], { encoding: 'utf8' });
+    assert.ok(listOut.includes('custom-wm-after-test.png'), 'Archive must include watermark matching archived config.yaml');
+  } finally {
+    setConfigOverride(null);
+    fs.rmSync(wmBefore, { force: true });
+    fs.rmSync(wmAfter, { force: true });
+    fs.rmSync(tmpBackupDir, { recursive: true, force: true });
+    if (hadConfig) fs.writeFileSync(CONFIG_PATH, origConfig, 'utf8');
+    else fs.rmSync(CONFIG_PATH, { force: true });
+  }
+});

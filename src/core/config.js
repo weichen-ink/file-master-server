@@ -6,7 +6,11 @@ const { MONITOR_SECTIONS, normalizeMonitoring, validateMonitoring } = require('.
 const { isPathWithin } = require('./file-security');
 
 const ROOT_DIR = path.resolve(__dirname, '../..');
-const CONFIG_PATH = path.join(ROOT_DIR, 'config.yaml');
+const LEGACY_CONFIG_PATH = path.join(ROOT_DIR, 'config.yaml');
+const CONFIG_DIR = process.env.FILE_MASTER_CONFIG_DIR ? path.resolve(process.env.FILE_MASTER_CONFIG_DIR) : ROOT_DIR;
+const CONFIG_PATH = process.env.FILE_MASTER_CONFIG_PATH
+  ? path.resolve(process.env.FILE_MASTER_CONFIG_PATH)
+  : path.join(CONFIG_DIR, 'config.yaml');
 const EXAMPLE_CONFIG_PATH = path.join(ROOT_DIR, 'config.example.yaml');
 const DATA_DIR = path.join(ROOT_DIR, 'data');
 const STORAGE_DIR = path.join(ROOT_DIR, 'storage');
@@ -17,7 +21,15 @@ const OFFICIAL_UPSTREAM_REPO = 'https://github.com/weichen-ink/file-master-serve
 let cachedConfig = null;
 let lastConfigRevision = '';
 
+function ensureConfigLocation() {
+  if (CONFIG_PATH !== LEGACY_CONFIG_PATH && !fs.existsSync(CONFIG_PATH) && fs.existsSync(LEGACY_CONFIG_PATH)) {
+    fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
+    fs.copyFileSync(LEGACY_CONFIG_PATH, CONFIG_PATH);
+  }
+}
+
 function isConfigInitialized() {
+  ensureConfigLocation();
   return fs.existsSync(CONFIG_PATH);
 }
 
@@ -246,6 +258,7 @@ function getConfig() {
   if (configOverride) {
     return configOverride;
   }
+  ensureConfigLocation();
   if (!fs.existsSync(CONFIG_PATH)) {
     const raw = getExampleConfigTemplate();
     const parsed = YAML.parse(raw) || {};
@@ -320,6 +333,7 @@ function writeJsonData(moduleName, data) {
  * Returns raw config.yaml string including comments and formatting.
  */
 function getRawConfigYaml() {
+  ensureConfigLocation();
   if (!fs.existsSync(CONFIG_PATH)) {
     return getExampleConfigTemplate();
   }
@@ -434,6 +448,7 @@ function prepareRawConfigYaml(rawText) {
 }
 
 function writePreparedConfig(prepared) {
+  fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
   const tmpPath = `${CONFIG_PATH}.tmp`;
   fs.writeFileSync(tmpPath, prepared.yaml, 'utf8');
   fs.renameSync(tmpPath, CONFIG_PATH);
@@ -468,7 +483,10 @@ const IMAGE_PROCESSING_CONFIG_KEYS = [
 /**
  * Updates specific config fields via AST nodes, preserving existing comments and structure.
  */
-function prepareConfigPatch(patch = {}) {
+function prepareConfigPatch(patch = {}, revision = '') {
+  if (revision && revision !== configRevision()) {
+    const error = new Error('CONFIG_CHANGED'); error.status = 409; throw error;
+  }
   const raw = getRawConfigYaml();
   const doc = YAML.parseDocument(raw);
 

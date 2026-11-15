@@ -11,7 +11,7 @@ const { createUpdateGit, OFFICIAL_UPSTREAM_REPO, getEffectiveUpstreamRepo,
 // One coordinator owns the lock. Tests use separate roots and a command boundary.
 function createUpdater({ rootDir = ROOT_DIR, config = defaultConfig, runCommand, resolveOfficialCommit } = {}) {
   const DATA_DIR = path.join(rootDir, 'data');
-  const CONFIG_PATH = path.join(rootDir, 'config.yaml');
+  const CONFIG_PATH = config.CONFIG_PATH && rootDir === ROOT_DIR ? config.CONFIG_PATH : path.join(rootDir, 'config.yaml');
   const EXAMPLE_CONFIG_PATH = path.join(rootDir, 'config.example.yaml');
   const PKG_PATH = path.join(rootDir, 'package.json');
   const PKG_LOCK_PATH = path.join(rootDir, 'package-lock.json');

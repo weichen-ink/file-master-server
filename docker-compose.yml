@@ -8,10 +8,10 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3210
+      - FILE_MASTER_CONFIG_DIR=/app/config
     volumes:
+      - ./config:/app/config
       - ./storage:/app/storage
       - ./data:/app/data
-      # Note: On first run without config.yaml, visit http://localhost:3210/setup to initialize!
-      # If you already have config.yaml, you can also mount it directly:
-      # - ./config.yaml:/app/config.yaml
+      # Config is stored inside ./config/config.yaml so atomic saves never hit EBUSY.
 

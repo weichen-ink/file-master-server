@@ -35,6 +35,7 @@ const {
   createRateLimiter
 } = require('./core/security');
 const { collectRuntimeMetrics } = require('./core/metrics');
+const { ALL_ALLOWED_EXTS } = require('./core/file-security');
 const { startupMessage } = require('./core/startup-message');
 const { registerMonitoringRoutes } = require('./core/monitoring');
 const {
@@ -137,6 +138,7 @@ app.get('/api/platform/version', (req, res) => {
     version: readPackageVersion(),
     apiVersion: 1,
     minPluginVersion: '1.1.0',
+    supportedExtensions: [...ALL_ALLOWED_EXTS],
     features: {
       webp: true,
       watermark: true,
@@ -326,7 +328,7 @@ const handleConfigUpdate = (req, res) => {
   try {
     prepared = mode === 'raw'
       ? prepareEditorConfigYaml(rawYaml, req.body?.revision)
-      : prepareConfigPatch(patch || {});
+      : prepareConfigPatch(patch || {}, req.body?.revision);
   } catch (err) {
     return res.status(err.status || 400).json(configurationError(err));
   }

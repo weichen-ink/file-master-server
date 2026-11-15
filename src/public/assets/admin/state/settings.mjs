@@ -67,6 +67,18 @@ export function createSettingsStore() {
       const s = sections.get(name);
       if (s && !this.dirty(name)) this.accept(name, saved);
     },
+    rebase(name, saved) {
+      const s = sections.get(name);
+      if (!s) return;
+      for (const [key, val] of Object.entries(saved)) {
+        if (equal(s.draft[key], s.baseline[key])) {
+          s.draft[key] = clone(val);
+        }
+      }
+      s.baseline = clone(saved);
+      s.errors = {};
+      emit();
+    },
     clear() {
       sections.clear();
       emit();

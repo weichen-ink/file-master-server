@@ -1,10 +1,13 @@
 const { forecastBackup } = require('./backup-schedule');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
+const YAML = require('yaml');
 const { spawn, execFile } = require('node:child_process');
 const { promisify } = require('node:util');
-const { ROOT_DIR, DATA_DIR, getConfig, readJsonData, writeJsonData } = require('./config');
+const { ROOT_DIR, CONFIG_PATH, DATA_DIR, STORAGE_DIR, UPLOAD_TMP_DIR, getConfig, readJsonData, writeJsonData } = require('./config');
 const { appendAuditLog } = require('./audit');
+const { mutateAssets } = require('../modules/image-host/mutation-queue');
 
 const execFileAsync = promisify(execFile);
 
@@ -293,6 +296,54 @@ async function syncAndRotateRclone(archivePath, rcloneTarget, retentionLimit, lo
   }
 }
 
+function isSubpathOrSame(targetPath, basePath) {
+  const rel = path.relative(path.resolve(basePath), path.resolve(targetPath));
+  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+}
+
+function validateBackupLocalDir(localDir) {
+  const resolved = path.resolve(localDir);
+  const forbiddenExact = [
+    path.resolve(ROOT_DIR),
+    path.resolve(DATA_DIR),
+    path.resolve(STORAGE_DIR)
+  ];
+  if (forbiddenExact.includes(resolved) || isSubpathOrSame(resolved, path.join(STORAGE_DIR, 'raw'))) {
+    throw new Error('backup.local_dir 不能指向根目录、data 根目录或 storage/raw 目录');
+  }
+}
+
+function copyFileOrHardlinkSync(src, dest, hardlink = false) {
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  if (hardlink) {
+    try {
+      fs.linkSync(src, dest);
+      return;
+    } catch (err) {
+      if (err.code !== 'EXDEV' && err.code !== 'EPERM' && err.code !== 'EACCES') {
+        throw err;
+      }
+    }
+  }
+  fs.copyFileSync(src, dest);
+}
+
+function copyDirFilteredSync(srcDir, destDir, shouldExclude, { hardlinkFiles = false } = {}) {
+  if (!fs.existsSync(srcDir)) return;
+  fs.mkdirSync(destDir, { recursive: true });
+  const entries = fs.readdirSync(srcDir, { withFileTypes: true });
+  for (const entry of entries) {
+    const srcPath = path.join(srcDir, entry.name);
+    const destPath = path.join(destDir, entry.name);
+    if (shouldExclude(srcPath, entry.name, entry)) continue;
+    if (entry.isDirectory()) {
+      copyDirFilteredSync(srcPath, destPath, shouldExclude, { hardlinkFiles });
+    } else if (entry.isFile()) {
+      copyFileOrHardlinkSync(srcPath, destPath, hardlinkFiles);
+    }
+  }
+}
+
 async function performBackup({ manual = false } = {}) {
   if (activeBackupJob) {
     throw new Error('备份任务正在进行中，请稍候...');
@@ -302,6 +353,7 @@ async function performBackup({ manual = false } = {}) {
   const backupCfg = cfg.backup || {};
   const retentionLimit = Math.max(1, Number(backupCfg.retention) || 7);
   const localDir = resolveBackupDir(backupCfg.local_dir);
+  validateBackupLocalDir(localDir);
   const rcloneTarget = (backupCfg.rclone_target || '').trim();
   const barkUrl = (backupCfg.bark_url || '').trim();
 
@@ -323,41 +375,85 @@ async function performBackup({ manual = false } = {}) {
     logs
   };
 
+  let snapshotDir = null;
   try {
     logStep(`Starting ${manual ? 'manual' : 'scheduled'} full backup...`);
     fs.mkdirSync(localDir, { recursive: true });
 
-    // Gather backup targets
-    const backupCandidates = new Set([
-      'config.yaml',
-      'config.example.yaml',
-      'wm-light.png',
-      'wm-dark.png',
-      'watermark.png',
-      'watermark-dark.png',
-      'data'
-    ]);
-
+    let snapBaseDir = os.tmpdir();
     try {
-      if (cfg.image_host?.watermark_image) {
-        const rel = path.relative(ROOT_DIR, path.resolve(ROOT_DIR, cfg.image_host.watermark_image));
-        if (!rel.startsWith('..') && !path.isAbsolute(rel)) backupCandidates.add(rel);
-      }
-      if (cfg.image_host?.watermark_image_dark) {
-        const rel = path.relative(ROOT_DIR, path.resolve(ROOT_DIR, cfg.image_host.watermark_image_dark));
-        if (!rel.startsWith('..') && !path.isAbsolute(rel)) backupCandidates.add(rel);
-      }
+      fs.mkdirSync(UPLOAD_TMP_DIR, { recursive: true });
+      snapBaseDir = UPLOAD_TMP_DIR;
     } catch {}
+    snapshotDir = fs.mkdtempSync(path.join(snapBaseDir, 'fm-backup-snap-'));
 
-    const targets = [];
-    for (const cand of backupCandidates) {
-      if (fs.existsSync(path.join(ROOT_DIR, cand))) {
-        targets.push(cand);
+    const defaultBackupsDir = path.resolve(path.join(DATA_DIR, 'backups'));
+    const resolvedLocalDir = path.resolve(localDir);
+    const relBackupDir = isSubpathOrSame(resolvedLocalDir, ROOT_DIR)
+      ? path.relative(ROOT_DIR, resolvedLocalDir).split(path.sep).join('/')
+      : '';
+    const shouldExcludeFromSnapshot = (srcPath, entryName) => {
+      if (entryName.endsWith('.tmp')) return true;
+      const resolvedSrc = path.resolve(srcPath);
+      if (resolvedSrc === defaultBackupsDir || resolvedSrc === resolvedLocalDir) return true;
+      return false;
+    };
+
+    const targets = await mutateAssets(async () => {
+      const staged = [];
+
+      let snapshotCfg = getConfig();
+      if (fs.existsSync(CONFIG_PATH) && fs.statSync(CONFIG_PATH).isFile()) {
+        const rawConfigText = fs.readFileSync(CONFIG_PATH, 'utf8');
+        const destConfigPath = path.join(snapshotDir, 'config.yaml');
+        fs.mkdirSync(path.dirname(destConfigPath), { recursive: true });
+        fs.writeFileSync(destConfigPath, rawConfigText, 'utf8');
+        staged.push('config.yaml');
+        try {
+          const parsed = YAML.parse(rawConfigText);
+          if (parsed && typeof parsed === 'object') snapshotCfg = parsed;
+        } catch {}
       }
-    }
-    if (fs.existsSync(path.join(ROOT_DIR, 'storage', 'raw'))) {
-      targets.push('storage/raw');
-    }
+
+      const rootFileCandidates = new Set([
+        'config.example.yaml',
+        'wm-light.png',
+        'wm-dark.png',
+        'watermark.png',
+        'watermark-dark.png'
+      ]);
+      try {
+        if (snapshotCfg.image_host?.watermark_image) {
+          const rel = path.relative(ROOT_DIR, path.resolve(ROOT_DIR, snapshotCfg.image_host.watermark_image));
+          if (!rel.startsWith('..') && !path.isAbsolute(rel)) rootFileCandidates.add(rel);
+        }
+        if (snapshotCfg.image_host?.watermark_image_dark) {
+          const rel = path.relative(ROOT_DIR, path.resolve(ROOT_DIR, snapshotCfg.image_host.watermark_image_dark));
+          if (!rel.startsWith('..') && !path.isAbsolute(rel)) rootFileCandidates.add(rel);
+        }
+      } catch {}
+
+      for (const cand of rootFileCandidates) {
+        const srcPath = path.join(ROOT_DIR, cand);
+        if (fs.existsSync(srcPath) && fs.statSync(srcPath).isFile()) {
+          copyFileOrHardlinkSync(srcPath, path.join(snapshotDir, cand), false);
+          staged.push(cand);
+        }
+      }
+
+      if (fs.existsSync(DATA_DIR)) {
+        copyDirFilteredSync(DATA_DIR, path.join(snapshotDir, 'data'), shouldExcludeFromSnapshot, { hardlinkFiles: false });
+        staged.push('data');
+      }
+
+      const rawStorageDir = path.join(STORAGE_DIR, 'raw');
+      if (fs.existsSync(rawStorageDir)) {
+        copyDirFilteredSync(rawStorageDir, path.join(snapshotDir, 'storage', 'raw'), shouldExcludeFromSnapshot, { hardlinkFiles: true });
+        staged.push('storage/raw');
+      }
+
+      return staged;
+    });
 
     if (targets.length === 0) {
       throw new Error('未在磁盘上找到可备份的有效目标目录');
@@ -369,8 +465,9 @@ async function performBackup({ manual = false } = {}) {
 
     activeBackupJob.archivePath = archivePath + '.tmp';
     logStep(`Targets (${targets.length}): ${targets.join(', ')}`);
-    // Tar exclude internal backups directory if targets contains 'data'; throttle CPU/I/O priority & use fastest gzip (-1)
-    const tarArgs = ['-czf', activeBackupJob.archivePath, '--exclude=data/backups', '--exclude=*.tmp', '-C', ROOT_DIR, ...targets];
+    const tarExcludes = ['--exclude=data/backups', '--exclude=*.tmp'];
+    if (relBackupDir) tarExcludes.push(`--exclude=${relBackupDir}`);
+    const tarArgs = ['-czf', activeBackupJob.archivePath, ...tarExcludes, '-C', snapshotDir, ...targets];
     const hasCpulimit = process.platform === 'linux' && (fs.existsSync('/usr/bin/cpulimit') || fs.existsSync('/bin/cpulimit'));
     logStep(`Packing into ${archiveFilename} (gzip=-1, priority=low${hasCpulimit ? ', cpulimit=50%' : ''})...`);
     const cmd = hasCpulimit ? 'cpulimit' : (process.platform === 'win32' ? 'tar' : 'nice');
@@ -489,6 +586,7 @@ async function performBackup({ manual = false } = {}) {
 
     throw err;
   } finally {
+    if (snapshotDir) fs.rmSync(snapshotDir, { recursive: true, force: true });
     if (activeBackupJob?.archivePath) fs.rmSync(activeBackupJob.archivePath, {force:true});
     activeBackupJob = null;
   }

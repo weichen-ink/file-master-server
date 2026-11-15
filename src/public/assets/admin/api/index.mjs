@@ -14,10 +14,10 @@ export function createApi(request) {
     logout: () => post("/api/platform/logout"),
     config: (reveal = false) =>
       get("/api/platform/config" + (reveal ? "?reveal=1" : "")),
-    save: (patch) =>
+    save: (patch, revision) =>
       request("/api/platform/config", {
         method: "PUT",
-        json: { mode: "form", patch },
+        json: { mode: "form", patch, ...(revision ? { revision } : {}) },
       }),
     saveRaw: (rawYaml, revision) =>
       request("/api/platform/config", {

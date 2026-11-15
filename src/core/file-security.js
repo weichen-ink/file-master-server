@@ -4,6 +4,7 @@ const path = require('node:path');
 const INLINE_SAFE_EXTS = new Set([
   '.jpg',
   '.jpeg',
+  '.jfif',
   '.png',
   '.webp',
   '.gif',
@@ -30,6 +31,7 @@ const INLINE_SAFE_EXTS = new Set([
 const PROCESSABLE_IMAGE_EXTS = new Set([
   '.jpg',
   '.jpeg',
+  '.jfif',
   '.png',
   '.webp',
   '.gif',
@@ -49,6 +51,8 @@ const NEEDS_TRANSCODE_EXTS = new Set(['.heic', '.heif', '.tif', '.tiff']);
 // Non-image document & media extensions supported by File Master unified attachment storage
 const DOCUMENT_AND_MEDIA_EXTS = new Set([
   '.pdf',
+  '.ofd',
+  '.caj',
   '.mp4',
   '.webm',
   '.mov',
@@ -59,23 +63,76 @@ const DOCUMENT_AND_MEDIA_EXTS = new Set([
   '.ogg',
   '.m4a',
   '.flac',
+  '.aac',
   '.zip',
   '.rar',
   '.7z',
   '.tar',
   '.gz',
+  '.tgz',
+  '.bz2',
+  '.xz',
+  '.zst',
   '.doc',
   '.docx',
   '.xls',
   '.xlsx',
   '.ppt',
   '.pptx',
+  '.wps',
+  '.wpt',
+  '.et',
+  '.ett',
+  '.dps',
+  '.dpt',
+  '.rtf',
+  '.odt',
+  '.ods',
+  '.odp',
+  '.pages',
+  '.numbers',
+  '.key',
+  '.epub',
+  '.mobi',
+  '.azw3',
   '.csv',
+  '.tsv',
   '.txt',
   '.json',
+  '.yaml',
+  '.yml',
+  '.toml',
+  '.log',
   '.md',
   '.excalidraw',
-  '.canvas'
+  '.canvas',
+  '.xmind',
+  '.drawio',
+  '.eddx',
+  '.psd',
+  '.psb',
+  '.ai',
+  '.eps',
+  '.indd',
+  '.fig',
+  '.sketch',
+  '.xd',
+  '.cdr',
+  '.dwg',
+  '.dxf',
+  '.dwf',
+  '.rvt',
+  '.rfa',
+  '.stp',
+  '.step',
+  '.igs',
+  '.iges',
+  '.stl',
+  '.obj',
+  '.fbx',
+  '.blend',
+  '.glb',
+  '.gltf'
 ]);
 
 const ALL_ALLOWED_EXTS = new Set([
@@ -89,8 +146,8 @@ function getFileCategory(ext) {
   if (PROCESSABLE_IMAGE_EXTS.has(e) || PASSTHROUGH_IMAGE_EXTS.has(e)) return 'image';
   if (e === '.pdf') return 'pdf';
   if (['.mp4', '.webm', '.mov', '.mkv', '.avi'].includes(e)) return 'video';
-  if (['.mp3', '.wav', '.ogg', '.m4a', '.flac'].includes(e)) return 'audio';
-  if (['.zip', '.rar', '.7z', '.tar', '.gz'].includes(e)) return 'archive';
+  if (['.mp3', '.wav', '.ogg', '.m4a', '.flac', '.aac'].includes(e)) return 'audio';
+  if (['.zip', '.rar', '.7z', '.tar', '.gz', '.tgz', '.bz2', '.xz', '.zst'].includes(e)) return 'archive';
   return 'document';
 }
 

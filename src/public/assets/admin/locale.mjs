@@ -246,6 +246,9 @@ export const messages = {
   validYaml: ["配置校验通过", "Configuration is valid"],
   before: ["已保存", "Saved"],
   after: ["待应用", "Proposed"],
+  reloadLatest: ["加载最新配置（保留草稿）", "Reload latest (keep draft)"],
+  uploadingShort: ["上传 {done}/{total}", "Uploading {done}/{total}"],
+  retryFailed: ["重试 {count} 个失败", "Retry {count} failed"],
   rawConflict: [
     "其他页面还有未保存的设置，请先处理后再保存配置文件。",
     "Save or discard changes on other pages before saving this configuration.",

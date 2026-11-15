@@ -275,3 +275,33 @@ test("Binary preview responses retain errors and session invalidation",async()=>
   let expired=false;const denied=createClient(async()=>new Response('{"error":"expired"}',{status:401}),()=>{expired=true;});
   await assert.rejects(denied("/preview",{responseType:"blob"}),/expired/);assert.equal(expired,true);
 });
+
+test("prepareConfigPatch rejects stale revision with 409 CONFIG_CHANGED", () => {
+  const { prepareConfigPatch, configRevision } = require("../src/core/config");
+  const currentRev = configRevision();
+  assert.ok(currentRev);
+  assert.throws(
+    () => prepareConfigPatch({ site_name: "New Name" }, "stale-revision"),
+    (err) => err && err.status === 409 && err.message === "CONFIG_CHANGED"
+  );
+  const prepared = prepareConfigPatch({ site_name: "New Name" }, currentRev);
+  assert.equal(prepared.config.site_name, "New Name");
+});
+
+test("Settings store merge safely handles uninitialized, clean, and dirty advanced sections", async () => {
+  const { createSettingsStore } = await modules("state/settings");
+  const store = createSettingsStore();
+  // 1. Never opened: merge must not throw
+  store.merge("advanced", { raw: "v2", revision: "rev2" });
+  assert.equal(store.dirty("advanced"), false);
+
+  // 2. Opened and clean: merge updates baseline & draft
+  store.section("advanced", { raw: "v1", revision: "rev1" });
+  store.merge("advanced", { raw: "v2", revision: "rev2" });
+  assert.deepEqual(store.section("advanced").draft, { raw: "v2", revision: "rev2" });
+
+  // 3. Opened and dirty: merge preserves dirty draft & old revision
+  store.edit("advanced", "raw", "v2-edited");
+  store.merge("advanced", { raw: "v3", revision: "rev3" });
+  assert.deepEqual(store.section("advanced").draft, { raw: "v2-edited", revision: "rev2" });
+});

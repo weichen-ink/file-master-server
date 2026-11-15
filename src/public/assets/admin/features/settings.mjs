@@ -146,7 +146,7 @@ export async function mountSettings(ctx, root, route, signal) {
       root.querySelector("#section-error").textContent = "";
       try {
         const session = ctx.sessionVersion;
-        const data = await ctx.api.save(sectionPatch(name, state.draft));
+        const data = await ctx.api.save(sectionPatch(name, state.draft), ctx.configRevision);
         ctx.acceptConfig(data, name, session);
         toast(t("configSaved"));
         ctx.drafts.accept(name, sectionValues(name, data.config));
@@ -158,11 +158,28 @@ export async function mountSettings(ctx, root, route, signal) {
         ctx.invalidateFiles();
         if (!signal.aborted) ctx.render();
       } catch (error) {
-        if (!signal.aborted)
-          root.querySelector("#section-error").innerHTML = notice(
-            error.message,
-            "danger",
-          );
+        if (!signal.aborted) {
+          const isConflict = error.message === "CONFIG_CHANGED";
+          const message = isConflict ? t("rawStale") : error.message;
+          const reloadBtn = isConflict
+            ? `<div class="actions"><button type="button" class="button quiet" data-action="reload-latest">${e(t("reloadLatest"))}</button></div>`
+            : "";
+          const errEl = root.querySelector("#section-error");
+          errEl.innerHTML = notice(message, "danger") + reloadBtn;
+          const btn = errEl.querySelector('[data-action="reload-latest"]');
+          if (btn) {
+            btn.onclick = async () => {
+              btn.disabled = true;
+              try {
+                await ctx.reloadConfig();
+                if (!signal.aborted) ctx.render();
+              } catch (reloadErr) {
+                btn.disabled = false;
+                if (!signal.aborted) toast(reloadErr.message);
+              }
+            };
+          }
+        }
       } finally {
         state.saving = false;
         if (!signal.aborted) sync();

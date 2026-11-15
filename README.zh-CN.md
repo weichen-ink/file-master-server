@@ -43,7 +43,7 @@ docker compose up -d --build
 
 ### 方式二：Node.js 直接运行
 
-需要 **Node.js 18** 或更新版本：
+需要 **Node.js 20**（`>= 20.9.0`）或更新版本：
 
 ```bash
 git clone https://github.com/weichen-ink/file-master-server.git

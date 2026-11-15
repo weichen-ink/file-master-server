@@ -92,6 +92,25 @@ export async function start() {
     }
     return configPromise;
   };
+  ctx.reloadConfig = async () => {
+    const session = generation;
+    const data = await ctx.api.config();
+    if (session !== generation)
+      throw new DOMException("Session ended", "AbortError");
+    ctx.config = data.config;
+    ctx.rawYaml = data.rawYaml;
+    ctx.configRevision = data.revision;
+    for (const section of Object.keys(schemas)) {
+      ctx.drafts.rebase(section, sectionValues(section, data.config));
+    }
+    if (!ctx.drafts.dirty("advanced")) {
+      ctx.drafts.merge("advanced", { raw: data.rawYaml, revision: data.revision });
+      ctx.rawStale = false;
+    } else {
+      ctx.rawStale = true;
+    }
+    return data.config;
+  };
   ctx.acceptConfig = (data, savedSection, session = generation) => {
     if (!ctx.authenticated || session !== generation)
       throw new DOMException("Session ended", "AbortError");
@@ -139,11 +158,37 @@ export async function start() {
     }
     return filesPromise;
   };
+  const renderTaskSummary = (jobs = {}) => {
+    const items = [];
+    if (jobs.upload?.state === "running") {
+      items.push(`<button type="button" class="notice" data-action="open-upload">${icon("upload")}<span>${e(t("uploadingShort", { done: jobs.upload.done, total: jobs.upload.total }))}</span></button>`);
+    } else if (jobs.upload?.failed > 0) {
+      items.push(`<button type="button" class="button quiet full-width" data-action="retry-upload">${icon("upload")}<span>${e(t("retryFailed", { count: jobs.upload.failed }))}</span></button>`);
+    }
+    if (jobs.integrity?.state === "running") {
+      items.push(`<a class="notice" href="#/status">${icon("pulse")}<span>${e(t("integrityModalTitle"))}</span></a>`);
+    }
+    if (jobs.backup?.isBackingUp) {
+      items.push(`<a class="notice" href="#/settings/backup">${icon("archive")}<span>${e(t("backup"))}</span></a>`);
+    }
+    const html = items.join("");
+    for (const id of ["task-summary", "mobile-task-summary"]) {
+      const el = document.getElementById(id);
+      if (!el) continue;
+      el.hidden = items.length === 0;
+      el.innerHTML = html;
+      const uploadBtn = el.querySelector('[data-action="open-upload"]');
+      if (uploadBtn) uploadBtn.onclick = () => ctx.chooseUpload();
+      const retryBtn = el.querySelector('[data-action="retry-upload"]');
+      if (retryBtn) retryBtn.onclick = () => ctx.tasks.retryUpload();
+    }
+  };
   ctx.tasks = createTasks(ctx.api, async () => {
     if (!ctx.authenticated) return;
     await ctx.loadFiles(true);
     if (["files", "detail"].includes(ctx.route?.page)) ctx.render();
   });
+  ctx.tasks.subscribe(renderTaskSummary);
   ctx.mountBackup = (target, signal) => mountBackup(ctx, target, signal);
   ctx.mountUpdates = (target, signal) => mountUpdates(ctx, target, signal);
   ctx.chooseUpload = () => openUpload(ctx);
@@ -209,7 +254,8 @@ export async function start() {
   const renderShell = () => {
     document.documentElement.lang = getLocale() === "zh" ? "zh-CN" : "en";
     document.getElementById("sidebar-content").innerHTML =
-      `<a class="brand" href="#/files"><span class="brand-mark">${icon("bolt")}</span><strong data-site-name>${e(ctx.status.siteName || "File Master")}</strong></a><nav id="main-navigation" aria-label="${e(t("openMenu"))}">${navigationHtml(ctx.route || parseRoute(location.hash))}</nav><div class="sidebar-bottom">${utilityHtml()}</div>`;
+      `<a class="brand" href="#/files"><span class="brand-mark">${icon("bolt")}</span><strong data-site-name>${e(ctx.status.siteName || "File Master")}</strong></a><nav id="main-navigation" aria-label="${e(t("openMenu"))}">${navigationHtml(ctx.route || parseRoute(location.hash))}</nav><div id="task-summary" class="sidebar-task-summary" hidden></div><div class="sidebar-bottom">${utilityHtml()}</div>`;
+    renderTaskSummary(ctx.tasks.jobs);
     document.getElementById("mobile-heading").textContent =
       ctx.status.siteName || "File Master";
     document
