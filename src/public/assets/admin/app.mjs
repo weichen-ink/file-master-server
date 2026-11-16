@@ -193,6 +193,14 @@ export async function start() {
   ctx.mountUpdates = (target, signal) => mountUpdates(ctx, target, signal);
   ctx.chooseUpload = () => openUpload(ctx);
   ctx.checkIntegrity = () => openIntegrity(ctx);
+  const syncDirtyIndicator = () => {
+    const target = document.getElementById("dirty-indicator");
+    if (!target) return;
+    const names = ctx.drafts.dirtyNames();
+    const hasSaveBar = Boolean(root.querySelector(".save-bar:not([hidden])"));
+    target.hidden = !names.length || hasSaveBar;
+    target.innerHTML = `<button class="button secondary" aria-describedby="dirty-sections">${icon("settings")}${e(t("unsavedCount", { count: names.length }))}</button><div id="dirty-sections" class="dirty-sections"><strong>${e(t("unsaved"))}</strong>${names.map((name) => `<a href="#/settings/${["compression", "watermark"].includes(name) ? "media" : name}">${e(t(name))}</a>`).join("")}</div>`;
+  };
   ctx.render = async () => {
     if (!ctx.authenticated) return;
     pageController?.abort();
@@ -223,6 +231,7 @@ export async function start() {
     } finally {
       if (!signal.aborted) {
         root.removeAttribute("aria-busy");
+        syncDirtyIndicator();
         if (ctx.focusRoute) {
           (root.querySelector("h1") || root).setAttribute("tabindex", "-1");
           (root.querySelector("h1") || root).focus({ preventScroll: true });
@@ -355,12 +364,7 @@ export async function start() {
     },
     new AbortController().signal,
   );
-  ctx.drafts.subscribe(() => {
-    const target = document.getElementById("dirty-indicator");
-    const names = ctx.drafts.dirtyNames();
-    target.hidden = !names.length;
-    target.innerHTML = `<button class="button secondary" aria-describedby="dirty-sections">${icon("settings")}${e(t("unsavedCount", { count: names.length }))}</button><div id="dirty-sections" class="dirty-sections"><strong>${e(t("unsaved"))}</strong>${names.map((name) => `<a href="#/settings/${["compression", "watermark"].includes(name) ? "media" : name}">${e(t(name))}</a>`).join("")}</div>`;
-  });
+  ctx.drafts.subscribe(() => queueMicrotask(syncDirtyIndicator));
   document.getElementById("skip-link").addEventListener("click", (event) => {
     event.preventDefault();
     (ctx.authenticated ? root : login.querySelector("input"))?.focus();
