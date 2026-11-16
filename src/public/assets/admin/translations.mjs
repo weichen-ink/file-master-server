@@ -284,6 +284,9 @@ const I18N = {
 
     // 配置表单
     lblSiteName: "站点名称",
+    lblServerLanguage: "终端语言",
+    optLangZh: "简体中文",
+    optLangEn: "English",
     lblBaseUrl: "站点地址",
     lblPort: "服务监听端口",
     lblRawSecretPath: "原文件链接前缀",
@@ -772,6 +775,9 @@ const I18N = {
 
     // Settings Form
     lblSiteName: "Site Name",
+    lblServerLanguage: "Terminal Language",
+    optLangZh: "Simplified Chinese",
+    optLangEn: "English",
     lblBaseUrl: "Site URL",
     lblPort: "Server Port",
     lblRawSecretPath: "Original file URL prefix",

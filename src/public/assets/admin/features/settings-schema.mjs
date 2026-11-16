@@ -22,6 +22,10 @@ const wm = (d) => d.watermark_enable;
 const textWm = (d) => wm(d) && d.watermark_type !== "image";
 export const schemas = {
   general: [
+    select("language", "lblServerLanguage", [
+      ["zh", "optLangZh"],
+      ["en", "optLangEn"],
+    ]),
     select("card_copy_format", "cardCopyFormat", [
       ["raw", "rawLink"],
       ["webp", "webpLink"],

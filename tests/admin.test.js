@@ -33,6 +33,7 @@ test("Section payloads enforce ownership and preserve valid zeroes", async () =>
     "base_url",
     "console",
     "image_host",
+    "language",
     "port",
     "site_name",
   ]);

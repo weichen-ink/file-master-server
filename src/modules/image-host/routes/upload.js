@@ -200,7 +200,9 @@ function registerUploadRoutes(app) {
         markdown: assetMeta.markdown
       });
     } catch (err) {
-      console.error('[File Master] Upload error:', err);
+      if (!err.status || err.status >= 500) {
+        console.error('[File Master] Upload error:', err);
+      }
       return res.status(err.status || 500).json({
         error: 'Failed to save file: ' + err.message,
         code: err.code,
