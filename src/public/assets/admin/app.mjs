@@ -316,6 +316,7 @@ export async function start() {
         `<div class="confirm-body"><span class="confirm-icon is-warn">${icon("alert")}</span><p class="confirm-message">${e(t("draftKept"))}</p></div>`,
         {
           submit: t("navLogout"),
+          symbol: "logout",
           className: "dialog-compact",
         },
       ),
@@ -344,6 +345,7 @@ export async function start() {
           t("workspace"),
           `<nav class="mobile-nav">${navigationHtml(ctx.route)}</nav><div class="sidebar-bottom">${utilityHtml()}</div>`,
           {
+            symbol: "menu",
             onMount: (el) =>
               el.addEventListener("click", (event) => {
                 if (event.target.closest("a,[data-action]")) el.close();

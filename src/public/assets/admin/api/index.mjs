@@ -25,13 +25,15 @@ export function createApi(request) {
         json: { mode: "raw", rawYaml, revision },
       }),
     validateRaw: (rawYaml, revision) => post("/api/platform/config/preview", { rawYaml, revision }),
-    healthPreview: (options) => get("/api/platform/health-preview",options),
+    healthPreview: (options) => get("/api/platform/health-preview", options),
     metrics: (options) => get("/api/platform/metrics", options),
     files: () => get("/api/modules/image-host/list"),
+    uploadCheck: (items, signal) => post("/api/image/upload-check", { items }, { signal }),
     trash: () => get("/api/modules/image-host/trash"),
-    restoreTrash: (id) =>
+    restoreTrash: (id, options) =>
       post(
         "/api/modules/image-host/trash/" + encodeURIComponent(id) + "/restore",
+        options,
       ),
     deleteTrash: (id) =>
       request("/api/modules/image-host/trash/" + encodeURIComponent(id), {
@@ -58,9 +60,9 @@ export function createApi(request) {
     remove: (item) =>
       request(
         "/api/modules/image-host/item/" +
-          [item.year, item.month, item.filename]
-            .map(encodeURIComponent)
-            .join("/"),
+        [item.year, item.month, item.filename]
+          .map(encodeURIComponent)
+          .join("/"),
         { method: "DELETE" },
       ),
     clearCache: () => post("/api/modules/image-host/cache/clear"),
@@ -90,16 +92,25 @@ export function createApi(request) {
       get("/api/platform/update/status" + (remote ? "?fetch=1" : "")),
     install: () => post("/api/platform/update/pull"),
     restart: () => post("/api/platform/restart"),
-    async upload(file, signal) {
-      // Uploads may retry because the server deduplicates the original's full hash.
+    async upload(file, signal, {
+      filename = file.name, conflictStrategy = "", conflictTargetYear = "", conflictTargetMonth = "",
+      conflictTargetFilename = "", conflictTargetSha256 = "",
+    } = {}) {
+      // Every replacement retry revalidates the same confirmed target and version.
       for (let attempt = 0; ; attempt++) {
         signal.throwIfAborted();
         const body = new FormData();
         body.append("file", file);
+        const headers = { "X-File-Name": encodeURIComponent(filename) };
+        if (conflictStrategy) headers["X-Conflict-Strategy"] = conflictStrategy;
+        if (conflictTargetYear) headers["X-Conflict-Target-Year"] = String(conflictTargetYear);
+        if (conflictTargetMonth) headers["X-Conflict-Target-Month"] = String(conflictTargetMonth);
+        if (conflictTargetFilename) headers["X-Conflict-Target-Filename"] = encodeURIComponent(String(conflictTargetFilename));
+        if (conflictTargetSha256) headers["X-Conflict-Target-Sha256"] = String(conflictTargetSha256);
         try {
           return await request("/api/image/upload", {
             method: "POST",
-            headers: { "X-File-Name": encodeURIComponent(file.name) },
+            headers,
             body,
             signal,
           });

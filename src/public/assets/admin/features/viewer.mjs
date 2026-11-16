@@ -163,7 +163,7 @@ export function openImagePreview({ src, filename, signal }) {
   const controller = new AbortController();
   const modal = document.createElement('dialog');
   modal.className = 'image-preview-dialog';
-  modal.innerHTML = `<header><h2>${e(filename)}</h2><div class="image-preview-actions">${viewerControls()}<span class="viewer-zoom-divider" aria-hidden="true"></span><button type="button" class="icon-button" data-preview-close aria-label="${e(t('close'))}" title="${e(t('close'))}">${icon('close')}</button></div></header><div class="image-preview-canvas image-viewport" tabindex="0" aria-label="${e(t('viewerHelp'))}"><img src="${e(src)}" alt="${e(filename)}" draggable="false"></div><p class="image-preview-hint">${e(t('viewerHelp'))}</p>`;
+  modal.innerHTML = `<header><h2 class="dialog-title"><span class="dialog-title-icon">${icon("image")}</span><span>${e(filename)}</span></h2><div class="image-preview-actions">${viewerControls()}<span class="viewer-zoom-divider" aria-hidden="true"></span><button type="button" class="icon-button" data-preview-close aria-label="${e(t('close'))}" title="${e(t('close'))}">${icon('close')}</button></div></header><div class="image-preview-canvas image-viewport" tabindex="0" aria-label="${e(t('viewerHelp'))}"><img src="${e(src)}" alt="${e(filename)}" draggable="false"></div><p class="image-preview-hint">${e(t('viewerHelp'))}</p>`;
   document.body.append(modal);
   modal.showModal();
   const stage = modal.querySelector('.image-viewport'), image = stage.querySelector('img');

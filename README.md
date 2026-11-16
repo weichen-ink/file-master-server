@@ -101,4 +101,4 @@ curl https://your-site.example/api/health
 
 ---
 
-[Changelog](CHANGELOG.md) · [Report an issue](https://github.com/weichen-ink/file-master-server/issues) · [MIT license](LICENSE)
+[File conflict API and recovery](docs/FILE-CONFLICTS.md) · [Changelog](CHANGELOG.md) · [Report an issue](https://github.com/weichen-ink/file-master-server/issues) · [MIT license](LICENSE)

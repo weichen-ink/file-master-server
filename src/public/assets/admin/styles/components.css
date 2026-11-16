@@ -823,6 +823,30 @@
 .dialog.dialog-medium {
   width: min(560px, calc(100vw - 32px));
 }
+.dialog .dialog-title,
+.image-preview-dialog .dialog-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.dialog-title-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  color: var(--muted);
+}
+.dialog-title-icon .icon {
+  width: 18px;
+  height: 18px;
+}
+.dialog-title > span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .input-with-action {
   position: relative;
   display: flex;
@@ -941,6 +965,76 @@
 .upload-zone.drag-over {
   border-color: var(--brand);
   background: var(--brand-subtle);
+}
+
+.dialog.dialog-upload {
+  width: min(680px, calc(100vw - 32px));
+}
+.dialog-upload .upload-zone {
+  padding: 22px 16px;
+}
+.upload-status {
+  padding: 14px 16px;
+}
+.upload-results {
+  margin-top: 18px;
+}
+.upload-results-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.upload-results-heading h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+.upload-results-heading > span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.dialog-upload.has-upload-results .upload-zone {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px;
+  text-align: left;
+}
+.dialog-upload.has-upload-results .upload-zone p {
+  margin: 0;
+  font-size: 12px;
+}
+.dialog-upload.has-upload-results .upload-zone .button { flex-shrink: 0; }
+.upload-result-actions {
+  margin-top: 14px;
+}
+
+.files-drop-target {
+  position: relative;
+}
+
+.files-drop-overlay {
+  display: none;
+  position: fixed;
+  inset: 16px;
+  z-index: 40;
+  border: 2px dashed var(--brand);
+  border-radius: var(--radius-panel);
+  background: color-mix(in srgb, var(--brand-subtle) 88%, var(--surface));
+  color: var(--brand);
+  font-weight: 600;
+  font-size: 16px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.files-drop-target.files-drop-active .files-drop-overlay {
+  display: flex;
 }
 
 .activity-result {
@@ -3245,4 +3339,288 @@ a.brand .brand-mark {
   max-height: 55dvh;
   margin: 12px 0 0;
   font-size: 12px;
+}
+
+.conflict-compare-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  gap: var(--space-3);
+  margin: 6px 0 20px;
+}
+
+.conflict-card-col {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.conflict-col-label,
+.conflict-section-title,
+.conflict-dialog .conflict-rename-field > label {
+  display: block;
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.conflict-col-label { margin-bottom: 10px; }
+.conflict-dialog form > footer {
+  border: 0;
+  background: var(--surface);
+  padding-top: 0;
+}
+.conflict-dialog .file-caption {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.conflict-dialog .conflict-compare-grid .file-caption h3 {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  margin: 0;
+}
+.conflict-dialog .file-caption p {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.conflict-compare-grid .file-card {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  background: var(--surface);
+  overflow: hidden;
+  min-width: 0;
+}
+
+.conflict-compare-grid .file-thumbnail {
+  position: relative;
+  flex: 1;
+  min-height: 120px;
+  height: auto;
+  background: var(--canvas);
+  border: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.conflict-compare-grid .file-thumbnail img {
+  width: 100%;
+  height: auto;
+  max-height: 220px;
+  object-fit: contain;
+  display: block;
+}
+
+.conflict-compare-grid .file-thumbnail:not(:has(img)) {
+  aspect-ratio: 4 / 3;
+}
+
+.conflict-rename-field .conflict-input-group {
+  max-width: 340px;
+}
+
+.conflict-input-group {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  overflow: hidden;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.conflict-input-group:focus-within {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 2px var(--brand-subtle);
+}
+
+.conflict-input-group.is-invalid {
+  border-color: var(--danger);
+  box-shadow: none;
+}
+
+.conflict-input-group input {
+  flex: 1;
+  min-width: 0;
+  border: 0 !important;
+  box-shadow: none !important;
+  background: transparent;
+  padding: 9px 12px;
+  font-size: 13.5px;
+  color: var(--text);
+}
+
+.conflict-input-ext {
+  padding: 0 12px;
+  font-size: 13px;
+  color: var(--muted);
+  background: var(--canvas);
+  border-left: 1px solid var(--border);
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  font-family: var(--mono);
+}
+
+.conflict-feedback {
+  margin-top: var(--space-2);
+}
+
+.conflict-feedback .notice {
+  margin: 0;
+}
+
+.conflict-feedback-checking {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.conflict-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.conflict-choice-grid {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.conflict-choice-card {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  max-width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 12px;
+  min-height: 36px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.conflict-choice-card:hover {
+  background: var(--surface-hover);
+}
+.conflict-choice-card > .icon,
+.conflict-choice-check .icon {
+  width: 15px;
+  height: 15px;
+}
+.conflict-choice-card[aria-disabled="true"],
+.conflict-choice-card[aria-disabled="true"]:hover {
+  background: var(--canvas);
+  color: var(--muted);
+  border-color: var(--border);
+  cursor: not-allowed;
+}
+
+.conflict-choice-card.is-selected {
+  border-color: var(--brand);
+  background: var(--brand-subtle);
+  color: var(--text);
+  font-weight: 500;
+}
+
+.conflict-choice-card.is-danger.is-selected {
+  border-color: var(--danger);
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.conflict-choice-check {
+  display: none;
+  width: 15px;
+  align-items: center;
+  color: var(--brand);
+}
+
+.conflict-choice-card.is-danger.is-selected .conflict-choice-check {
+  color: var(--danger);
+}
+
+.conflict-choice-card.is-selected .conflict-choice-check {
+  display: inline-flex;
+}
+
+.conflict-resolution > .conflict-choice-desc {
+  margin: 10px 0 22px;
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+.conflict-choice-desc.is-unavailable {
+  color: var(--text);
+}
+.conflict-batch {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  margin: 22px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.conflict-batch input[type="checkbox"] {
+  margin: 0;
+  flex: 0 0 15px;
+  width: 15px;
+  height: 15px;
+}
+.conflict-feedback-error,
+.conflict-feedback-success {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.conflict-feedback-error { color: var(--danger); }
+.conflict-feedback-success { color: var(--success); }
+.conflict-feedback:empty {
+  display: none;
+}
+
+@media (max-width: 520px) {
+  .conflict-compare-grid {
+    gap: 10px;
+  }
+  .conflict-rename-field .conflict-input-group {
+    max-width: none;
+  }
+  .conflict-dialog .file-caption {
+    padding: 8px;
+  }
+  .conflict-dialog .file-caption p {
+    flex-wrap: wrap;
+  }
+  .dialog-upload.has-upload-results .upload-zone p { display: none; }
+  .dialog-upload.has-upload-results .upload-zone { justify-content: flex-end; }
+
 }

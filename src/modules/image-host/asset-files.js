@@ -85,7 +85,14 @@ async function publishExclusive(staged, target) {
 }
 
 /** Publish a complete file exclusively; existing names are never overwritten. */
-async function persistUniqueUpload(file, directory, desiredName, sha256, disambiguate = false, { rejectOnConflict = false } = {}) {
+async function persistUniqueUpload(
+  file,
+  directory,
+  desiredName,
+  sha256,
+  disambiguate = false,
+  { rejectOnConflict = false, isNameAvailable = null } = {}
+) {
   await fs.promises.mkdir(directory, { recursive: true });
   const ext = path.extname(desiredName);
   const base = path.basename(desiredName, ext);
@@ -97,6 +104,9 @@ async function persistUniqueUpload(file, directory, desiredName, sha256, disambi
       const suffix = attempt === 0 ? '' : attempt === 1 ? `_${sha256.slice(0, 8)}`
         : attempt === 2 ? `_${sha256}` : `_${sha256}_${crypto.randomUUID()}`;
       const filename = `${base}${suffix}${ext}`;
+      if (attempt > 0 && typeof isNameAvailable === 'function' && !isNameAvailable(filename)) {
+        continue;
+      }
       const target = path.join(directory, filename);
       try {
         await publishExclusive(staged, target);

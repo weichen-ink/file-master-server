@@ -1,4 +1,5 @@
 import { t, getLocale } from "../locale.mjs";
+import { promptFileConflict } from "./conflict-dialog.mjs";
 import {
   e,
   icon,
@@ -305,10 +306,81 @@ export async function mountTrash(ctx, root, route, signal) {
         if (item?.isImage) openImagePreview({src:`/api/modules/image-host/trash/${item.id}/preview`,filename:item.filename,signal});
       },
       restore: async (target) => {
-        await ctx.api.restoreTrash(target.dataset.id);
-        ctx.invalidateFiles();
-        toast(t("restored"));
-        ctx.render();
+        const id = target.dataset.id;
+        const item = items.find((i) => i.id === id);
+        const finishRestore = () => {
+          ctx.invalidateFiles();
+          toast(t("restored"));
+          ctx.render();
+        };
+        try {
+          await ctx.api.restoreTrash(id);
+          finishRestore();
+        } catch (error) {
+          let conflict = error.details?.conflict || error.data?.conflict;
+          if (error.status !== 409 || !conflict || !item) throw error;
+          const localThumbHtml = item.isImage
+            ? `<img src="/api/modules/image-host/trash/${e(item.id)}/preview" alt="">`
+            : icon("file", 28);
+          let currentName = item.filename;
+          let initialWarn = "";
+          while (true) {
+            const choice = await promptFileConflict({
+              title: t("restoreConflictTitle"),
+              desc: t("restoreConflictDesc"),
+              localLabel: t("restoreConflictTrash"),
+              localName: item.filename,
+              localSize: item.size,
+              localThumbHtml,
+              conflict,
+              hasMore: false,
+              cancelLabel: t("cancel"),
+              initialWarning: initialWarn,
+              initialRenameBase: currentName.replace(/\.[^.]+$/, ""),
+              renameLabel: t("restoreConflictRenameBtn"),
+              renameDesc: t("restoreConflictRenameDesc"),
+              replaceLabel: t("restoreConflictReplaceBtn"),
+              replaceDesc: t("restoreConflictReplaceDesc"),
+              lockedHint: t("restoreConflictLockedHint"),
+              api: ctx.api,
+              checkYear: item.year,
+              checkMonth: item.month,
+            });
+            if (choice.action === "skip") return;
+            try {
+              if (choice.action === "replace") {
+                const confirmedTarget = choice.target || conflict;
+                currentName = item.filename;
+                await ctx.api.restoreTrash(id, {
+                  conflictStrategy: "replace",
+                  filename: currentName,
+                  conflictTarget: {
+                    year: confirmedTarget.year, month: confirmedTarget.month,
+                    filename: confirmedTarget.filename, sha256: confirmedTarget.sha256,
+                  },
+                });
+              } else if (choice.action === "rename") {
+                currentName = choice.filename || currentName;
+                await ctx.api.restoreTrash(id, { conflictStrategy: "rename", filename: currentName });
+              } else {
+                return;
+              }
+              finishRestore();
+              return;
+            } catch (retryErr) {
+              if (retryErr.status === 409 && (retryErr.details?.conflict || retryErr.data?.conflict)) {
+                // Only a changed original target may refresh the comparison. Rename collisions only validate the input.
+                if (choice.action === "replace") conflict = retryErr.details?.conflict || retryErr.data?.conflict;
+                initialWarn = retryErr.details?.code === "CONFLICT_TARGET_CHANGED"
+                  ? t("uploadConflictTargetChanged")
+                  : t("uploadConflictRenameExists", { name: currentName });
+                continue;
+              }
+              if (retryErr.details?.code === "CONFLICT_TARGET_CHANGED") throw new Error(t("uploadConflictTargetChanged"));
+              throw retryErr;
+            }
+          }
+        }
       },
       "delete-forever": async (target) => {
         const item = items.find((i) => i.id === target.dataset.id);
@@ -447,6 +519,7 @@ export function mountBackup(ctx, root, signal) {
               empty: empty("noBackups", "startFirstBackup"),
             },
           ),
+          { symbol: "hardDrive" },
         );
       },
     },

@@ -101,4 +101,4 @@ curl https://your-site.example/api/health
 
 ---
 
-[更新记录](CHANGELOG.md) · [问题反馈](https://github.com/weichen-ink/file-master-server/issues) · [MIT 许可证](LICENSE)
+[同名冲突 API 与恢复机制](docs/FILE-CONFLICTS.md) · [更新记录](CHANGELOG.md) · [问题反馈](https://github.com/weichen-ink/file-master-server/issues) · [MIT 许可证](LICENSE)

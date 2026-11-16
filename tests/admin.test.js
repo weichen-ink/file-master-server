@@ -170,6 +170,44 @@ test("Upload cancellation retains unfinished files and retries only those files"
   assert.equal(tasks.jobs.upload.failed, 0);
 });
 
+test("Upload results use actual server identities and retain successful rows when retrying failures", async () => {
+  const { createTasks } = await modules("state/tasks");
+  const { renderUploadResult } = await modules("features/activity");
+  let failed = false;
+  const calls = [];
+  const tasks = createTasks({ upload: async file => {
+    calls.push(file.name);
+    if (file.name === 'retry.pdf' && !failed) { failed = true; throw Error('<offline>'); }
+    return { year: '2020', month: '02', filename: file.name === 'copy.png' ? 'existing #图.png' : file.name,
+      category: file.name.endsWith('.png') ? 'image' : 'other', rawUrl: 'https://example.test/raw/2020/02/existing.png', deduplicated: file.name === 'copy.png' };
+  } }, async () => {});
+  await tasks.upload([{ name: 'copy.png' }, { name: 'retry.pdf' }]);
+  const job = tasks.jobs.upload;
+  assert.equal(job.results[0].state, 'reused');
+  assert.equal(job.results[0].filename, 'existing #图.png');
+  assert.equal(job.results[1].state, 'failed');
+  let html = renderUploadResult(job);
+  assert.ok(html.includes(detailLink()));
+  assert.ok(html.includes('collection file-collection'));
+  assert.ok(html.includes('class="row-thumbnail"'));
+  assert.ok(html.includes('src="https://example.test/raw/2020/02/existing.png?thumbnail=1"'));
+  assert.ok(html.includes('&lt;offline&gt;'));
+  assert.ok(!html.includes('<offline>'));
+  await tasks.retryUpload();
+  assert.deepEqual(calls, ['copy.png', 'retry.pdf', 'retry.pdf']);
+  assert.equal(tasks.jobs.upload, job);
+  assert.equal(job.results.length, 2);
+  assert.equal(job.results[0].state, 'reused');
+  assert.equal(job.results[1].state, 'uploaded');
+  assert.equal(job.total, 2);
+  assert.equal(job.done, 2);
+  assert.equal(job.failed, 0);
+  html = renderUploadResult(job);
+  assert.ok(html.includes(detailLink()));
+  assert.ok(!html.includes('&lt;offline&gt;'));
+  function detailLink() { return '#/files/2020/02/' + encodeURIComponent('existing #图.png'); }
+});
+
 test("Task responses arriving after session cleanup cannot repopulate jobs or restart polling", async () => {
   const { createTasks } = await modules("state/tasks");
   let resolveIntegrity, resolveBackup;

@@ -1,11 +1,39 @@
 import { t } from "../locale.mjs";
-import { e, icon, button, notice, dialog, downloadJson, toast } from "../ui.mjs";
+import { promptFileConflict } from "../features/conflict-dialog.mjs";
+import { e, icon, button, notice, dialog, actions, downloadJson, toast } from "../ui.mjs";
+
+function promptUploadConflict(file, conflict, hasMore, displayName = file.name, api = null, initialWarning = "") {
+  if (typeof document === "undefined") return Promise.resolve({ action: "skip" });
+  const isImage = /^image\//i.test(file.type || "");
+  const localUrl = isImage ? URL.createObjectURL(file) : "";
+  const localThumbHtml = localUrl ? `<img src="${e(localUrl)}" alt="">` : icon("file", 28);
+  return promptFileConflict({
+    title: t("uploadConflictTitle"),
+    desc: t("uploadConflictDesc", { name: displayName }),
+    localLabel: t("uploadConflictLocal"),
+    localName: displayName,
+    localSize: file.size,
+    localThumbHtml,
+    conflict,
+    hasMore,
+    cancelLabel: t("uploadConflictSkipBtn"),
+    initialWarning,
+    api,
+  }).finally(() => {
+    if (localUrl) URL.revokeObjectURL(localUrl);
+  });
+}
 
 export function createTasks(api, onFilesChanged) {
   const listeners = new Set();
   const jobs = {};
   let uploadController;
   let pending = [];
+  let uploadPreviewUrls = [];
+  const releaseUploadPreviews = () => {
+    uploadPreviewUrls.forEach(url => URL.revokeObjectURL(url));
+    uploadPreviewUrls = [];
+  };
   let integrityTimer,
     backupTimer,
     epoch = 0;
@@ -17,60 +45,144 @@ export function createTasks(api, onFilesChanged) {
       fn(jobs);
       return () => listeners.delete(fn);
     },
-    async upload(files) {
+    async upload(files, { retry = false } = {}) {
       if (uploadController || !files?.length) return;
       const session = epoch;
-      const selected = [...files];
+      if (!retry) releaseUploadPreviews();
+      const selected = retry ? [...pending] : [...files].map((file) => {
+        const isImage = /^image\//i.test(file.type || "");
+        const localPreviewUrl = isImage && file instanceof Blob ? URL.createObjectURL(file) : "";
+        if (localPreviewUrl) uploadPreviewUrls.push(localPreviewUrl);
+        return { file, row: { name: file.name, filename: file.name, ext: file.name.split(".").pop(),
+          size: file.size, isImage, localPreviewUrl, state: "queued" } };
+      });
       const controller = (uploadController = new AbortController());
       pending = [];
-      const job = (jobs.upload = {
+      const job = retry ? jobs.upload : (jobs.upload = {
         state: "running",
         done: 0,
         total: selected.length,
         success: 0,
         duplicates: 0,
+        skipped: 0,
         failed: 0,
         items: [],
+        results: selected.map(({ row }) => row),
       });
-      emit();
+      job.state = "running";
+      job.items = [];
+      for (const { row } of selected) { row.state = "queued"; delete row.error; }
+      const update = () => {
+        job.success = job.results.filter(row => ["uploaded", "replaced"].includes(row.state)).length;
+        job.duplicates = job.results.filter(row => row.state === "reused").length;
+        job.skipped = job.results.filter(row => row.state === "skipped").length;
+        job.failed = job.results.filter(row => ["failed", "cancelled"].includes(row.state)).length;
+        job.done = job.results.filter(row => !["queued", "uploading", "cancelled"].includes(row.state)).length;
+        emit();
+      };
+      update();
+      let batchStrategy = null;
       try {
         for (let i = 0; i < selected.length; i++) {
           if (controller.signal.aborted) {
-            pending.push(...selected.slice(i));
+            const remaining = selected.slice(i);
+            remaining.forEach(({ row }) => { row.state = "cancelled"; });
+            pending.push(...remaining);
             break;
           }
-          const file = selected[i];
+          const { file, row } = selected[i];
+          row.state = "uploading";
           job.current = file.name;
-          emit();
+          update();
           try {
-            const result = await api.upload(file, controller.signal);
+            let result = null;
+            let skipped = false;
+            let currentName = file.name;
+            let uploadOpts = {};
+            let renameAttempts = 0;
+            while (true) {
+              try {
+                result = await api.upload(file, controller.signal, { filename: currentName, ...uploadOpts });
+                break;
+              } catch (error) {
+                if (error.status === 409 && (error.details?.conflict || error.data?.conflict || error.details?.code === "CONFLICT_TARGET_CHANGED")) {
+                  const conflict = error.details?.conflict || error.data?.conflict;
+                  if (!conflict) throw new Error(t("uploadConflictTargetChanged"));
+                  const canBatchApply = batchStrategy && error.details?.code !== "CONFLICT_TARGET_CHANGED" &&
+                    !(batchStrategy === "replace" && (conflict.locked || conflict.code !== "NAME_CONFLICT"));
+                  const retryWarn = error.details?.code === "CONFLICT_TARGET_CHANGED"
+                    ? t("uploadConflictTargetChanged")
+                    : renameAttempts > 0 ? t("uploadConflictRenameExists", { name: currentName }) : "";
+                  const choice = canBatchApply
+                    ? { action: batchStrategy, target: conflict }
+                    : await promptUploadConflict(file, conflict, selected.length - i > 1, currentName, api, retryWarn);
+                  if (choice.action === "replace") {
+                    const target = choice.target || conflict;
+                    if (target.code === "NAME_CONFLICT" && !target.locked) {
+                      if (choice.applyToAll) batchStrategy = "replace";
+                      if (choice.filename) currentName = choice.filename;
+                      uploadOpts = {
+                        conflictStrategy: "replace", conflictTargetYear: target.year, conflictTargetMonth: target.month,
+                        conflictTargetFilename: target.filename, conflictTargetSha256: target.sha256,
+                      };
+                      continue;
+                    }
+                  }
+                  if (choice.action === "rename") {
+                    if (choice.filename && choice.filename !== currentName) {
+                      currentName = choice.filename;
+                      uploadOpts = {};
+                      renameAttempts++;
+                    } else {
+                      uploadOpts = { conflictStrategy: "rename" };
+                    }
+                    if (choice.applyToAll) batchStrategy = "rename";
+                    continue;
+                  }
+                  if (choice.applyToAll) batchStrategy = "skip";
+                  skipped = true;
+                  break;
+                }
+                throw error;
+              }
+            }
             if (session !== epoch) return;
-            if (result.deduplicated) job.duplicates++;
-            else job.success++;
+            if (skipped) row.state = "skipped";
+            else if (result) {
+              Object.assign(row, {
+                state: result.deduplicated ? "reused" : result.replaced ? "replaced" : "uploaded",
+                filename: result.filename || currentName,
+                year: result.year, month: result.month,
+                category: result.category,
+                isImage: result.category === "image",
+                rawPreviewPath: result.rawUrl,
+                thumbnailUrl: result.thumbnailUrl || (result.category === "image" && result.rawUrl
+                  ? result.rawUrl + (result.rawUrl.includes("?") ? "&" : "?") + "thumbnail=1" : ""),
+              });
+            }
           } catch (error) {
             if (session !== epoch) return;
-            pending.push(file);
+            pending.push({ file, row });
+            row.state = error.name === "AbortError" ? "cancelled" : "failed";
+            row.error = error.name === "AbortError" ? t("cancelled") : error.message;
             job.items.push({
               name: file.name,
               error:
                 error.name === "AbortError" ? t("cancelled") : error.message,
             });
           }
-          job.done++;
-          job.failed = pending.length;
-          emit();
+          update();
         }
       } finally {
         if (session !== epoch) return;
         uploadController = null;
-        job.failed = pending.length;
         job.state = controller.signal.aborted
           ? "cancelled"
           : pending.length
             ? "error"
             : "completed";
         job.current = "";
-        emit();
+        update();
         try {
           await onFilesChanged();
         } catch (error) {
@@ -82,7 +194,7 @@ export function createTasks(api, onFilesChanged) {
       uploadController?.abort();
     },
     retryUpload() {
-      return this.upload(pending);
+      return this.upload(pending, { retry: true });
     },
     async startIntegrity() {
       const session = epoch;
@@ -169,10 +281,11 @@ export function createTasks(api, onFilesChanged) {
           ${data.error ? notice(data.error, "danger") : ""}
           ${issueCount ? `<div class="table-wrap"><table><thead><tr><th>${e(t("lblPath"))}</th><th>${e(t("lblIssueType"))}</th><th>${e(t("lblIssueDetail"))}</th></tr></thead><tbody>${data.issues.map((i) => `<tr><td class="break-all">${e(i.path)}</td><td>${e(i.type)}</td><td class="break-all">${e(i.error || i.actual || "—")}</td></tr>`).join("")}</tbody></table></div>` : ""}
         </div>`,
-        { submit: t("btnDownloadCheck"), className: issueCount ? "" : "dialog-medium" },
+        { submit: t("btnDownloadCheck"), className: issueCount ? "" : "dialog-medium", symbol: "check" },
       ).then((ok) => ok && downloadJson(data, "file-master-integrity.json"));
     },
     clear() {
+      releaseUploadPreviews();
       epoch++;
       uploadController?.abort();
       uploadController = null;

@@ -37,9 +37,9 @@ function registerManageRoutes(app) {
       } catch (error) { res.status(error.status || 500).json({ error: error.message, code: error.code }); }
     }));
   }
-  app.get('/api/modules/image-host/trash', requireApiOrAdmin, (req,res) => {
+  app.get('/api/modules/image-host/trash', requireApiOrAdmin, serializeMutation((req,res) => {
     try { res.json({items:publicTrashEntries()}); } catch(error) { res.status(500).json({error:error.message}); }
-  });
+  }));
   // Deleted assets stay private. Temporary raster output cannot revive their public URLs.
   app.get('/api/modules/image-host/trash/:id/preview', requireApiOrAdmin, async (req,res) => {
     let dir;
@@ -127,8 +127,22 @@ function registerManageRoutes(app) {
     }
   }));
   app.post('/api/modules/image-host/trash/:id/restore', requireApiOrAdmin, serializeMutation(async (req,res) => {
-    try { const result=await restoreTrash(req.params.id); invalidateScanCache(); appendAuditLog({action:'restore_from_trash',ip:getClientIp(req),...result}); res.json(result); }
-    catch(error) { res.status(error.status || 500).json({error:error.message}); }
+    try {
+      const result = await restoreTrash(req.params.id, {
+        conflictStrategy: req.body?.conflictStrategy,
+        filename: req.body?.filename,
+        conflictTarget: req.body?.conflictTarget
+      });
+      invalidateScanCache();
+      appendAuditLog({action:'restore_from_trash',ip:getClientIp(req),...result});
+      res.json(result);
+    } catch(error) {
+      res.status(error.status || 500).json({
+        error: error.message,
+        ...(error.code ? { code: error.code } : {}),
+        ...(error.conflict ? { conflict: error.conflict } : {})
+      });
+    }
   }));
   app.delete('/api/modules/image-host/trash/:id', requireApiOrAdmin, serializeMutation(async (req,res) => {
     try { const result=deleteTrash(req.params.id); appendAuditLog({action:'permanent_delete',ip:getClientIp(req),trashId:req.params.id}); res.json(result); }

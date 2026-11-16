@@ -1,5 +1,13 @@
 # Changelog (file-master-server)
 
+## [1.2.5] - 2026-11-16
+
+### File Conflict Target Verification, Atomic Replacement & Trash Recovery
+- Check filename conflicts globally across all year/month directories and reserved rename aliases (`upload-check` & upload), requiring confirmed target identity (`year`, `month`, `filename`, `sha256`) on `replace` and returning `409 CONFLICT_TARGET_CHANGED` on stale or missing targets.
+- Unify upload overwrite and trash restore replacement under `replaceAsset` / `recoverReplacement` with persisted `asset_mutation` intent, staging verification, recycle-bin backup, and atomic `renameSync` switchover (see `docs/FILE-CONFLICTS.md`).
+- Clean up identical-byte trash entries on restore-replace and serialize scheduled/manual trash retention purges with audit logging.
+- Extract shared Web conflict dialog (`conflict-dialog.mjs`) with async rename-check race guards, unified file metadata, bounded equal-height comparison cards, and upload result retry handling.
+
 ## [1.2.3] - 2026-11-14
 
 ### Batch trash management & unified UI polish

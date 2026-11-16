@@ -1,6 +1,20 @@
 import { e, icon } from "../ui.mjs";
 import { t } from "../locale.mjs";
 
+/** Shared thumbnail for the library, upload results, and other file collections. */
+export const fileThumbnail = (item) =>
+  item.isImage && (item.thumbnailUrl || item.rawPreviewPath)
+    ? `<img src="${e(item.thumbnailUrl || item.rawPreviewPath)}" alt="" loading="lazy"><span class="thumbnail-fallback" hidden>${icon("image")}</span>`
+    : `<span class="file-type-icon">${icon(item.isImage ? "image" : "file")}<span>${e(item.ext?.replace(".", "").toUpperCase() || "")}</span></span>`;
+
+export function thumbnailFallback(event) {
+  const image = event.target;
+  const fallback = image?.nextElementSibling;
+  if (image?.tagName !== "IMG" || !fallback?.classList.contains("thumbnail-fallback")) return;
+  image.hidden = true;
+  fallback.hidden = false;
+}
+
 /** A single column model with compact, content-first rows on narrow containers. */
 export function collection(columns, rows, { className = "", empty = "" } = {}) {
   if (!rows.length) return empty;

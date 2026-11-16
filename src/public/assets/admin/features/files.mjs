@@ -37,7 +37,7 @@ import {
   filesHref,
   navigate,
 } from "../router.mjs";
-import { collection, fileIdentity } from "./collection.mjs";
+import { collection, fileIdentity, fileThumbnail, thumbnailFallback } from "./collection.mjs";
 import { mountViewer, viewerControls, bindViewerControls, openImagePreview } from "./viewer.mjs";
 import { cardCopy } from "../state/preferences.mjs";
 import { confirmedMutation } from "../state/settings.mjs";
@@ -93,18 +93,14 @@ export function queryFiles(items, query) {
     visible: filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
   };
 }
-const previewThumb = (item) =>
-  item.isImage
-    ? `<img src="${e(item.thumbnailUrl || item.rawPreviewPath)}" alt="" loading="lazy"><span class="thumbnail-fallback" hidden>${icon("image")}</span>`
-    : `<span class="file-type-icon">${icon("file")}<span>${e(item.ext?.replace(".", "").toUpperCase())}</span></span>`;
 export function fileCard(item, index, from = "") {
-  return `<article class="file-card"><a href="${e(detailHref(item, { from }))}" class="file-open"><div class="file-thumbnail">${previewThumb(item)}${item.locked ? `<span class="protection-badge" aria-label="${e(t("protected"))}">${icon("lock")}</span>` : ""}</div><div class="file-caption"><h3 title="${e(item.filename)}">${e(item.filename)}</h3><p>${metaItem("hardDrive", bytes(item.size))}<span class="meta-sep" aria-hidden="true"></span>${metaItem("eye", item.hits || 0, { title: `${t("sortHits")}: ${item.hits || 0}` })}</p></div></a><button type="button" class="card-copy icon-button" data-action="copy-raw" data-index="${index}" title="${e(t("copy"))}" aria-label="${e(t("copy"))}">${icon("copy")}</button></article>`;
+  return `<article class="file-card"><a href="${e(detailHref(item, { from }))}" class="file-open"><div class="file-thumbnail">${fileThumbnail(item)}${item.locked ? `<span class="protection-badge" aria-label="${e(t("protected"))}">${icon("lock")}</span>` : ""}</div><div class="file-caption"><h3 title="${e(item.filename)}">${e(item.filename)}</h3><p>${metaItem("hardDrive", bytes(item.size))}<span class="meta-sep" aria-hidden="true"></span>${metaItem("eye", item.hits || 0, { title: `${t("sortHits")}: ${item.hits || 0}` })}</p></div></a><button type="button" class="card-copy icon-button" data-action="copy-raw" data-index="${index}" title="${e(t("copy"))}" aria-label="${e(t("copy"))}">${icon("copy")}</button></article>`;
 }
 function fileRow(item, index, from = "") {
   return {
     file: fileIdentity(item, {
       href: detailHref(item, { from }),
-      thumbnail: previewThumb(item),
+      thumbnail: fileThumbnail(item),
       summary: `${metaItem("hardDrive", bytes(item.size))}${metaItem("calendar", compactDate(item.createdAt))}${item.locked ? metaItem("lock", t("protected")) : ""}`,
     }),
     size: e(bytes(item.size)),
@@ -117,6 +113,7 @@ function fileRow(item, index, from = "") {
 }
 const selected = (a, b) => (a === b ? "selected" : "");
 export async function mountFiles(ctx, root, route, signal) {
+  root.addEventListener("error", thumbnailFallback, { capture: true, signal });
   await Promise.all([ctx.loadFiles(), ctx.loadConfig()]);
   if (signal.aborted) return;
   let query = { ...route.query };
@@ -267,6 +264,60 @@ export async function mountFiles(ctx, root, route, signal) {
     { capture: true, signal },
   );
   renderResults();
+  root.classList.add("files-drop-target");
+  let dropOverlay = root.querySelector(".files-drop-overlay");
+  if (!dropOverlay) {
+    dropOverlay = document.createElement("div");
+    dropOverlay.className = "files-drop-overlay";
+    dropOverlay.innerHTML = `${icon("upload")}<span>${e(t("filesDropHint"))}</span>`;
+    root.append(dropOverlay);
+  }
+  let dragDepth = 0;
+  const hasFiles = (event) => Array.from(event.dataTransfer?.types || []).includes("Files");
+  root.addEventListener(
+    "dragenter",
+    (event) => {
+      if (!hasFiles(event)) return;
+      event.preventDefault();
+      dragDepth++;
+      root.classList.add("files-drop-active");
+    },
+    { signal },
+  );
+  root.addEventListener(
+    "dragover",
+    (event) => {
+      if (!hasFiles(event)) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+      root.classList.add("files-drop-active");
+    },
+    { signal },
+  );
+  root.addEventListener(
+    "dragleave",
+    () => {
+      if (dragDepth > 0) dragDepth--;
+      if (dragDepth === 0) root.classList.remove("files-drop-active");
+    },
+    { signal },
+  );
+  root.addEventListener(
+    "drop",
+    (event) => {
+      if (!hasFiles(event)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      dragDepth = 0;
+      root.classList.remove("files-drop-active");
+      const files = [...(event.dataTransfer?.files || [])];
+      if (files.length) {
+        ctx.chooseUpload();
+        ctx.tasks.upload(files);
+      }
+    },
+    { signal },
+  );
   if (ctx.restoreFileScroll) {
     window.scrollTo(0, ctx.fileScroll || 0);
     ctx.restoreFileScroll = false;
@@ -284,7 +335,7 @@ export async function createShare(ctx, item, signal) {
   const values = await dialog(
     t("share"),
     `<div class="share-target-name">${e(item.filename)}</div><div class="field"><label for="share-hours">${e(t("shareExpiryLabel"))}</label><input id="share-hours" name="hours" type="number" min="0" value="24" required></div><div class="field"><label for="share-max">${e(t("shareMaxDlLabel"))}</label><input id="share-max" name="max" type="number" min="0" step="1" value="0" required></div>${notice(t("sharesHelp"))}`,
-    { submit: t("share"), className: "dialog-compact" },
+    { submit: t("share"), className: "dialog-compact", symbol: "share" },
   );
   if (!values || signal?.aborted) return;
   const { share } = await ctx.api.share(item, {
@@ -297,6 +348,7 @@ export async function createShare(ctx, item, signal) {
     `<div class="field"><label for="created-share">${e(t("shareLink"))}</label><div class="input-with-action"><input readonly value="${e(share.shareUrl)}" id="created-share">${button("copy", "copy-created-share", "icon-button", "copy")}</div></div>`,
     {
       cancel: t("done"),
+      symbol: "share",
       className: "dialog-compact",
       onMount: (el) => {
         el.querySelector("input").addEventListener("click", (event) =>

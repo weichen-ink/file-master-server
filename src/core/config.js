@@ -69,6 +69,7 @@ image_host:
   raw_secret_path: raw
   pub_secret_path: pub
   rename_alias_days: 7
+  trash_retention_days: 0
   enable_optimization: true
   upload_rate_limit: 1200
   webp_quality: 82
@@ -174,6 +175,7 @@ function normalizeParsedConfig(parsed = {}, needsSetup = false) {
           .replace(/^\/+|\/+$/g, '') || 'pub',
       enable_optimization: img.enable_optimization !== false,
       rename_alias_days: Number.isInteger(Number(img.rename_alias_days)) && Number(img.rename_alias_days)>=1 && Number(img.rename_alias_days)<=365 ? Number(img.rename_alias_days) : 7,
+      trash_retention_days: Number.isInteger(Number(img.trash_retention_days)) && Number(img.trash_retention_days)>=0 && Number(img.trash_retention_days)<=3650 ? Number(img.trash_retention_days) : 0,
       upload_rate_limit: img.upload_rate_limit !== undefined ? Number(img.upload_rate_limit) : 1200,
       watermark_image: safeWatermarkImg,
       watermark_image_dark: safeWatermarkDark,
@@ -402,6 +404,9 @@ function prepareRawConfigYaml(rawText) {
   if (parsed.image_host?.rename_alias_days !== undefined && (!Number.isInteger(parsed.image_host.rename_alias_days) || parsed.image_host.rename_alias_days<1 || parsed.image_host.rename_alias_days>365)) {
     throw new Error('Old filename retention must be a whole number from 1 to 365 days');
   }
+  if (parsed.image_host?.trash_retention_days !== undefined && (!Number.isInteger(parsed.image_host.trash_retention_days) || parsed.image_host.trash_retention_days<0 || parsed.image_host.trash_retention_days>3650)) {
+    throw new Error('Recycle bin auto-purge retention must be a whole number from 0 to 3650 days');
+  }
 
   if(parsed.language !== undefined && !['en','zh','en-US','zh-CN'].includes(parsed.language))throw new Error('Terminal language must be en or zh');
   if(parsed.monitoring !== undefined)validateMonitoring(parsed.monitoring);
@@ -520,6 +525,7 @@ function prepareConfigPatch(patch = {}, revision = '') {
       'raw_secret_path',
       'pub_secret_path',
       'rename_alias_days',
+      'trash_retention_days',
       ...IMAGE_PROCESSING_CONFIG_KEYS
     ];
     for (const k of imgKeys) {

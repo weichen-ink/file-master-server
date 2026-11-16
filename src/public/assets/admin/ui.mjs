@@ -110,7 +110,7 @@ export async function copy(value) {
     await dialog(
       t("copyManually"),
       `<textarea readonly aria-label="${e(t("copy"))}">${e(value)}</textarea>`,
-      { className: "dialog-compact" },
+      { className: "dialog-compact", symbol: "copy" },
     );
   }
 }
@@ -128,14 +128,15 @@ export function downloadJson(value, filename) {
 export function dialog(
   title,
   content,
-  { submit, cancel, danger = false, className = "", onMount } = {},
+  { submit, cancel, danger = false, className = "", symbol = "file", focusSelector, onMount } = {},
 ) {
   return new Promise((resolve) => {
     const previous = document.activeElement;
     const el = document.createElement("dialog");
     el.className = className ? `dialog ${className}` : "dialog";
-    el.innerHTML = `<form method="dialog"><header><h2 id="dialog-title">${e(title)}</h2><button type="button" data-dialog-cancel class="icon-button" aria-label="${e(t("close"))}">${icon("close")}</button></header><div class="dialog-content">${content}</div><footer><button type="button" data-dialog-cancel class="button secondary">${e(cancel || t(submit ? "cancel" : "close"))}</button>${submit ? `<button value="confirm" class="button ${danger ? "danger" : "primary"}">${e(submit)}</button>` : ""}</footer></form>`;
-    el.setAttribute("aria-labelledby", "dialog-title");
+    const titleId = `dialog-title-${++dialog.sequence}`;
+    el.innerHTML = `<form method="dialog"><header><h2 id="${titleId}" class="dialog-title"><span class="dialog-title-icon">${icon(symbol)}</span><span>${e(title)}</span></h2><button type="button" data-dialog-cancel class="icon-button" aria-label="${e(t("close"))}">${icon("close")}</button></header><div class="dialog-content">${content}</div><footer><button type="button" data-dialog-cancel class="button secondary">${e(cancel || t(submit ? "cancel" : "close"))}</button>${submit ? `<button value="confirm" class="button ${danger ? "danger" : "primary"}">${e(submit)}</button>` : ""}</footer></form>`;
+    el.setAttribute("aria-labelledby", titleId);
     document.body.append(el);
     el.addEventListener("click", (event) => {
       if (event.target === el || event.target.closest("[data-dialog-cancel]"))
@@ -154,11 +155,12 @@ export function dialog(
     );
     onMount?.(el);
     el.querySelector(
-      ".dialog-content input:not([readonly]), .dialog-content textarea:not([readonly]), .dialog-content select",
+      focusSelector || ".dialog-content input:not([readonly]), .dialog-content textarea:not([readonly]), .dialog-content select",
     )?.setAttribute("autofocus", "");
     el.showModal();
   });
 }
+dialog.sequence = 0;
 export async function confirm(title, body, danger = false) {
   return (
     (await dialog(
@@ -167,6 +169,7 @@ export async function confirm(title, body, danger = false) {
       {
         submit: t("confirm"),
         danger,
+        symbol: danger ? "trash" : "alert",
         className: "dialog-compact",
       },
     )) !== null
