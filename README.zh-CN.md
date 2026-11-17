@@ -21,7 +21,7 @@
 - **文件管理与检索**：支持按目录、文件类型、关键词及时间/大小/访问量排序浏览，网格与列表视图自由切换，大图预览支持缩放与拖拽。
 - **媒体处理（压缩 + 自适应水印）**：支持自动 WebP 转换、最大宽度限制，以及图片/文字/平铺水印（支持根据图片亮度自动切换深浅色水印，后台实时预览效果）。
 - **安全与去重机制**：上传自动 SHA-256 去重；支持文件锁定防删、安全重命名（含旧链接宽限期）以及服务端回收站还原。
-- **外链分享**：为任意文件生成独立分享链接，可配置过期时间与最大下载次数，随时撤销。
+- **外链分享**：为任意文件生成独立分享链接，可配置过期时间与最大下载次数，随时撤销。限次分享每次返回完整文件，不支持分片续传；不限次分享支持续传。
 - **运维管理与监控**：内置运行状态面板、低 CPU 占用的定时/手动打包备份（支持 `rclone` 同步与 Bark 推送）、GitHub 在线更新与只读 `/api/health` 监控端点。
 - **多端与多语言**：支持简体中文与 English，支持亮色、暗色及跟随系统主题。
 
@@ -34,8 +34,12 @@
 ```bash
 git clone https://github.com/weichen-ink/file-master-server.git
 cd file-master-server
+mkdir -p config storage data
+sudo chown -R 1000:1000 config storage data
 docker compose up -d --build
 ```
+
+容器以非 root 的 `node` 用户（UID/GID 1000:1000）运行。在 Linux 常规 rootful Docker 下，**首次启动、升级或恢复后都需先准备可写的挂载目录**；Compose 不会自动创建缺失的宿主机目录。rootless Docker 或自定义 UID 映射需将属主设置为映射后的宿主机用户。升级时先按[部署说明](docs/DEPLOYMENT.md)保留旧配置，再设置目录属主并启动。
 
 启动后打开 `http://localhost:3210/setup`（远程部署请将 `localhost` 替换为服务器地址）完成初始化设置。
 

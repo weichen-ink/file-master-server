@@ -196,9 +196,11 @@ export async function start() {
   const syncDirtyIndicator = () => {
     const target = document.getElementById("dirty-indicator");
     if (!target) return;
-    const names = ctx.drafts.dirtyNames();
     const hasSaveBar = Boolean(root.querySelector(".save-bar:not([hidden])"));
-    target.hidden = !names.length || hasSaveBar;
+    const sectionRoute = name => ["compression", "watermark"].includes(name) ? "media" : name;
+    const names = ctx.drafts.dirtyNames().filter(name =>
+      !(hasSaveBar && ctx.route?.page === "settings" && sectionRoute(name) === ctx.route.section));
+    target.hidden = !names.length;
     target.innerHTML = `<button class="button secondary" aria-describedby="dirty-sections">${icon("settings")}${e(t("unsavedCount", { count: names.length }))}</button><div id="dirty-sections" class="dirty-sections"><strong>${e(t("unsaved"))}</strong>${names.map((name) => `<a href="#/settings/${["compression", "watermark"].includes(name) ? "media" : name}">${e(t(name))}</a>`).join("")}</div>`;
   };
   ctx.render = async () => {
@@ -365,6 +367,9 @@ export async function start() {
     new AbortController().signal,
   );
   ctx.drafts.subscribe(() => queueMicrotask(syncDirtyIndicator));
+  document.getElementById("dirty-indicator")?.addEventListener("click", (event) => {
+    if (event.target.closest("a[href]")) ctx.highlightDirty = true;
+  });
   document.getElementById("skip-link").addEventListener("click", (event) => {
     event.preventDefault();
     (ctx.authenticated ? root : login.querySelector("input"))?.focus();

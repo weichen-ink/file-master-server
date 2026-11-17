@@ -8,10 +8,12 @@ const OFFICIAL_UPSTREAM_REPO = 'https://github.com/weichen-ink/file-master-serve
 /**
  * Resolves the effective clone/fetch URL by combining an optional mirror accelerator prefix
  * with the locked official repository.
+ * Note: Mirror validation only constrains prefix syntax (and rejects deceptive fork URLs that
+ * embed the author slug without trailing official repo path); cryptographic provenance is enforced
+ * in fetchVerifiedUpdate() by verifying FETCH_HEAD against the commit SHA from GitHub's official HTTPS API.
  * Examples:
  *   - mirrorPrefix: "" -> "https://github.com/weichen-ink/file-master-server.git"
  *   - mirrorPrefix: "https://ghproxy.net/" -> "https://ghproxy.net/https://github.com/weichen-ink/file-master-server.git"
- *   - mirrorPrefix: "https://gitclone.com/github.com/weichen-ink/file-master-server.git" -> as-is
  */
 function validateGitMirror(mirror) {
   if (!mirror) return true;

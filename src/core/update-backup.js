@@ -1,6 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { ensurePrivateFile, writePrivateFile } = require('./private-files');
 
 // Backup layout and legacy readers remain compatible with earlier server versions.
 function createUpdateBackup({ rootDir: ROOT_DIR, dataDir: DATA_DIR, configPath: CONFIG_PATH, getConfig }) {
@@ -10,6 +11,7 @@ function createUpdateBackup({ rootDir: ROOT_DIR, dataDir: DATA_DIR, configPath: 
   // Replace the marker atomically so a crash cannot silently discard an install obligation.
   function readPendingUpdate(pendingFile = UPDATE_PENDING_FILE) {
     if (!fs.existsSync(pendingFile)) return null;
+    ensurePrivateFile(pendingFile);
     const raw = fs.readFileSync(pendingFile, 'utf8').trim();
     // Pre-state-machine releases wrote these plain markers.
     if (raw === 'pending' || raw === 'interrupted') return { assetsRestored: false, dependenciesPending: false };
@@ -22,7 +24,7 @@ function createUpdateBackup({ rootDir: ROOT_DIR, dataDir: DATA_DIR, configPath: 
 
   function writePendingUpdate(state, pendingFile = UPDATE_PENDING_FILE) {
     fs.mkdirSync(path.dirname(pendingFile), { recursive: true });
-    fs.writeFileSync(`${pendingFile}.tmp`, JSON.stringify(state), 'utf8');
+    writePrivateFile(`${pendingFile}.tmp`, JSON.stringify(state));
     fs.renameSync(`${pendingFile}.tmp`, pendingFile);
   }
 
@@ -176,6 +178,7 @@ function createUpdateBackup({ rootDir: ROOT_DIR, dataDir: DATA_DIR, configPath: 
     if (!fs.existsSync(pendingFile)) return { recovered: false, success: true };
     try {
       const state = readPendingUpdate(pendingFile);
+      ensurePrivateFile(cfgBackup);
       if (!state.assetsRestored) {
         console.log('[File Master Updater] Interrupted update detected, restoring configuration and watermarks from disk backups...');
         if (!fs.existsSync(cfgBackup)) throw new Error('Config backup missing in data/config.backup.yaml');
@@ -184,7 +187,12 @@ function createUpdateBackup({ rootDir: ROOT_DIR, dataDir: DATA_DIR, configPath: 
           const errs = wmRes.failed.map((f) => `${path.basename(f.file)}: ${f.error}`).join(', ');
           throw new Error(`Watermark restoration failed: ${errs}`);
         }
-        fs.copyFileSync(cfgBackup, targetConfig);
+        fs.mkdirSync(path.dirname(targetConfig), { recursive: true });
+        ensurePrivateFile(targetConfig);
+        // Keep the old config intact if writing its private replacement fails.
+        writePrivateFile(`${targetConfig}.tmp`, fs.readFileSync(cfgBackup, 'utf8'));
+        fs.renameSync(`${targetConfig}.tmp`, targetConfig);
+        ensurePrivateFile(targetConfig);
         state.assetsRestored = true;
         writePendingUpdate(state, pendingFile);
       }

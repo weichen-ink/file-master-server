@@ -11,6 +11,7 @@ const {
   sendBarkNotification
 } = require('../src/core/backup-service');
 const { ROOT_DIR, DATA_DIR, getConfig, setConfigOverride } = require('../src/core/config');
+assert.equal(process.env.FILE_MASTER_TEST_ROOT,fs.realpathSync(ROOT_DIR),'Run npm test: backups require an isolated project');
 
 test('resolveBackupDir handles absolute and relative paths', () => {
   const defaultDir = resolveBackupDir();
@@ -229,5 +230,134 @@ test('performBackup snapshots watermark files matching the queued config.yaml ve
     fs.rmSync(tmpBackupDir, { recursive: true, force: true });
     if (hadConfig) fs.writeFileSync(CONFIG_PATH, origConfig, 'utf8');
     else fs.rmSync(CONFIG_PATH, { force: true });
+  }
+});
+
+test('Credential archives are private while being written and failed packing cleans temporary output', {skip:process.platform==='win32'}, async t=>{
+  const {execFileSync}=require('node:child_process');
+  const config=require('../src/core/config');
+  const localDir=fs.mkdtempSync(path.join(os.tmpdir(),'fm-private-archive-'));
+  const toolsDir=fs.mkdtempSync(path.join(os.tmpdir(),'fm-archive-command-'));
+  t.after(()=>{fs.rmSync(localDir,{recursive:true,force:true});fs.rmSync(toolsDir,{recursive:true,force:true});});
+  config.initializeConfigFromSetup({username:'archive-test',password:'synthetic-password',api_token:'synthetic-archive-token'});
+  const marker=path.join(toolsDir,'descriptor.json');
+  // A wrapper observes the actual inherited archive fd before starting real tar.
+  const script=`#!${process.execPath}
+const fs=require('node:fs');
+fs.writeFileSync(${JSON.stringify(marker)},JSON.stringify({mode:fs.fstatSync(1).mode&0o777,regular:fs.fstatSync(1).isFile()}));
+if(process.env.FILE_MASTER_ARCHIVE_TEST_FAIL==='yes')process.exit(7);
+const result=require('node:child_process').spawnSync('/usr/bin/nice',process.argv.slice(2),{stdio:'inherit'});
+process.exit(result.status===null?1:result.status);
+`;
+  fs.writeFileSync(path.join(toolsDir,'nice'),script,{mode:0o755});
+  // Exercise the Linux wrapper branch on the host too. A non-quiet wrapper
+  // deliberately writes status text to stdout, which would corrupt the gzip.
+  fs.writeFileSync(path.join(toolsDir,'cpulimit'),`#!${process.execPath}
+const args=process.argv.slice(2);
+if(!args.includes('-q'))process.stdout.write('Process detected\\n');
+const command=args.slice(args.indexOf('--')+1);
+const result=require('node:child_process').spawnSync(command[0],command.slice(1),{stdio:'inherit'});
+process.exit(result.status===null?1:result.status);
+`,{mode:0o755});
+  const platformDescriptor=Object.getOwnPropertyDescriptor(process,'platform');
+  const exists=fs.existsSync;
+  t.mock.method(fs,'existsSync',file=>file==='/usr/bin/cpulimit'||exists(file));
+  const originalPath=process.env.PATH;
+  const originalUmask=process.umask(0o022);
+  try {
+    Object.defineProperty(process,'platform',{...platformDescriptor,value:'linux'});
+    process.env.PATH=toolsDir+path.delimiter+originalPath;
+    setConfigOverride({...getConfig(),backup:{enabled:false,local_dir:localDir,retention:3,rclone_target:'',bark_url:''}});
+    const result=await performBackup({manual:true});
+    assert.deepEqual(JSON.parse(fs.readFileSync(marker,'utf8')),{mode:0o600,regular:true});
+    assert.equal(fs.statSync(result.archivePath).mode&0o777,0o600);
+    const yaml=execFileSync('tar',['-xOzf',result.archivePath,'config.yaml'],{encoding:'utf8'});
+    assert.match(yaml,/synthetic-archive-token/,'Exercise an archive that really contains credentials');
+    fs.chmodSync(result.archivePath,0o644);
+    getBackupStatus();
+    assert.equal(fs.statSync(result.archivePath).mode&0o777,0o600,'Listing tightens legacy archives too');
+    const originalArchive=fs.readFileSync(result.archivePath);
+    process.env.FILE_MASTER_ARCHIVE_TEST_FAIL='yes';
+    await assert.rejects(performBackup({manual:true}),/Archive command failed/);
+    assert.equal(fs.readdirSync(localDir).some(file=>file.endsWith('.tmp')),false);
+    assert.deepEqual(fs.readFileSync(result.archivePath),originalArchive,'Failed packing cannot replace a completed archive');
+  } finally {
+    Object.defineProperty(process,'platform',platformDescriptor);
+    process.env.PATH=originalPath;delete process.env.FILE_MASTER_ARCHIVE_TEST_FAIL;
+    process.umask(originalUmask);setConfigOverride(null);
+  }
+});
+
+test('Two successful backups at the same timestamp retain separate archives and ignore unrelated stale output', async t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fm-collision-'));
+  const cfg = getConfig();
+  const NativeDate = Date;
+  const frozen = new NativeDate('2026-11-17T02:03:04Z').getTime();
+  const stale = path.join(dir,'filemaster-full-20261117-020304.tar.gz.tmp');
+  fs.writeFileSync(stale,'unrelated-stale-output');
+  try {
+    global.Date = class extends NativeDate { constructor(...args) { super(...(args.length ? args : [frozen])); } };
+    setConfigOverride({...cfg,backup:{enabled:false,local_dir:dir,retention:10}});
+    const first = await performBackup({manual:true});
+    const bytes = fs.readFileSync(first.archivePath);
+    const second = await performBackup({manual:true});
+    assert.notEqual(first.archiveFilename, second.archiveFilename);
+    assert.deepEqual(fs.readFileSync(first.archivePath),bytes);
+    assert.equal(getBackupStatus().localBackupsCount,2);
+    assert.equal(fs.readFileSync(stale,'utf8'),'unrelated-stale-output');
+    assert.equal(fs.readdirSync(dir).some(name=>name.startsWith('.fm-archive-')),false);
+  } finally {global.Date=NativeDate;setConfigOverride(null);fs.rmSync(dir,{recursive:true,force:true});}
+});
+
+test('Archive descriptor validation failure cleans the created file and task directory', async t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(),'fm-open-fault-'));
+  const open = fs.openSync, stat = fs.fstatSync;
+  let archiveFd;
+  t.mock.method(fs,'openSync',function(file,...args) {
+    const fd = open.call(this,file,...args);
+    if (String(file).includes('.fm-archive-') && path.basename(file)==='archive.tmp') archiveFd=fd;
+    return fd;
+  });
+  t.mock.method(fs,'fstatSync',function(fd,...args) {
+    if (fd===archiveFd) {archiveFd=undefined; throw new Error('injected archive fstat failure');}
+    return stat.call(this,fd,...args);
+  });
+  try {
+    setConfigOverride({...getConfig(),backup:{enabled:false,local_dir:dir,retention:10}});
+    await assert.rejects(performBackup({manual:true}),/injected archive fstat/);
+    assert.deepEqual(fs.readdirSync(dir),[]);
+    assert.equal(require('../src/core/backup-service').isBackupInProgress(),false);
+  } finally {setConfigOverride(null);fs.rmSync(dir,{recursive:true,force:true});}
+});
+
+test('Invalid backup state blocks execution and mid-job corruption remains intact', async t => {
+  const config = require('../src/core/config');
+  const state = path.join(DATA_DIR,'backup_status.json');
+  const before = fs.existsSync(state) ? fs.readFileSync(state) : null;
+  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'fm-state-fault-'));
+  try {
+    setConfigOverride({...getConfig(),backup:{enabled:false,local_dir:dir,retention:10}});
+    for(const raw of ['{bad','null','[]','123']) {
+      fs.writeFileSync(state,raw);
+      assert.throws(()=>getBackupStatus(),{code:'STATE_INVALID'});
+      assert.throws(()=>getBackupMonitorState(),{code:'STATE_INVALID'});
+      await assert.rejects(performBackup({manual:true}),{code:'STATE_INVALID'});
+      assert.equal(fs.readFileSync(state,'utf8'),raw);
+      assert.deepEqual(fs.readdirSync(dir),[]);
+    }
+    config.writeJsonData('backup_status',{success:true,completedAt:'2026-11-16T00:00:00Z'});
+    const {mutateAssets}=require('../src/modules/image-host/mutation-queue');
+    let release;
+    const gate=new Promise(resolve=>{release=resolve;});
+    const change=mutateAssets(async()=>{await gate;fs.writeFileSync(state,'{mid-job-corruption');});
+    const running=performBackup({manual:true});
+    release();await change;
+    await assert.rejects(running,{code:'STATE_INVALID'});
+    assert.equal(fs.readFileSync(state,'utf8'),'{mid-job-corruption');
+    assert.equal(fs.readdirSync(dir).some(name=>name.startsWith('.fm-archive-')),false);
+    assert.equal(require('../src/core/backup-service').isBackupInProgress(),false);
+  } finally {
+    setConfigOverride(null);fs.rmSync(dir,{recursive:true,force:true});
+    if(before)fs.writeFileSync(state,before);else fs.rmSync(state,{force:true});
   }
 });

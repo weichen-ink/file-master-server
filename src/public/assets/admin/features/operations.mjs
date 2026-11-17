@@ -474,9 +474,18 @@ function duration(seconds) {
 }
 
 export function mountBackup(ctx, root, signal) {
-  root.innerHTML = `<div class="section-heading"><h2>${e(t("backupActivity"))}</h2><div class="section-actions">${button("viewBackups", "view-backups")}${button("backupRun", "run-backup", "primary")}</div></div><div id="backup-details"></div>`;
+  root.innerHTML = `<div class="section-heading"><h2>${e(t("backupActivity"))}</h2><div class="section-actions">${button("viewBackups", "view-backups")}${button("backupRun", "run-backup", "primary", "", 'disabled aria-disabled="true"')}</div></div><div id="backup-details"></div>`;
   const unsubscribe = ctx.tasks.subscribe(({ backup: data }) => {
     if (!data) return;
+    const run = root.querySelector('[data-action="run-backup"]');
+    run.disabled = Boolean(data.isBackingUp || data.pollError);
+    run.setAttribute("aria-disabled", String(run.disabled));
+    const pollError = ["STATE_INVALID", "STATE_CHANGED"].includes(data.pollErrorCode)
+      ? t("backupStateUnavailable") : data.pollError;
+    if (!data.config) {
+      root.querySelector("#backup-details").innerHTML = notice(pollError, "danger") + button("retry", "retry-backup-status");
+      return;
+    }
     const last = data.lastBackup;
     const lastMeta = data.isBackingUp
       ? data.currentStep || ""
@@ -486,16 +495,15 @@ export function mountBackup(ctx, root, signal) {
     const logs = data.liveLogs || [];
     const expandLogs = data.isBackingUp || last?.success === false;
     root.querySelector("#backup-details").innerHTML =
-      `${data.pollError ? notice(data.pollError, "warning") : ""}<div class="backup-facts"><div class="backup-fact-card"><span>${e(t("lastBackup"))}</span><strong>${e(data.isBackingUp ? t("running") : !last ? t("neverBackedUp") : t(last.success ? "completed" : "error"))}</strong><small>${e(lastMeta)}</small></div><div class="backup-fact-card"><span>${e(t("nextBackup"))}</span><strong>${e(data.config.enabled === false ? t("scheduleOff") : data.nextRunAt ? date(data.nextRunAt) : t("scheduleNeedsReview"))}</strong><small>${e(t("timezoneLabel"))} ${e(data.timezone || "UTC")}</small></div></div>${data.isBackingUp ? "<progress></progress>" : ""}${last?.error ? notice(last.error, "danger") : ""}${last?.rcloneError ? notice(last.rcloneError, "warning") : ""}${logs.length ? `<details class="backup-log-panel"${expandLogs ? " open" : ""}><summary>${e(t("executionLog"))} (${logs.length})</summary><pre class="code-panel">${e(logs.join("\n"))}</pre></details>` : ""}`;
-    const run = root.querySelector('[data-action="run-backup"]');
-    run.disabled = Boolean(data.isBackingUp);
-    run.setAttribute("aria-disabled", String(Boolean(data.isBackingUp)));
+      `${data.pollError ? notice(pollError, "warning") + button("retry", "retry-backup-status") : ""}<div class="backup-facts"><div class="backup-fact-card"><span>${e(t("lastBackup"))}</span><strong>${e(data.isBackingUp ? t("running") : !last ? t("neverBackedUp") : t(last.success ? "completed" : "error"))}</strong><small>${e(lastMeta)}</small></div><div class="backup-fact-card"><span>${e(t("nextBackup"))}</span><strong>${e(data.config.enabled === false ? t("scheduleOff") : data.nextRunAt ? date(data.nextRunAt) : t("scheduleNeedsReview"))}</strong><small>${e(t("timezoneLabel"))} ${e(data.timezone || "UTC")}</small></div></div>${data.isBackingUp ? "<progress></progress>" : ""}${last?.error ? notice(last.error, "danger") : ""}${last?.rcloneError ? notice(last.rcloneError, "warning") : ""}${logs.length ? `<details class="backup-log-panel"${expandLogs ? " open" : ""}><summary>${e(t("executionLog"))} (${logs.length})</summary><pre class="code-panel">${e(logs.join("\n"))}</pre></details>` : ""}`;
+
   });
   signal.addEventListener("abort", unsubscribe, { once: true });
   actions(
     root,
     {
       "run-backup": () => ctx.tasks.runBackup(),
+      "retry-backup-status": () => ctx.tasks.pollBackup(),
       "view-backups": async () => {
         const { files } = await ctx.api.backupFiles();
         if (signal.aborted) return;

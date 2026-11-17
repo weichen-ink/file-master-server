@@ -4,6 +4,7 @@ const crypto = require('node:crypto');
 const YAML = require('yaml');
 const { MONITOR_SECTIONS, normalizeMonitoring, validateMonitoring } = require('./monitor-config');
 const { isPathWithin } = require('./file-security');
+const { ensurePrivateFile, writePrivateFile } = require('./private-files');
 
 const ROOT_DIR = path.resolve(__dirname, '../..');
 const LEGACY_CONFIG_PATH = path.join(ROOT_DIR, 'config.yaml');
@@ -22,15 +23,17 @@ let cachedConfig = null;
 let lastConfigRevision = '';
 
 function ensureConfigLocation() {
-  if (CONFIG_PATH !== LEGACY_CONFIG_PATH && !fs.existsSync(CONFIG_PATH) && fs.existsSync(LEGACY_CONFIG_PATH)) {
+  if (!cachedConfig && CONFIG_PATH !== LEGACY_CONFIG_PATH && !fs.existsSync(CONFIG_PATH) && fs.existsSync(LEGACY_CONFIG_PATH)) {
+    ensurePrivateFile(LEGACY_CONFIG_PATH);
     fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
     fs.copyFileSync(LEGACY_CONFIG_PATH, CONFIG_PATH);
   }
+  ensurePrivateFile(CONFIG_PATH);
 }
 
 function isConfigInitialized() {
   ensureConfigLocation();
-  return fs.existsSync(CONFIG_PATH);
+  return Boolean(cachedConfig) || fs.existsSync(CONFIG_PATH);
 }
 
 function hashPasswordString(plainPassword) {
@@ -260,26 +263,24 @@ function getConfig() {
   if (configOverride) {
     return configOverride;
   }
-  ensureConfigLocation();
-  if (!fs.existsSync(CONFIG_PATH)) {
-    const raw = getExampleConfigTemplate();
-    const parsed = YAML.parse(raw) || {};
-    return normalizeParsedConfig(parsed, true);
-  }
   try {
+    ensureConfigLocation();
+    if (!fs.existsSync(CONFIG_PATH) && !cachedConfig) {
+      return normalizeParsedConfig(YAML.parse(getExampleConfigTemplate()), true);
+    }
     const stat = fs.statSync(CONFIG_PATH);
     const rev = `${stat.ino}:${stat.size}:${stat.mtimeMs}:${stat.ctimeMs}`;
     if (!cachedConfig || rev !== lastConfigRevision) {
-      const raw = fs.readFileSync(CONFIG_PATH, 'utf8');
-      const parsed = YAML.parse(raw) || {};
+      const { parsed } = readConfigSnapshot();
       cachedConfig = normalizeParsedConfig(parsed, false);
       lastConfigRevision = rev;
     }
     return cachedConfig;
-  } catch (err) {
-    console.error('[Config] Failed to read config.yaml:', err.message);
+  } catch {
+    // Keep authentication and in-flight work on the last known good snapshot.
+    // Parser messages may contain credentials; never log their source excerpts.
     if (cachedConfig) return cachedConfig;
-    throw err;
+    throw invalidStoredConfig();
   }
 }
 
@@ -290,6 +291,7 @@ function readJsonData(moduleName, defaultData = []) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
   const filePath = path.join(DATA_DIR, `${moduleName}.json`);
   if (!fs.existsSync(filePath)) return defaultData;
+  ensurePrivateFile(filePath);
   try {
     return JSON.parse(fs.readFileSync(filePath, 'utf8'));
   } catch (err) {
@@ -303,7 +305,7 @@ const isRecord = value => Boolean(value) && typeof value === 'object' && !Array.
 function readCriticalJsonData(moduleName, defaultData, validate = isRecord) {
   const file = path.join(DATA_DIR, `${moduleName}.json`);
   let raw;
-  try { raw = fs.readFileSync(file, 'utf8'); }
+  try { ensurePrivateFile(file); raw = fs.readFileSync(file, 'utf8'); }
   catch (error) { if (error.code === 'ENOENT') return defaultData; throw stateError(moduleName, error); }
   try {
     const value = JSON.parse(raw);
@@ -327,7 +329,7 @@ function writeJsonData(moduleName, data) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
   const filePath = path.join(DATA_DIR, `${moduleName}.json`);
   const tmpPath = `${filePath}.tmp`;
-  fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2), 'utf8');
+  writePrivateFile(tmpPath, JSON.stringify(data, null, 2));
   fs.renameSync(tmpPath, filePath);
 }
 
@@ -335,11 +337,7 @@ function writeJsonData(moduleName, data) {
  * Returns raw config.yaml string including comments and formatting.
  */
 function getRawConfigYaml() {
-  ensureConfigLocation();
-  if (!fs.existsSync(CONFIG_PATH)) {
-    return getExampleConfigTemplate();
-  }
-  return fs.readFileSync(CONFIG_PATH, 'utf8');
+  return readConfigSnapshot().raw;
 }
 
 /** Web editor excludes credentials entirely; reveal only applies to the explicit token action. */
@@ -356,20 +354,58 @@ function redactConfigForClient(cfg, rawYaml, revealSecrets = false) {
   try {
     const doc = YAML.parseDocument(String(rawYaml || ''));
     if (doc.errors.length) throw doc.errors[0];
+    if (!YAML.isMap(doc.contents)) throw new Error('Configuration must be a mapping');
     for (const key of ['password', 'api_token', 'totp_secret']) doc.delete(key);
     safeRawYaml = doc.toString();
-  } catch { /* Never return unparsed configuration that may contain credentials. */ }
+  } catch {
+    // Do not turn a malformed credential-bearing file into a successful empty
+    // editor value: a reload would silently discard the user's draft.
+    throw Object.assign(new Error('Cannot load configuration; repair the server configuration file and retry'),
+      { status: 503, code: 'CONFIG_INVALID' });
+  }
   return { config: safeConfig, rawYaml: safeRawYaml, revision: configRevision(String(rawYaml || '')) };
 }
 
-function prepareEditorConfigYaml(rawText, revision) {
-  if (revision && revision !== configRevision()) {
-    const error = new Error('CONFIG_CHANGED'); error.status = 409; throw error;
+function invalidStoredConfig() {
+  return Object.assign(new Error('Cannot load configuration; repair the server configuration file and retry'),
+    { status: 503, code: 'CONFIG_INVALID' });
+}
+
+function parseStoredConfig(raw, requireCredentials = true) {
+  const doc = YAML.parseDocument(raw);
+  if (doc.errors.length || !YAML.isMap(doc.contents)) throw invalidStoredConfig();
+  const parsed = doc.toJS();
+  if (requireCredentials && (typeof parsed.username !== 'string' || !parsed.username.trim() ||
+    typeof parsed.password !== 'string' || !parsed.password.trim() ||
+    typeof parsed.api_token !== 'string')) throw invalidStoredConfig();
+  return { raw, doc, parsed, revision: configRevision(raw) };
+}
+
+// All editor reads and mutations validate the stored source before revision checks.
+// Only a never-initialized installation may use the setup template.
+function readConfigSnapshot() {
+  try {
+    ensureConfigLocation();
+    const exists = fs.existsSync(CONFIG_PATH);
+    if (!exists && cachedConfig) throw invalidStoredConfig();
+    return parseStoredConfig(exists ? fs.readFileSync(CONFIG_PATH, 'utf8') : getExampleConfigTemplate(), exists);
+  } catch { throw invalidStoredConfig(); }
+}
+
+function checkConfigRevision(snapshot, revision) {
+  if (revision && revision !== snapshot.revision) {
+    throw Object.assign(new Error('CONFIG_CHANGED'), { status: 409 });
   }
+}
+
+function prepareEditorConfigYaml(rawText, revision) {
+  const snapshot = readConfigSnapshot();
+  checkConfigRevision(snapshot, revision);
   const doc = YAML.parseDocument(String(rawText));
   if (doc.errors.length) throw doc.errors[0];
   if (doc.has('password') || doc.has('api_token')) throw new Error('EDIT_CREDENTIALS_IN_SECURITY');
-  return prepareRawConfigYaml(rawText);
+  const existingCfg = isConfigInitialized() ? normalizeParsedConfig(snapshot.parsed, false) : null;
+  return { ...prepareRawConfigYaml(rawText, existingCfg), before: snapshot.parsed, sourceRevision: snapshot.revision };
 }
 function configurationChanges(before, after, prefix = '') {
   const result = [];
@@ -390,7 +426,7 @@ function configurationChanges(before, after, prefix = '') {
  * (password scrypt hashing, preserving existing secrets when blanked by redacted editor,
  * locking upstream_repo, and validating watermark_image path boundaries).
  */
-function prepareRawConfigYaml(rawText) {
+function prepareRawConfigYaml(rawText, passedExistingCfg = null) {
   const doc = YAML.parseDocument(String(rawText));
   if (doc.errors.length > 0) throw doc.errors[0];
   const parsed = doc.toJS();
@@ -410,10 +446,11 @@ function prepareRawConfigYaml(rawText) {
 
   if(parsed.language !== undefined && !['en','zh','en-US','zh-CN'].includes(parsed.language))throw new Error('Terminal language must be en or zh');
   if(parsed.monitoring !== undefined)validateMonitoring(parsed.monitoring);
-  const existingCfg = isConfigInitialized() ? getConfig() : null;
+  const existingCfg = passedExistingCfg || (isConfigInitialized() ? getConfig() : null);
+  const rawPass = parsed.password !== undefined ? String(parsed.password).trim() : '';
+  const rawToken = parsed.api_token !== undefined ? String(parsed.api_token).trim() : '';
 
   // 1. Enforce password hashing & preserve existing password if submitted blank on an initialized server
-  const rawPass = parsed.password !== undefined ? String(parsed.password).trim() : '';
   if (!rawPass) {
     if (existingCfg && existingCfg.password) {
       doc.set('password', existingCfg.password);
@@ -423,7 +460,6 @@ function prepareRawConfigYaml(rawText) {
   }
 
   // 2. Preserve existing api_token if submitted blank on an initialized server
-  const rawToken = parsed.api_token !== undefined ? String(parsed.api_token).trim() : '';
   if (!rawToken && existingCfg && existingCfg.api_token) {
     doc.set('api_token', existingCfg.api_token);
   }
@@ -446,16 +482,25 @@ function prepareRawConfigYaml(rawText) {
     doc.setIn(['image_host', 'watermark_image_dark'], safeWmDark);
   }
 
-  return {
-    yaml: doc.toString(),
-    config: normalizeParsedConfig(doc.toJS(), false)
-  };
+  const yaml = doc.toString();
+  if (existingCfg) validatePreparedCredentials(yaml);
+  return { yaml, config: normalizeParsedConfig(doc.toJS(), false) };
+}
+
+function validatePreparedCredentials(raw) {
+  try { parseStoredConfig(raw); }
+  catch {
+    throw new Error('Configuration must include a non-empty username and password, and an API token string');
+  }
 }
 
 function writePreparedConfig(prepared) {
+  // Validate before touching disk, including callers outside the HTTP editor.
+  validatePreparedCredentials(prepared.yaml);
+  if (prepared.sourceRevision && isConfigInitialized()) checkConfigRevision(readConfigSnapshot(), prepared.sourceRevision);
   fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
   const tmpPath = `${CONFIG_PATH}.tmp`;
-  fs.writeFileSync(tmpPath, prepared.yaml, 'utf8');
+  writePrivateFile(tmpPath, prepared.yaml);
   fs.renameSync(tmpPath, CONFIG_PATH);
   lastConfigRevision = '';
   return getConfig();
@@ -489,11 +534,9 @@ const IMAGE_PROCESSING_CONFIG_KEYS = [
  * Updates specific config fields via AST nodes, preserving existing comments and structure.
  */
 function prepareConfigPatch(patch = {}, revision = '') {
-  if (revision && revision !== configRevision()) {
-    const error = new Error('CONFIG_CHANGED'); error.status = 409; throw error;
-  }
-  const raw = getRawConfigYaml();
-  const doc = YAML.parseDocument(raw);
+  const snapshot = readConfigSnapshot();
+  checkConfigRevision(snapshot, revision);
+  const doc = snapshot.doc;
 
   const topKeys = [
     'site_name',
@@ -572,7 +615,8 @@ function prepareConfigPatch(patch = {}, revision = '') {
     }
   }
 
-  return prepareRawConfigYaml(doc.toString());
+  const existingCfg = isConfigInitialized() ? normalizeParsedConfig(snapshot.parsed, false) : null;
+  return { ...prepareRawConfigYaml(doc.toString(), existingCfg), sourceRevision: snapshot.revision };
 }
 
 function updateConfigPreservingComments(patch = {}) {

@@ -1,5 +1,18 @@
 # Changelog (file-master-server)
 
+## [1.2.6] - 2026-11-17
+
+### Security Hardening, Private-File Protection & Draft/Backup Resilience
+- Shares: validate `realpath` on create, list and download. Limited shares ignore Range and reserve one complete download before transmission; HEAD is free, failed transfers and 304 responses release reservations. Unlimited shares retain Range support. Forward sendFile errors so 416/412 responses finish instead of hanging.
+- Malformed cookies return 401 instead of 500; login verifies passwords asynchronously with constant-time username comparison and upgrades legacy plaintext passwords to scrypt.
+- Add CSP (strict `script-src 'self'` for the admin console), drop `X-XSS-Protection`, lower the global body limit to 256 KB and rate limit the setup API.
+- Tighten existing config/state files and audit logs to `0600` on access, including reused temporary files, and reject final symlinks before private-file writes. Rotated audit logs keep only the newest five.
+- Docker image runs as non-root `node` with memory/CPU limits. **Installation/upgrade note:** prepare `config`, `storage`, `data` and assign ownership to container UID/GID 1000:1000 before starting (see deployment guide for rootless/custom mappings). Compose refuses to create missing host directories.
+- Keep unsaved settings drafts in memory without automatic expiry or deletion on server version changes; retain explicit save/discard and session cleanup.
+- Advanced YAML editor can load the latest configuration after conflicts, confirms before replacing a draft, and fetches current values when discarding. Invalid on-disk YAML returns `503 CONFIG_INVALID` instead of a successful empty editor value.
+- Protect hot-update configuration backups, pending markers and interrupted-update config restoration with private-file operations. Restore config through a private temporary file and atomic rename.
+- Write backup archives through a private descriptor from the first byte, keep compression-wrapper output quiet, and tighten existing archives when listed. Backup monitoring reuses the central state reader and preserves `backup_unavailable` on malformed state.
+
 ## [1.2.5] - 2026-11-16
 
 ### File Conflict Target Verification, Atomic Replacement & Trash Recovery

@@ -27,6 +27,11 @@ export function createSettingsStore() {
     dirtyNames() {
       return [...sections.keys()].filter((name) => this.dirty(name));
     },
+    dirtyKeys(name) {
+      const s = sections.get(name);
+      if (!s) return [];
+      return Object.keys(s.draft).filter((key) => !equal(s.baseline[key], s.draft[key]));
+    },
     section(name, initial) {
       if (!sections.has(name))
         sections.set(name, {

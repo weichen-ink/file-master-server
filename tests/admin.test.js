@@ -344,3 +344,44 @@ test("Settings store merge safely handles uninitialized, clean, and dirty advanc
   store.merge("advanced", { raw: "v3", revision: "rev3" });
   assert.deepEqual(store.section("advanced").draft, { raw: "v2-edited", revision: "rev2" });
 });
+
+test("Settings drafts survive elapsed time, polling and remounts until explicitly resolved", async (t) => {
+  const { createSettingsStore } = await modules("state/settings");
+  let now = 1000;
+  t.mock.method(Date, 'now', () => now);
+  const store = createSettingsStore();
+  store.section("site", { site_name: "a", port: 3210 });
+  store.edit("site", "site_name", "b");
+  now += 60 * 60 * 1000;
+  store.merge("site", { site_name: "server-update", port: 3210 });
+  assert.deepEqual(store.section("site").draft, { site_name: "b", port: 3210 });
+  assert.deepEqual(store.dirtyKeys("site"), ["site_name"]);
+  store.rebase("site", { site_name: "server-update", port: 3211 });
+  assert.deepEqual(store.section("site").draft, { site_name: "b", port: 3211 });
+  store.accept("site", store.section("site").draft);
+  assert.equal(store.anyDirty(), false);
+  store.edit("site", "site_name", "discard-me");
+  store.discard("site");
+  assert.equal(store.section("site").draft.site_name, "b");
+  store.clear();
+  assert.deepEqual(store.section("site", { site_name: "after-login" }).draft, { site_name: "after-login" });
+});
+
+
+test('Backup polling exposes the first failure, retains known status on failure, and recovers', async () => {
+  const { createTasks } = await modules('state/tasks');
+  let fails = true;
+  const data = { config: { enabled: true }, lastBackup: { success: true }, isBackingUp: false };
+  const tasks = createTasks({backup: async () => { if (fails) throw new Error('Cannot read backup_status.json'); return data; }}, async () => {});
+  await tasks.pollBackup();
+  assert.match(tasks.jobs.backup.pollError, /backup_status/);
+  assert.equal(tasks.jobs.backup.lastBackup, undefined, 'A failed read must not manufacture a never-run result');
+  fails = false; await tasks.pollBackup();
+  assert.equal(tasks.jobs.backup.pollError, undefined);
+  fails = true; await tasks.pollBackup();
+  assert.deepEqual(tasks.jobs.backup.lastBackup, {success:true});
+  assert.match(tasks.jobs.backup.pollError, /backup_status/);
+  fails = false; await tasks.pollBackup();
+  assert.equal(tasks.jobs.backup.pollError, undefined);
+  tasks.clear();
+});

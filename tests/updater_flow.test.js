@@ -227,3 +227,94 @@ test('Official verification failure blocks fetching and installation without ins
   await assert.rejects(updater.performHotUpdate({upstream_mirror:'https://untrusted.example'}),/official source unreachable/);
   assert.ok(!f.calls.some(call=>['fetch','reset'].includes(call[1])));assertAssets(f);
 });
+
+test('Hot update backups and pending markers stay private across failed installation and restart', {skip:process.platform==='win32'}, async t=>{
+  const f=createFixture(t);
+  const backup=path.join(f.rootDir,'data/config.backup.yaml');
+  const marker=path.join(f.rootDir,'data/update_pending_restore.flag');
+  fs.mkdirSync(path.dirname(backup));
+  fs.writeFileSync(backup,'old');fs.chmodSync(backup,0o644);
+  fs.writeFileSync(marker+'.tmp','stale');fs.chmodSync(marker+'.tmp',0o644);
+  f.faults.changeDeps=true;f.faults.install=true;
+  f.faults.duringInstall=()=>{
+    assert.equal(fs.statSync(backup).mode&0o777,0o600);
+    assert.equal(fs.statSync(marker).mode&0o777,0o600);
+    assert.equal(fs.readFileSync(backup,'utf8'),f.original);
+  };
+  await assert.rejects(f.updater.performHotUpdate(),/dependency install failure/);
+  fs.chmodSync(backup,0o644);fs.chmodSync(marker,0o644);
+  assert.equal(f.updater.recoverInterruptedUpdate().dependenciesPending,true);
+  assert.equal(fs.statSync(backup).mode&0o777,0o600);
+  assert.equal(fs.statSync(marker).mode&0o777,0o600);
+});
+
+test('Interrupted update restores config atomically with private permissions, including stale temp files', {skip:process.platform==='win32'}, t=>{
+  const f=createFixture(t),target=path.join(f.rootDir,'config.yaml');
+  f.updater.backupWatermarkFiles();
+  fs.mkdirSync(path.join(f.rootDir,'data'),{recursive:true});
+  f.write('data/config.backup.yaml',f.original);
+  fs.chmodSync(path.join(f.rootDir,'data/config.backup.yaml'),0o644);
+  f.updater.writePendingUpdate({assetsRestored:false,dependenciesPending:true});
+  f.write('config.yaml','upstream config');fs.chmodSync(target,0o644);
+  f.write('config.yaml.tmp','stale');fs.chmodSync(target+'.tmp',0o644);
+  assert.equal(f.updater.recoverInterruptedUpdate().success,true);
+  assert.equal(f.read('config.yaml'),f.original);
+  assert.equal(fs.statSync(target).mode&0o777,0o600);
+  assert.equal(fs.statSync(path.join(f.rootDir,'data/config.backup.yaml')).mode&0o777,0o600);
+  assert.equal(f.pending(),true,'Dependency recovery obligation must survive config restoration');
+});
+
+test('Update backup, marker and recovery paths refuse symlinks without touching their targets', {skip:process.platform==='win32'}, async t=>{
+  for(const kind of ['backup','marker-temp','config-temp','config']) {
+    const f=createFixture(t);
+    f.updater.backupWatermarkFiles();
+    fs.mkdirSync(path.join(f.rootDir,'data'),{recursive:true});
+    const protectedFile=path.join(f.rootDir,'do-not-touch.txt');
+    fs.writeFileSync(protectedFile,'keep me');fs.chmodSync(protectedFile,0o644);
+    const backup=path.join(f.rootDir,'data/config.backup.yaml');
+    const marker=path.join(f.rootDir,'data/update_pending_restore.flag');
+    if(kind==='backup') {
+      fs.symlinkSync(protectedFile,backup);
+      await assert.rejects(f.updater.performHotUpdate());
+      assert.equal(f.calls.length,0);
+    } else if(kind==='marker-temp') {
+      fs.symlinkSync(protectedFile,marker+'.tmp');
+      assert.throws(()=>f.updater.writePendingUpdate({assetsRestored:false,dependenciesPending:true}));
+    } else {
+      fs.writeFileSync(backup,f.original);
+      f.updater.writePendingUpdate({assetsRestored:false,dependenciesPending:true});
+      const link=path.join(f.rootDir,kind==='config'?'config.yaml':'config.yaml.tmp');
+      fs.rmSync(link,{force:true});fs.symlinkSync(protectedFile,link);
+      assert.equal(f.updater.recoverInterruptedUpdate().success,false);
+      assert.equal(f.pending(),true);
+    }
+    assert.equal(fs.readFileSync(protectedFile,'utf8'),'keep me',kind);
+    assert.equal(fs.statSync(protectedFile).mode&0o777,0o644,kind);
+  }
+});
+
+test('Production config adapter restores user configuration even when git reset overwrites on-disk config.yaml', async () => {
+  const realConfig = require('../src/core/config');
+  const { createUpdater } = require('../src/core/updater');
+  assert.equal(process.env.FILE_MASTER_TEST_ROOT, fs.realpathSync(realConfig.ROOT_DIR), 'Requires isolated test project');
+  realConfig.saveRawConfigYaml('# user comment\nport: 3000\nusername: admin\npassword: user-secret\napi_token: ""\n');
+  fs.mkdirSync(path.join(realConfig.ROOT_DIR, '.git'), { recursive: true });
+  fs.writeFileSync(realConfig.EXAMPLE_CONFIG_PATH, 'port: 9999\nnew_default: enabled\n');
+  const updater = createUpdater({
+    rootDir: realConfig.ROOT_DIR,
+    config: realConfig,
+    resolveOfficialCommit: async () => 'a'.repeat(40),
+    runCommand: async (cmd, args) => {
+      if (args[0] === 'reset') {
+        fs.writeFileSync(realConfig.CONFIG_PATH, 'port: 9999\n');
+      }
+      return { stdout: args[0] === 'rev-parse' && args.includes('FETCH_HEAD^{commit}') ? 'a'.repeat(40) : 'main', stderr: '' };
+    }
+  });
+  const res = await updater.performHotUpdate();
+  assert.equal(res.success, true);
+  const restored = fs.readFileSync(realConfig.CONFIG_PATH, 'utf8');
+  assert.match(restored, /# user comment/);
+  assert.match(restored, /new_default: enabled/);
+  assert.equal(realConfig.getConfig().username, 'admin');
+});

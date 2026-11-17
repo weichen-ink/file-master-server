@@ -1,11 +1,13 @@
 const { forecastBackup } = require('./backup-schedule');
 const fs = require('node:fs');
 const os = require('node:os');
+const { randomUUID } = require('node:crypto');
 const path = require('node:path');
 const YAML = require('yaml');
 const { spawn, execFile } = require('node:child_process');
 const { promisify } = require('node:util');
-const { ROOT_DIR, CONFIG_PATH, DATA_DIR, STORAGE_DIR, UPLOAD_TMP_DIR, getConfig, readJsonData, writeJsonData } = require('./config');
+const { ROOT_DIR, CONFIG_PATH, DATA_DIR, STORAGE_DIR, UPLOAD_TMP_DIR, getConfig, readCriticalJsonData, dataRevision, writeJsonData } = require('./config');
+const { openPrivateFile, ensurePrivateFile, writePrivateFile } = require('./private-files');
 const { appendAuditLog } = require('./audit');
 const { mutateAssets } = require('../modules/image-host/mutation-queue');
 
@@ -61,7 +63,7 @@ function validateSafeBarkUrl(rawUrl) {
 function assertSafeRcloneTarget(target) {
   const cleanTarget = String(target || '').trim();
   if (!cleanTarget) {
-    throw new Error('请提供有效的 Rclone / OneDrive 目标路径（如 onedrive:应用/File Master 备份）');
+    throw new Error('请填写有效的 rclone 远程备份目标，例如 remote:backups');
   }
   if (cleanTarget.startsWith('-')) {
     throw new Error('Rclone 目标路径不能以 "-" 开头');
@@ -173,6 +175,7 @@ function getLocalBackupFiles(backupDir) {
         const fullPath = path.join(backupDir, f);
         const st = fs.lstatSync(fullPath);
         if (!st.isFile() || fullPath === activeBackupJob?.archivePath) return null;
+        ensurePrivateFile(fullPath);
         return {
           filename: f,
           path: fullPath,
@@ -349,6 +352,19 @@ async function performBackup({ manual = false } = {}) {
     throw new Error('备份任务正在进行中，请稍候...');
   }
 
+  const previous = readBackupState();
+  const statusRevision = dataRevision('backup_status');
+  const lastSuccessAt = previous?.lastSuccessAt ||
+    (previous?.success && previous.rcloneSuccess !== false ? previous.completedAt : null);
+  const recordStatus = value => {
+    // Do not overwrite corruption or an external replacement introduced mid-job.
+    readBackupState();
+    if (dataRevision('backup_status') !== statusRevision) {
+      throw Object.assign(new Error('Backup state changed during this job; inspect backup_status.json before retrying'),
+        { status: 503, code: 'STATE_CHANGED' });
+    }
+    writeJsonData('backup_status', value);
+  };
   const cfg = getConfig();
   const backupCfg = cfg.backup || {};
   const retentionLimit = Math.max(1, Number(backupCfg.retention) || 7);
@@ -376,6 +392,7 @@ async function performBackup({ manual = false } = {}) {
   };
 
   let snapshotDir = null;
+  let archiveWorkDir = null;
   try {
     logStep(`Starting ${manual ? 'manual' : 'scheduled'} full backup...`);
     fs.mkdirSync(localDir, { recursive: true });
@@ -407,7 +424,7 @@ async function performBackup({ manual = false } = {}) {
         const rawConfigText = fs.readFileSync(CONFIG_PATH, 'utf8');
         const destConfigPath = path.join(snapshotDir, 'config.yaml');
         fs.mkdirSync(path.dirname(destConfigPath), { recursive: true });
-        fs.writeFileSync(destConfigPath, rawConfigText, 'utf8');
+        writePrivateFile(destConfigPath, rawConfigText);
         staged.push('config.yaml');
         try {
           const parsed = YAML.parse(rawConfigText);
@@ -460,23 +477,38 @@ async function performBackup({ manual = false } = {}) {
     }
 
     const timestamp = formatBackupTimestamp(new Date());
-    const archiveFilename = `filemaster-full-${timestamp}.tar.gz`;
+    const archiveFilename = `filemaster-full-${timestamp}-${randomUUID()}.tar.gz`;
     const archivePath = path.join(localDir, archiveFilename);
 
-    activeBackupJob.archivePath = archivePath + '.tmp';
+    // Pass a securely opened descriptor to tar. No public-readable interval and
+    // no child-process reopening of an attacker-controlled temporary pathname.
+    archiveWorkDir = fs.mkdtempSync(path.join(localDir, '.fm-archive-'));
+    activeBackupJob.archivePath = path.join(archiveWorkDir, 'archive.tmp');
+    const archiveFd = openPrivateFile(activeBackupJob.archivePath, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL);
     logStep(`Targets (${targets.length}): ${targets.join(', ')}`);
     const tarExcludes = ['--exclude=data/backups', '--exclude=*.tmp'];
     if (relBackupDir) tarExcludes.push(`--exclude=${relBackupDir}`);
-    const tarArgs = ['-czf', activeBackupJob.archivePath, ...tarExcludes, '-C', snapshotDir, ...targets];
+    const tarArgs = ['-czf', '-', ...tarExcludes, '-C', snapshotDir, ...targets];
     const hasCpulimit = process.platform === 'linux' && (fs.existsSync('/usr/bin/cpulimit') || fs.existsSync('/bin/cpulimit'));
     logStep(`Packing into ${archiveFilename} (gzip=-1, priority=low${hasCpulimit ? ', cpulimit=50%' : ''})...`);
     const cmd = hasCpulimit ? 'cpulimit' : (process.platform === 'win32' ? 'tar' : 'nice');
     const args = hasCpulimit
-      ? ['-l', '50', '-f', '--', 'nice', '-n', '19', 'tar', ...tarArgs]
+      ? ['-q', '-l', '50', '-f', '--', 'nice', '-n', '19', 'tar', ...tarArgs]
       : (process.platform === 'win32' ? tarArgs : ['-n', '19', 'tar', ...tarArgs]);
-    await execFileAsync(cmd, args, { timeout: 30 * 60 * 1000, env: { ...process.env, GZIP: '-1' } });
+    try {
+      await new Promise((resolve, reject) => {
+        const child = spawn(cmd, args, { timeout: 30 * 60 * 1000,
+          env: { ...process.env, GZIP: '-1' }, stdio: ['ignore', archiveFd, 'pipe'] });
+        let stderr = '';
+        child.stderr.on('data', chunk => { stderr = (stderr + chunk.toString()).slice(-65536); });
+        child.on('error', reject);
+        child.on('close', (code, signal) => code === 0 ? resolve() :
+          reject(new Error(`Archive command failed (${signal || code}): ${stderr.trim()}`)));
+      });
+    } finally { fs.closeSync(archiveFd); }
 
-    if (fs.existsSync(activeBackupJob.archivePath)) fs.renameSync(activeBackupJob.archivePath, archivePath);
+    if (fs.existsSync(archivePath)) throw new Error('Backup archive already exists; refusing to replace it');
+    fs.renameSync(activeBackupJob.archivePath, archivePath);
     if (!fs.existsSync(archivePath)) {
       throw new Error('创建归档文件失败，未生成压缩包');
     }
@@ -547,8 +579,8 @@ async function performBackup({ manual = false } = {}) {
       logs
     };
 
-    result.lastSuccessAt = rcloneSuccess !== false ? result.completedAt : previousSuccessfulBackup();
-    writeJsonData('backup_status', result);
+    result.lastSuccessAt = rcloneSuccess !== false ? result.completedAt : lastSuccessAt;
+    recordStatus(result);
     appendAuditLog({
       action: 'automated_backup',
       mode: manual ? 'manual' : 'scheduled',
@@ -572,8 +604,8 @@ async function performBackup({ manual = false } = {}) {
       logs
     };
 
-    failureRecord.lastSuccessAt = previousSuccessfulBackup();
-    writeJsonData('backup_status', failureRecord);
+    failureRecord.lastSuccessAt = lastSuccessAt;
+    recordStatus(failureRecord);
 
     if (barkUrl) {
       sendBarkNotification({
@@ -586,22 +618,25 @@ async function performBackup({ manual = false } = {}) {
 
     throw err;
   } finally {
-    if (snapshotDir) fs.rmSync(snapshotDir, { recursive: true, force: true });
-    if (activeBackupJob?.archivePath) fs.rmSync(activeBackupJob.archivePath, {force:true});
-    activeBackupJob = null;
+    try {
+      if (snapshotDir) fs.rmSync(snapshotDir, { recursive: true, force: true });
+    } finally {
+      try { if (archiveWorkDir) fs.rmSync(archiveWorkDir, { recursive: true, force: true }); }
+      finally { activeBackupJob = null; }
+    }
   }
 }
 
-function previousSuccessfulBackup() {
-  const previous=readJsonData('backup_status',null);
-  return previous?.lastSuccessAt || (previous?.success && previous.rcloneSuccess !== false ? previous.completedAt : null);
+function readBackupState() {
+  return readCriticalJsonData('backup_status', null);
 }
 
 // Monitoring deliberately excludes logs, archive paths and remote credentials.
 function getBackupMonitorState() {
   const cfg=getConfig().backup || {};
-  const file=path.join(DATA_DIR,'backup_status.json');
-  const last=fs.existsSync(file)?JSON.parse(fs.readFileSync(file,'utf8')):null;
+  // Keep malformed state distinguishable from "never run" so health reports
+  // backup_unavailable, while reusing centralized private-file handling.
+  const last=readBackupState();
   const status=activeBackupJob ? 'running' : cfg.enabled===false ? 'disabled' : !last ? 'never_run' : last.success===false ? 'failed' : last.rcloneSuccess===false ? 'partial' : last.success===true ? 'success' : 'unknown';
   const iso=value=>value && Number.isFinite(new Date(value).getTime()) ? new Date(value).toISOString():null;
   return {enabled:cfg.enabled!==false, status, isRunning:Boolean(activeBackupJob),
@@ -615,7 +650,7 @@ function getBackupStatus() {
   const cfg = getConfig();
   const backupCfg = cfg.backup || {};
   const localDir = resolveBackupDir(backupCfg.local_dir);
-  const status = readJsonData('backup_status', null);
+  const status = readBackupState();
   const localBackups = getLocalBackupFiles(localDir);
 
   const isBackingUp = activeBackupJob !== null;

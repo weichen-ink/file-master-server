@@ -21,8 +21,11 @@ RUN npm ci --omit=dev || npm install --omit=dev
 COPY src ./src
 COPY config.example.yaml ./config.example.yaml
 
-# Ensure persistent runtime directories exist
-RUN mkdir -p /app/storage/raw /app/storage/cache /app/storage/trash /app/storage/tmp /app/data
+# Ensure persistent runtime directories exist and belong to the non-root node user
+RUN mkdir -p /app/storage/raw /app/storage/cache /app/storage/trash /app/storage/tmp /app/data /app/config \
+  && chown -R node:node /app
+
+USER node
 
 ENV NODE_ENV=production
 ENV PORT=3210

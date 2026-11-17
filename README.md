@@ -21,7 +21,7 @@ Instead of relying on third-party image hosts or heavy cloud suites, File Master
 - **File Library & Browser**: filter by directory, type, search query, and sort by date, name, size, or views; switch between grid and list views with zoomable previews.
 - **Media Processing (Compression + Adaptive Watermarks)**: automatic WebP conversion, max-width resizing, and image/text/tiled watermarks with auto-contrast and live console preview.
 - **Safety & Deduplication**: SHA-256 deduplication on upload, file lock protection, safe renames with URL alias grace periods, and a recycle bin for accidental deletions.
-- **Expiring Shares**: generate share links with custom expiration dates and download limits, revocable anytime.
+- **Expiring Shares**: generate share links with custom expiration dates and download limits, revocable anytime. Limited shares deliver whole files without byte-range resume; unlimited shares support resume.
 - **Operations & Monitoring**: runtime status overview, CPU-throttled `.tar.gz` backups (with `rclone` sync and Bark alerts), one-click updates, and a read-only `/api/health` endpoint.
 - **Themes & Languages**: English and Simplified Chinese UI with light, dark, and system theme support.
 
@@ -34,8 +34,12 @@ Instead of relying on third-party image hosts or heavy cloud suites, File Master
 ```bash
 git clone https://github.com/weichen-ink/file-master-server.git
 cd file-master-server
+mkdir -p config storage data
+sudo chown -R 1000:1000 config storage data
 docker compose up -d --build
 ```
+
+The container runs as the non-root `node` user (UID/GID 1000:1000). On Linux with rootful Docker, prepare writable bind directories **before the first start and after an upgrade or restore**. Compose refuses to create missing host directories. For rootless Docker or custom UID mapping, assign ownership to the mapped host user instead. When upgrading, first preserve any old configuration as described in the [deployment guide](docs/DEPLOYMENT.md#english), then set ownership and start the container.
 
 Open `http://localhost:3210/setup` (replace `localhost` with your server address for remote deployments) to finish initial setup.
 

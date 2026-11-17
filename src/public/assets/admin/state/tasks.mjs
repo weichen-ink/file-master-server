@@ -233,7 +233,7 @@ export function createTasks(api, onFilesChanged) {
         jobs.backup = data;
       } catch (error) {
         if (session !== epoch) return;
-        if (jobs.backup) jobs.backup.pollError = error.message;
+        jobs.backup = { ...jobs.backup, pollError: error.message, pollErrorCode: error.details?.code };
       }
       emit();
       if (jobs.backup?.isBackingUp)

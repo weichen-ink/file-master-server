@@ -79,10 +79,12 @@ export async function mountSettings(ctx, root, route, signal) {
   let schedulePreview = () => {};
   const form = root.querySelector("#section-form");
   const sync = () => {
+    const dirtySet = new Set(ctx.drafts.dirtyKeys?.(name) || []);
     for (const def of schemas[name]) {
       const wrap = form.querySelector(`[data-field="${def.key}"]`);
       const visible = !def.when || def.when(state.draft);
       wrap.hidden = !visible;
+      wrap.classList.toggle("is-dirty", visible && dirtySet.has(def.key));
       wrap.querySelector("input,select").disabled = !visible || state.saving;
     }
     if(name==='site') {
@@ -237,6 +239,17 @@ export async function mountSettings(ctx, root, route, signal) {
     signal,
   );
   sync();
+  if (ctx.highlightDirty) {
+    ctx.highlightDirty = false;
+    const firstDirty = form.querySelector(".field.is-dirty");
+    if (firstDirty) {
+      firstDirty.scrollIntoView?.({ behavior: "smooth", block: "center" });
+      for (const el of form.querySelectorAll(".field.is-dirty")) {
+        el.classList.add("is-dirty-pulse");
+        setTimeout(() => el.classList.remove("is-dirty-pulse"), 1800);
+      }
+    }
+  }
   if (name === "backup")
     ctx.mountBackup(root.querySelector("#backup-runtime"), signal);
   if (isMedia) {
@@ -322,15 +335,18 @@ export async function mountSettings(ctx, root, route, signal) {
 
 async function mountAdvanced(ctx, root, signal) {
   const state=ctx.drafts.section('advanced',{raw:ctx.rawYaml,revision:ctx.configRevision});
-  root.innerHTML=heading('advanced')+`<div class="settings-content"><form class="panel configuration-editor" id="yaml-form"><div class="editor-heading"><span class="editor-filename">config.yaml</span><p>${e(t('configEditorHelp'))}</p></div><label class="sr-only" for="rawYamlEditor">${e(t('advanced'))}</label><textarea id="rawYamlEditor" name="raw" class="code-editor" spellcheck="false" aria-describedby="yaml-error">${e(state.draft.raw)}</textarea><p class="editor-secret-note">${e(t('credentialsManagedIn'))}<a href="#/settings/site">${e(t('site'))}</a>${e(t('credentialsManagedAfter'))}</p><div id="yaml-error" role="alert"></div><footer class="save-bar"><span id="yaml-state"></span><div class="actions">${button('discard','discard')}${button('saveConfigFile','validate','primary')}</div></footer></form></div>`;
+  root.innerHTML=heading('advanced')+`<div class="settings-content"><form class="panel configuration-editor" id="yaml-form"><div class="editor-heading"><span class="editor-filename">config.yaml</span><p>${e(t('configEditorHelp'))}</p></div><label class="sr-only" for="rawYamlEditor">${e(t('advanced'))}</label><textarea id="rawYamlEditor" name="raw" class="code-editor" spellcheck="false" aria-describedby="yaml-error">${e(state.draft.raw)}</textarea><p class="editor-secret-note">${e(t('credentialsManagedIn'))}<a href="#/settings/site">${e(t('site'))}</a>${e(t('credentialsManagedAfter'))}</p><div id="yaml-error" role="alert"></div><footer class="save-bar"><span id="yaml-state"></span><div class="actions">${button('reloadConfigFile','reload-latest')}${button('discard','discard')}${button('saveConfigFile','validate','primary')}</div></footer></form></div>`;
   const editor=root.querySelector('#rawYamlEditor');
+  let reloading=false;
   const sync=()=>{
     if(signal.aborted)return;const dirty=ctx.drafts.dirty('advanced');
-    editor.disabled=Boolean(state.saving);
-    root.querySelector('[data-action="validate"]').disabled=Boolean(state.saving)||!dirty;
+    const busy=Boolean(state.saving)||reloading;
+    editor.disabled=busy;
+    root.querySelector('[data-action="validate"]').disabled=busy||!dirty;
+    root.querySelector('[data-action="reload-latest"]').disabled=busy;
     root.querySelector('[data-action="discard"]').hidden=!dirty;
-    root.querySelector('[data-action="discard"]').disabled=Boolean(state.saving);
-    root.querySelector('#yaml-state').textContent=state.saving?t('saving'):'';
+    root.querySelector('[data-action="discard"]').disabled=busy;
+    root.querySelector('#yaml-state').textContent=reloading?t('loading'):state.saving?t('saving'):'';
   };
   editor.addEventListener('input',()=>{ctx.drafts.edit('advanced','raw',editor.value);editor.removeAttribute('aria-invalid');root.querySelector('#yaml-error').replaceChildren();sync();},{signal});
   const fieldName=key=>{
@@ -339,6 +355,7 @@ async function mountAdvanced(ctx, root, signal) {
   };
   const valueText=value=>value===null?t('notSet'):typeof value==='boolean'?t(value?'enabled':'disabled'):typeof value==='object'?JSON.stringify(value):String(value);
   const errorText=error=>{
+    if(error.details?.code==='CONFIG_INVALID')return t('configFileUnavailable');
     if(error.message==='EDIT_CREDENTIALS_IN_SECURITY')return t('credentialsEditorError');
     if(error.message==='CONFIG_CHANGED')return t('rawStale');
     const line=error.details?.line;
@@ -351,13 +368,31 @@ async function mountAdvanced(ctx, root, signal) {
     }
     return error.message;
   };
+  const reloadLatest=async(askToReplace)=>{
+    if(state.saving||reloading)return;
+    reloading=true;sync();
+    try {
+      if(askToReplace && ctx.drafts.dirty('advanced')) {
+        const accepted=await dialog(t('replaceConfigDraftTitle'),`<p>${e(t('replaceConfigDraftHelp'))}</p>`,{submit:t('reloadConfigFile'),cancel:t('backToEdit'),symbol:'settings'});
+        if(!accepted||signal.aborted)return;
+      }
+      await ctx.reloadConfig();
+      if(signal.aborted)return;
+      ctx.drafts.accept('advanced',{raw:ctx.rawYaml,revision:ctx.configRevision});
+      ctx.rawStale=false;ctx.render();
+    } catch(error) {
+      if(!signal.aborted)root.querySelector('#yaml-error').innerHTML=notice(errorText(error),'danger');
+    } finally {reloading=false;sync();}
+  };
+  if(ctx.rawStale)root.querySelector('#yaml-error').innerHTML=notice(t('rawStale'),'danger');
   actions(root,{
-    discard:()=>{ctx.drafts.accept('advanced',{raw:ctx.rawYaml,revision:ctx.configRevision});ctx.rawStale=false;ctx.render();},
+    'reload-latest':()=>reloadLatest(true),
+    discard:()=>reloadLatest(false),
     validate:async()=>{
-      if(state.saving)return;state.saving=true;sync();
+      if(state.saving||reloading)return;state.saving=true;sync();
       const error=root.querySelector('#yaml-error');error.replaceChildren();
       try{
-        if(ctx.rawStale)throw new Error(t('rawStale'));
+        if(ctx.rawStale)throw new Error('CONFIG_CHANGED');
         if(Object.keys(schemas).some(name=>ctx.drafts.dirty(name)))throw new Error(t('rawConflict'));
         const session=ctx.sessionVersion;
         const preview=await ctx.api.validateRaw(state.draft.raw,state.draft.revision);if(signal.aborted)return;
@@ -369,7 +404,7 @@ async function mountAdvanced(ctx, root, signal) {
         ctx.acceptConfig(result,'advanced',session);ctx.drafts.accept('advanced',{raw:result.rawYaml,revision:result.revision});ctx.rawStale=false;
         ctx.invalidateFiles();await ctx.refreshStatus();toast(t('rawSaved'));
         if(result.adminPathChanged)location.assign('/'+result.newAdminPath+'#/settings/advanced');else ctx.render();
-      }catch(err){if(!signal.aborted){editor.disabled=false;editor.setAttribute('aria-invalid','true');error.innerHTML=notice(errorText(err),'danger');}}
+      }catch(err){if(!signal.aborted){if(err.message==='CONFIG_CHANGED')ctx.rawStale=true;editor.disabled=false;editor.setAttribute('aria-invalid','true');error.innerHTML=notice(errorText(err),'danger');}}
       finally{state.saving=false;sync();}
     }
   },signal);sync();

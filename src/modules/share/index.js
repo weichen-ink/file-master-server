@@ -15,6 +15,17 @@ const {
 
 const RAW_DIR = path.join(STORAGE_DIR, 'raw');
 
+function isValidSharedFilePath(fullPath) {
+  try {
+    if (!isPathWithin(fullPath, RAW_DIR) || !fs.existsSync(fullPath)) return false;
+    const realTarget = fs.realpathSync(fullPath);
+    const realRoot = fs.realpathSync(RAW_DIR);
+    return isPathWithin(realTarget, realRoot) && fs.statSync(realTarget).isFile();
+  } catch {
+    return false;
+  }
+}
+
 let cachedSharesMap = null;
 let cachedSharesMtimeMs = 0;
 let flushTimer = null;
@@ -71,7 +82,7 @@ function createShareRecord({ year, month, filename, expiresInHours = 24, maxDown
     throw new Error('Missing or invalid year, month, or filename');
   }
   const fullPath = path.join(RAW_DIR, y, m, f);
-  if (!isPathWithin(fullPath, RAW_DIR) || !fs.existsSync(fullPath)) {
+  if (!isValidSharedFilePath(fullPath)) {
     throw new Error('Target asset does not exist');
   }
 
@@ -147,8 +158,7 @@ function registerShareModule(app) {
         const expiredByTime = item.expiresAt > 0 && now >= item.expiresAt;
         const expiredByCount = item.maxDownloads > 0 && item.downloads >= item.maxDownloads;
         const target = path.resolve(RAW_DIR, String(item.year), String(item.month), String(item.filename));
-        let fileExists = false;
-        try { fileExists = isPathWithin(target, RAW_DIR) && isPathWithin(fs.realpathSync(target), RAW_DIR) && fs.statSync(target).isFile(); } catch {}
+        const fileExists = isValidSharedFilePath(target);
         const state = !fileExists ? 'fileMissing' : expiredByTime ? 'expired' : expiredByCount ? 'quotaUsed' : 'active';
         return {
           ...item,
@@ -180,7 +190,7 @@ function registerShareModule(app) {
   });
 
   // 4. Public access route: GET /s/:shareId
-  app.get('/s/:shareId', shareDownloadLimiter, (req, res) => {
+  app.get('/s/:shareId', shareDownloadLimiter, (req, res, next) => {
     const shareId = String(req.params.shareId || '').trim();
     const map = getSharesMap();
     const item = map[shareId];
@@ -197,17 +207,20 @@ function registerShareModule(app) {
     }
 
     const fullPath = path.join(RAW_DIR, item.year, item.month, item.filename);
-    if (!isPathWithin(fullPath, RAW_DIR) || !fs.existsSync(fullPath)) {
+    if (!isValidSharedFilePath(fullPath)) {
       return res.status(404).send('Underlying shared file no longer exists.');
     }
 
-    // Express also routes HEAD through this handler; metadata checks must not
-    // consume a limited share before a client actually requests its body.
-    if (req.method !== 'HEAD') {
+    // Limited shares deliver whole files: Range cannot grant an uncounted download.
+    // Unlimited shares retain normal HTTP range support. HEAD never reserves quota.
+    const limited = item.maxDownloads > 0;
+    const shouldCountDownload = req.method !== 'HEAD';
+    if (shouldCountDownload) {
       item.downloads = (item.downloads || 0) + 1;
       map[shareId] = item;
-      if (item.maxDownloads > 0 && item.downloads >= item.maxDownloads) {
-        saveSharesMap(map);
+      if (limited) {
+        try { saveSharesMap(map); }
+        catch (error) { item.downloads -= 1; throw error; }
       } else {
         scheduleSharesFlush();
       }
@@ -216,7 +229,25 @@ function registerShareModule(app) {
     const forceDownloadName = req.query.download === '1' ? path.basename(fullPath) : null;
     setSecurityFileHeaders(res, fullPath, forceDownloadName);
 
-    return res.sendFile(fullPath);
+    return res.sendFile(fullPath, { acceptRanges: !limited, cacheControl: !limited,
+      ...(limited ? { headers: { 'Cache-Control': 'private, no-store' } } : {}) }, (err) => {
+      // Reservations prevent concurrent requests from exceeding the limit, but
+      // failed transfers and bodyless 304 responses do not consume a download.
+      if (shouldCountDownload && (err || res.statusCode < 200 || res.statusCode >= 300)) {
+        try {
+          const currentMap = getSharesMap();
+          const currentItem = currentMap[shareId];
+          if (currentItem === item && currentItem.downloads > 0) {
+            currentItem.downloads -= 1;
+            if (limited) saveSharesMap(currentMap);
+            else scheduleSharesFlush();
+          }
+        } catch (error) {
+          console.error('[Share] Failed to release download quota:', error.message);
+        }
+      }
+      if (err && !res.destroyed && !['ECONNABORTED', 'ECONNRESET', 'EPIPE'].includes(err.code)) next(err);
+    });
   });
 }
 

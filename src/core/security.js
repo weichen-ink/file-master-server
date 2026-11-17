@@ -1,6 +1,7 @@
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
+const { promisify } = require('node:util');
 const { DATA_DIR, getConfig, readCriticalJsonData, writeJsonData, isRecord, dataRevision } = require('./config');
 
 // In-memory IP brute-force protection map: ip -> { count, bannedUntil, lastAttempt }
@@ -85,22 +86,42 @@ function hashPassword(password) {
   return `scrypt:${salt}:${derived}`;
 }
 
-function verifyPassword(password, storedHashOrPlain) {
-  if (!storedHashOrPlain) return false;
-  const str = String(storedHashOrPlain);
-  if (str.startsWith('scrypt:')) {
-    const parts = str.split(':');
-    if (parts.length !== 3) return false;
-    const [, salt, expectedDerived] = parts;
-    const actualDerived = crypto.scryptSync(String(password || ''), salt, 64).toString('hex');
-    if (actualDerived.length !== expectedDerived.length) return false;
-    return crypto.timingSafeEqual(Buffer.from(actualDerived), Buffer.from(expectedDerived));
+const sha256 = (text) => crypto.createHash('sha256').update(text).digest();
+// Constant-time text comparison that does not leak length.
+const safeEqual = (a, b) => crypto.timingSafeEqual(sha256(String(a)), sha256(String(b)));
+const scryptAsync = promisify(crypto.scrypt);
+
+function parseScryptHash(stored) {
+  const parts = stored.split(':');
+  return parts.length === 3 ? { salt: parts[1], expected: parts[2] } : null;
+}
+
+// Plaintext is only a legacy fallback; the login route upgrades it to scrypt.
+function verifyPassword(password, stored) {
+  if (!stored) return false;
+  const str = String(stored);
+  if (!str.startsWith('scrypt:')) return safeEqual(password || '', str);
+  const parsed = parseScryptHash(str);
+  return Boolean(parsed) && safeEqual(crypto.scryptSync(String(password || ''), parsed.salt, 64).toString('hex'), parsed.expected);
+}
+
+/** Same result as verifyPassword, without blocking the event loop during login. */
+async function verifyPasswordAsync(password, stored) {
+  if (!stored) return false;
+  const str = String(stored);
+  if (!str.startsWith('scrypt:')) return safeEqual(password || '', str);
+  const parsed = parseScryptHash(str);
+  if (!parsed) return false;
+  try {
+    return safeEqual((await scryptAsync(String(password || ''), parsed.salt, 64)).toString('hex'), parsed.expected);
+  } catch {
+    return false;
   }
-  // Fallback for legacy plaintext password with constant time comparison
-  const inputBuf = Buffer.from(String(password || ''));
-  const storedBuf = Buffer.from(str);
-  if (inputBuf.length !== storedBuf.length) return false;
-  return crypto.timingSafeEqual(inputBuf, storedBuf);
+}
+
+function verifyUsername(input, stored) {
+  const wanted = String(stored || '').trim();
+  return Boolean(wanted) && safeEqual(String(input || '').trim(), wanted);
 }
 
 function getSigningSecret(cfg) {
@@ -261,14 +282,18 @@ function verifySessionToken(token, cfg) {
 }
 
 function parseCookies(req) {
-  const header = req.headers.cookie || '';
+  const header = req?.headers?.cookie || '';
   const cookies = {};
   header.split(';').forEach((pair) => {
     const idx = pair.indexOf('=');
     if (idx > -1) {
       const k = pair.slice(0, idx).trim();
-      const v = decodeURIComponent(pair.slice(idx + 1).trim());
-      cookies[k] = v;
+      const rawVal = pair.slice(idx + 1).trim();
+      try {
+        cookies[k] = decodeURIComponent(rawVal);
+      } catch {
+        cookies[k] = rawVal;
+      }
     }
   });
   return cookies;
@@ -349,6 +374,9 @@ module.exports = {
   createSessionCookie,
   hashPassword,
   verifyPassword,
+  verifyPasswordAsync,
+  verifyUsername,
+  parseCookies,
   getClientIp,
   checkIpBan,
   recordLoginFailure,

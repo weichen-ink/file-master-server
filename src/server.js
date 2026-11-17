@@ -22,7 +22,8 @@ const {
   IMAGE_PROCESSING_CONFIG_KEYS
 } = require('./core/config');
 const {
-  verifyPassword,
+  verifyPasswordAsync,
+  verifyUsername,
   getClientIp,
   checkIpBan,
   recordLoginFailure,
@@ -71,15 +72,21 @@ if (initCfg.trust_proxy !== false) {
   app.set('trust proxy', initCfg.trust_proxy || 'loopback');
 }
 
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: '256kb' }));
+app.use(express.urlencoded({ extended: true, limit: '256kb' }));
+
+const pageCsp = (scriptSrc) => [
+  "default-src 'self'", `script-src ${scriptSrc}`, "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob: https: http:", "media-src 'self' data: blob:", "connect-src 'self'",
+  "font-src 'self' data:", "object-src 'none'", "base-uri 'self'", "frame-ancestors 'self'"
+].join('; ');
 
 // Global Security Response Headers
 app.use((req, res, next) => {
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Content-Security-Policy', pageCsp("'self' 'unsafe-inline'"));
   next();
 });
 
@@ -178,8 +185,14 @@ app.get('/api/platform/status', (req, res) => {
   });
 });
 
+const setupRateLimiter = createRateLimiter({
+  windowMs: 60 * 1000,
+  max: 20,
+  message: 'Too many setup requests from this IP. Please try again in a minute.'
+});
+
 // First-time Setup Wizard APIs (permanently locked once config.yaml exists)
-app.get('/api/platform/setup-defaults', (req, res) => {
+app.get('/api/platform/setup-defaults', setupRateLimiter, (req, res) => {
   if (isConfigInitialized()) {
     return res.status(403).json({ error: 'Server is already initialized' });
   }
@@ -201,7 +214,7 @@ app.get('/api/platform/setup-defaults', (req, res) => {
   });
 });
 
-app.post('/api/platform/setup', (req, res) => {
+app.post('/api/platform/setup', setupRateLimiter, (req, res) => {
   if (isConfigInitialized()) {
     return res.status(403).json({ error: 'Server is already initialized' });
   }
@@ -234,7 +247,7 @@ const loginRateLimiter = createRateLimiter({
   message: 'Too many login requests from this IP. Please try again in a minute.'
 });
 
-app.post('/api/platform/login', loginRateLimiter, (req, res) => {
+app.post('/api/platform/login', loginRateLimiter, async (req, res) => {
   const ip = getClientIp(req);
   const ban = checkIpBan(ip);
   if (ban.banned) {
@@ -243,11 +256,11 @@ app.post('/api/platform/login', loginRateLimiter, (req, res) => {
     });
   }
 
-  const cfg = getConfig();
+  let cfg = getConfig();
   const { username, password, rememberMe } = req.body || {};
 
-  const userOk = String(username || '').trim() === cfg.username;
-  const passOk = verifyPassword(password, cfg.password);
+  const userOk = verifyUsername(username, cfg.username);
+  const passOk = await verifyPasswordAsync(password, cfg.password);
 
   if (!userOk || !passOk) {
     const remaining = recordLoginFailure(ip);
@@ -262,6 +275,9 @@ app.post('/api/platform/login', loginRateLimiter, (req, res) => {
   }
 
   clearLoginFailures(ip);
+  if (!String(cfg.password).startsWith('scrypt:')) {
+    try { cfg = updateConfigPreservingComments({ password: String(password) }); } catch {}
+  }
   const token = createSessionToken(cfg);
   const maxAgeAttr = rememberMe ? `; Max-Age=${30 * 24 * 60 * 60}` : '';
   res.setHeader(
@@ -293,20 +309,25 @@ app.get('/api/platform/metrics', requireAdmin, async (req, res) => {
 });
 
 app.get('/api/platform/config', requireAdmin, (req, res) => {
-  const cfg = getConfig();
-  const revealSecrets = req.query.reveal === '1' || req.query.reveal === 'true';
-  res.json(redactConfigForClient(cfg, getRawConfigYaml(), revealSecrets));
+  try {
+    const cfg = getConfig();
+    const revealSecrets = req.query.reveal === '1' || req.query.reveal === 'true';
+    res.json(redactConfigForClient(cfg, getRawConfigYaml(), revealSecrets));
+  } catch (error) {
+    res.status(error.status || 503).json({error:'Cannot load configuration; repair the server configuration file and retry',code:'CONFIG_INVALID'});
+  }
 });
 
 function configurationError(err) {
-  return { error: err.message, code: err.code, line: err.linePos?.[0]?.line };
+  return { error: err.name === 'YAMLParseError' ? 'Invalid YAML syntax; check the indicated line' : err.message,
+    code: err.code, line: err.linePos?.[0]?.line };
 }
 
 // Read-only validation for the advanced editor. Never writes configuration or clears caches.
 app.post('/api/platform/config/preview', requireAdmin, (req, res) => {
   try {
     const prepared = prepareEditorConfigYaml(req.body?.rawYaml, req.body?.revision);
-    const changes = configurationChanges(require('yaml').parse(getRawConfigYaml()), require('yaml').parse(prepared.yaml));
+    const changes = configurationChanges(prepared.before, require('yaml').parse(prepared.yaml));
     res.json({ valid: true, changes });
   } catch (err) {
     res.status(err.status || 400).json(configurationError(err));
@@ -467,7 +488,7 @@ app.get('/api/platform/backup/status', requireAdmin, (req, res) => {
   try {
     res.json(getBackupStatus());
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message, code: err.code });
   }
 });
 
@@ -476,6 +497,7 @@ app.post('/api/platform/backup/run', requireAdmin, async (req, res) => {
     if (isBackupInProgress()) {
       return res.status(409).json({ error: '备份任务正在进行中，请稍候...' });
     }
+    getBackupStatus(); // Reject invalid persisted state before acknowledging a background job.
     const shouldWait = req.query?.wait === '1' || req.body?.wait === true;
     if (shouldWait) {
       const result = await performBackup({ manual: true });
@@ -487,7 +509,7 @@ app.post('/api/platform/backup/run', requireAdmin, async (req, res) => {
     });
     return res.json({ success: true, started: true, message: '备份任务已在后台启动，实时日志已同步' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message, code: err.code });
   }
 });
 
@@ -554,6 +576,8 @@ app.get('/:customAdminPath', (req, res, next) => {
     if (ban.banned && !isAdminAuthenticated(req)) {
       return res.status(403).send(`IP is currently banned. Try again in ${ban.hoursLeft} hours.`);
     }
+    // The admin console is fully external ESM, so inline scripts stay blocked here.
+    res.setHeader('Content-Security-Policy', pageCsp("'self'"));
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');

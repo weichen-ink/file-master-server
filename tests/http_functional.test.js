@@ -78,7 +78,10 @@ test('HTTP functional regression across platform, assets, shares and recovery', 
     assert.equal(status.data.storageHealth.atomicUploads, true);
     assert.equal((await call('/api/platform/config', { method: 'PUT', headers: { Cookie: cookie }, json: { patch: {} } })).status, 403);
     assert.equal((await call('/api/platform/config', { method: 'PUT', headers: { ...admin(), Origin: 'https://other.invalid' }, json: { patch: {} } })).status, 403);
-    assert.equal((await call('/test-admin')).status, 200);
+    assert.equal((await call('/api/platform/config', { headers: { Cookie: 'bad=%E0%A4%A' } })).status, 401);
+    const adminPage = await call('/test-admin');
+    assert.equal(adminPage.status, 200);
+    assert.match(adminPage.headers.get('content-security-policy') || '', /script-src 'self'/);
     assert.equal((await call('/assets/console.js')).status, 200);
     const entry = await call('/assets/admin/app.mjs');
     assert.equal(entry.status, 200);
@@ -193,6 +196,109 @@ test('HTTP functional regression across platform, assets, shares and recovery', 
     assert.equal(searched.totalCount,1);assert.equal(searched.images[0].filename,'camera.tiff');
   });
 
+  await t.test('Legacy plaintext password is upgraded to scrypt on successful login', async () => {
+    const YAML = require('yaml');
+    const doc = YAML.parseDocument(fs.readFileSync(CONFIG_PATH, 'utf8'));
+    doc.set('password', 'legacy-plain-pass');
+    fs.writeFileSync(CONFIG_PATH, doc.toString());
+    assert.equal((await call('/api/platform/login', { method: 'POST', json: { ...credentials, password: 'wrong' } })).status, 401);
+    assert.equal(getConfig().password, 'legacy-plain-pass');
+    const login = await call('/api/platform/login', { method: 'POST', json: { ...credentials, password: 'legacy-plain-pass' } });
+    assert.equal(login.status, 200, login.text); saveCookie(login);
+    assert.match(getConfig().password, /^scrypt:/);
+    assert.equal((await call('/api/platform/login', { method: 'POST', json: { ...credentials, password: 'legacy-plain-pass' } })).status, 200);
+    await patch({ password: credentials.password });
+    assert.equal((await call('/api/platform/login', { method: 'POST', json: credentials })).status, 200);
+  });
+
+  await t.test('Shares and listings refuse files whose symlink escapes storage', async () => {
+    const dir = path.dirname(assetPath(asset));
+    const linked = path.join(dir, 'share-symlink-probe.png');
+    const outside = path.join(require('node:os').tmpdir(), `fm-share-outside-${process.pid}.png`);
+    fs.writeFileSync(linked, original);
+    const result = await call('/api/modules/share/create', { method: 'POST', headers: api, json: { year: asset.year, month: asset.month, filename: 'share-symlink-probe.png' } });
+    assert.equal(result.status, 200, result.text);
+    const share = result.data.share;
+    try {
+      fs.writeFileSync(outside, 'outside-secret');
+      fs.rmSync(linked); fs.symlinkSync(outside, linked);
+      assert.equal((await call(share.shareUrl)).status, 404);
+      const listed = (await call('/api/modules/share/list', { headers: api })).data.shares.find((item) => item.id === share.id);
+      assert.equal(listed.fileExists, false);
+    } finally {
+      await call(`/api/modules/share/${share.id}`, { method: 'DELETE', headers: api });
+      fs.rmSync(linked, { force: true }); fs.rmSync(outside, { force: true });
+    }
+  });
+
+  await t.test('Invalid stored config preserves authentication, rejects every editor path, and never leaks or overwrites source', async () => {
+    const config = require('../src/core/config');
+    const good = fs.readFileSync(CONFIG_PATH, 'utf8');
+    const editor = (await call('/api/platform/config', {headers:admin()})).data;
+    const parsed = require('yaml').parse(good);
+    const without = key => { const value = {...parsed}; delete value[key]; return require('yaml').stringify(value); };
+    const corruptions = ['', '# comment only', '123', '[not, a, mapping]',
+      without('username'), without('password'), without('api_token'),
+      'username: tester\npassword: present\napi_token: synthetic-secret: typo',
+      'api_token: "synthetic-secret-unclosed'];
+    try {
+      for (const raw of [...corruptions, null]) {
+        if (raw === null) fs.rmSync(CONFIG_PATH); else fs.writeFileSync(CONFIG_PATH, raw);
+        const read = await call('/api/platform/config', {headers:admin()});
+        assert.equal(read.status, 503, String(raw));
+        assert.equal(read.data.code, 'CONFIG_INVALID');
+        assert.equal(config.isConfigInitialized(), true, 'A missing runtime config must not reopen setup');
+        assert.equal((await call('/api/modules/share/list', {headers:api})).status, 200, 'Plugin token remains valid');
+        for (const revision of [undefined, raw === null ? editor.revision : config.configRevision(raw), 'stale']) {
+          for (const [url, method, json] of [
+            ['/api/platform/config/preview', 'POST', {rawYaml:editor.rawYaml, revision}],
+            ['/api/platform/config', 'PUT', {mode:'raw', rawYaml:editor.rawYaml, revision}],
+            ['/api/platform/config', 'PUT', {mode:'form', patch:{site_name:'must-not-write'}, revision}],
+          ]) {
+            const result = await call(url, {method, headers:admin(), json});
+            assert.equal(result.status, 503, result.text);
+            assert.equal(result.data.code, 'CONFIG_INVALID');
+            assert.ok(!result.text.includes('synthetic-secret'));
+            assert.equal('rawYaml' in result.data, false);
+            assert.equal(raw === null ? fs.existsSync(CONFIG_PATH) : fs.readFileSync(CONFIG_PATH, 'utf8'), raw === null ? false : raw);
+          }
+        }
+      }
+    } finally { fs.writeFileSync(CONFIG_PATH, good); }
+    assert.equal((await call('/api/platform/config', {headers:admin()})).status, 200, 'Same cookie recovers without login');
+    const invalidInput = await call('/api/platform/config/preview', {method:'POST', headers:admin(), json:{rawYaml:'site_name: user-input-secret: typo'}});
+    assert.equal(invalidInput.status, 400);
+    assert.ok(!invalidInput.text.includes('user-input-secret'));
+    assert.ok(invalidInput.data.line > 0);
+    const noUsername = require('yaml').parse(editor.rawYaml);
+    delete noUsername.username;
+    for (const [url, method, json] of [
+      ['/api/platform/config/preview', 'POST', {rawYaml:require('yaml').stringify(noUsername)}],
+      ['/api/platform/config', 'PUT', {mode:'form',patch:{username:''}}],
+    ]) {
+      const result=await call(url,{method,headers:admin(),json});
+      assert.equal(result.status,400,result.text);
+      assert.equal(fs.readFileSync(CONFIG_PATH,'utf8'),good);
+    }
+  });
+
+  await t.test('Corrupt backup state is reported consistently and a background job is not accepted', async () => {
+    const state = path.join(require('../src/core/config').DATA_DIR, 'backup_status.json');
+    const before = fs.existsSync(state) ? fs.readFileSync(state) : null;
+    try {
+      for (const raw of ['{bad', 'null', '[]', '123']) {
+        fs.writeFileSync(state, raw);
+        for (const [url, method] of [['/api/platform/backup/status','GET'], ['/api/platform/backup/run','POST'], ['/api/platform/backup/run?wait=1','POST']]) {
+          const result = await call(url, {method, headers:admin()});
+          assert.equal(result.status, 503, result.text);
+          assert.equal(result.data.code, 'STATE_INVALID');
+          assert.equal(fs.readFileSync(state, 'utf8'), raw);
+        }
+      }
+    } finally { if (before) fs.writeFileSync(state,before); else fs.rmSync(state,{force:true}); }
+    assert.equal((await call('/api/platform/backup/status',{headers:admin()})).status, 200);
+  });
+
   await t.test('Shares serve exact bytes, enforce quotas/expiry and can be revoked', async () => {
     const create = async (options) => {
       const result = await call('/api/modules/share/create', { method: 'POST', headers: api, json: { ...asset, ...options } });
@@ -200,9 +306,11 @@ test('HTTP functional regression across platform, assets, shares and recovery', 
     };
     const share = await create({ maxDownloads: 1 });
     assert.equal((await call(share.shareUrl, { method: 'HEAD' })).status, 200);
+    const ranged = await call(share.shareUrl, { headers: { Range: 'bytes=1-3' } });
+    assert.equal(ranged.status, 200);
+    assert.deepEqual(ranged.buffer, original);
     const listing = (await call('/api/modules/share/list', { headers: api })).data.shares;
-    assert.equal(listing.find((item) => item.id === share.id).downloads, 0, 'HEAD is metadata inspection, not a file download');
-    assert.deepEqual((await call(share.shareUrl)).buffer, original);
+    assert.equal(listing.find((item) => item.id === share.id).downloads, 1, 'Limited shares ignore Range and charge one complete download; HEAD is free');
     assert.equal((await call(share.shareUrl)).status, 410);
     const expiring = await create({ expiresInHours: 0.0000001 });
     assert.equal((await call(expiring.shareUrl)).status, 410);

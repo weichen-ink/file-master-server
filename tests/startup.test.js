@@ -33,6 +33,7 @@ test('Startup summary uses one language and prints health only when configured',
 });
 
 test('Actual CLI startup follows config rather than OS locale and exposes the advertised health route',async()=>{
+  config.initializeConfigFromSetup({username:'startup-test',password:'synthetic-password',api_token:'synthetic-token'});
   for(const [language,enabled] of [['zh',true],['en',false]]) {
     fs.writeFileSync(config.CONFIG_PATH,config.prepareConfigPatch({language,monitoring:{enabled},backup:{enabled:false}}).yaml);
     const child=spawn(process.execPath,['src/server.js'],{cwd:root,env:{...process.env,PORT:'0',LANG:language==='zh'?'en_US.UTF-8':'zh_CN.UTF-8'},stdio:['ignore','pipe','pipe']});

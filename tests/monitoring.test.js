@@ -64,12 +64,28 @@ test('Backup monitor distinguishes disabled, never run, success, partial and fai
     const completedAt='2026-11-01T03:00:00.000Z';
     for(const [record,status] of [[{success:true},'success'],[{success:true,rcloneSuccess:false},'partial'],[{success:false},'failed']]) {
       fs.writeFileSync(statusFile,JSON.stringify({...record,completedAt,lastSuccessAt:completedAt,archivePath:'/secret/path',logs:['private']}));
+      if(process.platform!=='win32')fs.chmodSync(statusFile,0o644);
       const result=getBackupMonitorState();assert.equal(result.status,status);assert.equal(result.lastSuccessAt,completedAt);
+      if(process.platform!=='win32')assert.equal(fs.statSync(statusFile).mode&0o777,0o600);
       assert.ok(!JSON.stringify(result).includes('private'));assert.ok(!JSON.stringify(result).includes('/secret'));
     }
     config.setConfigOverride({...cfg,backup:{enabled:false}});assert.equal(getBackupMonitorState().status,'disabled');assert.equal(getBackupMonitorState().nextRunAt,null);
     fs.writeFileSync(statusFile,'broken');assert.throws(()=>getBackupMonitorState());
   } finally {config.setConfigOverride(null);fs.rmSync(statusFile,{force:true});}
+});
+
+test('Malformed backup state remains an explicit monitoring warning, not a false never-run result',async()=>{
+  const {getBackupMonitorState}=require('../src/core/backup-service');
+  const file=path.join(config.DATA_DIR,'backup_status.json');
+  fs.writeFileSync(file,'{broken');
+  try {
+    const reporter=createHealthReporter({config:()=>({monitoring:{enabled:true,sections:{service:false,resources:false,files:false,storage:false,backup:true}}}),checkReadiness:()=>true,sources:{backup:getBackupMonitorState}});
+    const report=await reporter();
+    assert.equal(report.httpStatus,200);
+    assert.equal(report.data.status,'warning');
+    assert.deepEqual(report.data.warnings,['backup_unavailable']);
+    assert.equal(report.data.backup.status,'unknown');
+  } finally {fs.rmSync(file,{force:true});}
 });
 
 test('HTTP health endpoint is public when enabled, read-only and exposes only selected groups',async(t)=>{

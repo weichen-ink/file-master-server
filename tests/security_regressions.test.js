@@ -138,6 +138,13 @@ test('Config exports EXAMPLE_CONFIG_PATH, redacts credentials by default, and bl
   assert.ok(!redacted.rawYaml.includes('password:'));
   assert.ok(!redacted.rawYaml.includes('api_token:'));
   assert.ok(!revealed.rawYaml.includes('scrypt:1234:abcd'));
+  for(const invalid of ['password: "fm_secret_unclosed','[not, a, mapping]','']) {
+    assert.throws(()=>redactConfigForClient(sampleCfg,invalid,false),error=>{
+      assert.equal(error.status,503);assert.equal(error.code,'CONFIG_INVALID');
+      assert.ok(!error.message.includes('fm_secret'));
+      return true;
+    });
+  }
 
   assert.equal(validateWatermarkImagePath('./watermark.png'), './watermark.png');
   assert.throws(() => validateWatermarkImagePath('../../etc/passwd'), /Invalid watermark_image path/);
@@ -214,5 +221,100 @@ test('Session revocation cache detects same-mtime file replacement via dataRevis
   } finally {
     if (original !== null) fs.writeFileSync(revFile, original);
     else fs.rmSync(revFile, { force: true });
+  }
+});
+
+test('Malformed percent-encoded cookies do not throw URIError during authentication checks', () => {
+  const { isAdminAuthenticated, requireAdmin, requireApiOrAdmin } = require('../src/core/security');
+  const badReq = {
+    headers: { cookie: 'bad=%E0%A4%A; filemaster_session=%E0%A4%A' },
+    socket: { remoteAddress: '127.0.0.1' }
+  };
+  assert.equal(isAdminAuthenticated(badReq), false);
+
+  let status = 0;
+  const mockRes = {
+    status(c) { status = c; return this; },
+    json() { return this; }
+  };
+  requireAdmin(badReq, mockRes, () => {});
+  assert.equal(status, 401);
+
+  status = 0;
+  requireApiOrAdmin(badReq, mockRes, () => {});
+  assert.equal(status, 401);
+});
+
+test('Async password verification and constant-time username comparison match expected credentials', async () => {
+  const { hashPassword, verifyPasswordAsync, verifyUsername } = require('../src/core/security');
+  const hashed = hashPassword('correct-horse-battery');
+  assert.equal(await verifyPasswordAsync('correct-horse-battery', hashed), true);
+  assert.equal(await verifyPasswordAsync('wrong-horse', hashed), false);
+  assert.equal(await verifyPasswordAsync('legacy-plain', 'legacy-plain'), true);
+  assert.equal(await verifyPasswordAsync('wrong-plain', 'legacy-plain'), false);
+
+  assert.equal(verifyUsername('admin', 'admin'), true);
+  assert.equal(verifyUsername(' admin ', 'admin'), true);
+  assert.equal(verifyUsername('admin2', 'admin'), false);
+  assert.equal(verifyUsername('', 'admin'), false);
+});
+
+test('State and audit files are created owner-only (0600)', () => {
+  const { DATA_DIR, writeJsonData } = require('../src/core/config');
+
+  writeJsonData('perm_check_tmp', { ok: true });
+  const permFile = path.join(DATA_DIR, 'perm_check_tmp.json');
+  try {
+    if (process.platform !== 'win32') {
+      const mode = fs.statSync(permFile).mode & 0o777;
+      assert.equal(mode, 0o600, 'State JSON files must be written with 0600 permissions');
+    }
+  } finally {
+    fs.rmSync(permFile, { force: true });
+  }
+
+});
+
+test('Audit log rotation keeps only the newest rotated files', () => {
+  const { DATA_DIR } = require('../src/core/config');
+  const { pruneRotatedAuditLogs } = require('../src/core/audit');
+  const createdLogs = [];
+  try {
+    for (let i = 0; i < 7; i++) {
+      const p = path.join(DATA_DIR, `audit.${1000 + i}.log`);
+      fs.writeFileSync(p, 'log\n');
+      createdLogs.push(p);
+    }
+    pruneRotatedAuditLogs(5);
+    const remaining = createdLogs.filter((p) => fs.existsSync(p));
+    assert.equal(remaining.length, 5);
+    assert.equal(fs.existsSync(createdLogs[0]), false);
+    assert.equal(fs.existsSync(createdLogs[1]), false);
+  } finally {
+    for (const p of createdLogs) fs.rmSync(p, { force: true });
+  }
+
+});
+
+test('Share creation rejects a symlink that escapes RAW_DIR', () => {
+  const { STORAGE_DIR } = require('../src/core/config');
+  const { createShareRecord } = require('../src/modules/share');
+  if (process.platform !== 'win32') {
+    const outsideFile = path.join(os.tmpdir(), `fm-outside-${process.pid}.png`);
+    const monthDir = path.join(STORAGE_DIR, 'raw', '2026', '11');
+    const symlinkPath = path.join(monthDir, 'escaped_symlink.png');
+    fs.mkdirSync(monthDir, { recursive: true });
+    fs.writeFileSync(outsideFile, 'outside-secret');
+    try {
+      fs.rmSync(symlinkPath, { force: true });
+      fs.symlinkSync(outsideFile, symlinkPath);
+      assert.throws(
+        () => createShareRecord({ year: '2026', month: '11', filename: 'escaped_symlink.png' }),
+        /Target asset does not exist/
+      );
+    } finally {
+      fs.rmSync(symlinkPath, { force: true });
+      fs.rmSync(outsideFile, { force: true });
+    }
   }
 });

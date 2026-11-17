@@ -2368,6 +2368,15 @@
   gap: 20px 24px;
 }
 
+.settings-content .field.is-dirty > label {
+  color: var(--brand);
+}
+.settings-content .field.is-dirty :is(input, select) {
+  border-color: var(--brand);
+}
+.settings-content .field.is-dirty-pulse :is(input, select) {
+  box-shadow: 0 0 0 3px var(--brand-subtle);
+}
 .settings-content .field label {
   font-size: 14px;
   line-height: 20px;

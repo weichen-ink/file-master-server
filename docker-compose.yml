@@ -3,6 +3,10 @@ services:
     build: .
     container_name: file-master-server
     restart: unless-stopped
+    mem_limit: 1g
+    cpus: 2.0
+    security_opt:
+      - no-new-privileges:true
     ports:
       - "3210:3210"
     environment:
@@ -10,8 +14,20 @@ services:
       - PORT=3210
       - FILE_MASTER_CONFIG_DIR=/app/config
     volumes:
-      - ./config:/app/config
-      - ./storage:/app/storage
-      - ./data:/app/data
+      - type: bind
+        source: ./config
+        target: /app/config
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./storage
+        target: /app/storage
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./data
+        target: /app/data
+        bind:
+          create_host_path: false
       # Config is stored inside ./config/config.yaml so atomic saves never hit EBUSY.
 

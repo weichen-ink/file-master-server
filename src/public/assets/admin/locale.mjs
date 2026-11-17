@@ -247,6 +247,24 @@ export const messages = {
   before: ["已保存", "Saved"],
   after: ["待应用", "Proposed"],
   reloadLatest: ["加载最新配置（保留草稿）", "Reload latest (keep draft)"],
+  reloadConfigFile: ["加载最新配置", "Load latest configuration"],
+  replaceConfigDraftTitle: ["替换未保存的配置？", "Replace unsaved configuration?"],
+  replaceConfigDraftHelp: [
+    "加载后将替换编辑器中未保存的内容。如需保留，请先返回并复制草稿。",
+    "Loading replaces unsaved editor content. To keep it, go back and copy your draft first.",
+  ],
+  backupRemoteHelp: [
+    "填写服务器上已配置的 rclone 目标，例如 remote:backups。留空则仅保存在本地。",
+    "Enter a configured rclone destination, for example remote:backups. Leave blank to keep backups locally only.",
+  ],
+  backupStateUnavailable: [
+    "无法读取备份记录。请检查并修复服务器上的 backup_status.json，然后重试。",
+    "Backup history is unavailable. Check and repair backup_status.json on the server, then retry.",
+  ],
+  configFileUnavailable: [
+    "服务器配置文件无法读取或格式有误。请先修复后重试，当前草稿已保留。",
+    "The server configuration cannot be read or is invalid. Repair it and retry. Your draft has been kept.",
+  ],
   uploadingShort: ["上传 {done}/{total}", "Uploading {done}/{total}"],
   retryFailed: ["重试 {count} 个失败", "Retry {count} failed"],
   rawConflict: [

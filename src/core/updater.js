@@ -5,6 +5,7 @@ const YAML = require('yaml');
 const defaultConfig = require('./config');
 const { ROOT_DIR } = defaultConfig;
 const { createUpdateBackup } = require('./update-backup');
+const { writePrivateFile } = require('./private-files');
 const { createUpdateGit, OFFICIAL_UPSTREAM_REPO, getEffectiveUpstreamRepo,
   validateGitMirror, validateGitRemote, validateGitBranch } = require('./update-git');
 
@@ -106,7 +107,7 @@ function createUpdater({ rootDir = ROOT_DIR, config = defaultConfig, runCommand,
 
       fs.mkdirSync(DATA_DIR, { recursive: true });
       const cfgBackupPath = path.join(DATA_DIR, 'config.backup.yaml');
-      fs.writeFileSync(cfgBackupPath, userRawYaml, 'utf8');
+      writePrivateFile(cfgBackupPath, userRawYaml);
       state = { assetsRestored: false, dependenciesPending: previousInstallPending };
       writePendingUpdate(state);
       logStep(`Backed up config.yaml to data/config.backup.yaml`);

@@ -2,6 +2,17 @@
 
 默认 `docker-compose.yml` 已通过目录挂载 `storage/`、`data/` 和 `config/`（并设置 `FILE_MASTER_CONFIG_DIR=/app/config`），站点配置将直接持久化在宿主机的 `./config/config.yaml`，支持在网页端原子保存配置而不会触发单文件挂载的 `EBUSY` 错误。
 
+容器以 UID/GID `1000:1000` 运行。首次部署先创建挂载目录；升级或恢复时先完成下面的配置迁移，再设置属主，最后启动。在项目目录执行（Linux 常规 rootful Docker）：
+
+```sh
+mkdir -p config storage data
+# 升级或恢复：在此步先迁移配置，避免之后复制的文件仍属于 root。
+sudo chown -R 1000:1000 config storage data
+docker compose up -d --build
+```
+
+Compose 使用 `create_host_path: false`，缺少目录时会直接报错，避免 Docker 自动创建 root 属主的目录导致初始化失败。rootless Docker 或自定义 UID 映射需使用映射后的宿主机 UID/GID。若启动时报权限错误，请检查三个挂载目录及其现有文件的属主。
+
 如果是从早期未挂载 `./config` 的旧容器升级，请**在重建旧容器之前**先将旧容器内的配置文件导出到宿主机 `./config/` 目录：
 
 ```sh
@@ -23,6 +34,17 @@ cp ./config.yaml ./config/config.yaml
 ## English
 
 The default `docker-compose.yml` mounts `storage/`, `data/`, and `config/` as directories (with `FILE_MASTER_CONFIG_DIR=/app/config`), persisting site settings at `./config/config.yaml` on the host and allowing atomic config saves from the web admin without single-file bind-mount `EBUSY` errors.
+
+The container runs as UID/GID `1000:1000`. Create the bind directories for a new installation. For upgrades or restores, migrate the configuration below first, then assign ownership, then start. Run from the project directory (Linux with rootful Docker):
+
+```sh
+mkdir -p config storage data
+# Upgrades/restores: migrate config here before setting ownership.
+sudo chown -R 1000:1000 config storage data
+docker compose up -d --build
+```
+
+Compose uses `create_host_path: false` to fail on missing directories instead of creating root-owned directories that prevent setup. For rootless Docker or custom UID mappings, use the mapped host UID/GID. If startup reports permission errors, check ownership of all three bind directories and their existing files.
 
 If you are upgrading from an older container that did not mount `./config`, export the existing configuration **before** recreating the old container:
 

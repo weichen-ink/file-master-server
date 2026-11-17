@@ -158,7 +158,7 @@ export const schemas = {
     }),
     number("retention", "lblBackupRetention", 1, 100),
     field("local_dir", "lblBackupLocalDir", "text", { required: true }),
-    field("rclone_target", "lblBackupRclone"),
+    field("rclone_target", "lblBackupRclone", "text", {help:"backupRemoteHelp"}),
     field("bark_url", "lblBackupBark", "password"),
   ],
   monitoring: [
