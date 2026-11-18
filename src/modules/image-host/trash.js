@@ -28,13 +28,13 @@ module.exports = { moveFileToTrash };
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { TRASH_DIR, getConfig, readCriticalJsonData, writeJsonData, isRecord } = require('../../core/config');
-const { RAW_DIR, hasSiblingWithSameBasename } = require('./asset-paths');
+const { RAW_DIR, hasSiblingWithSameBasename, resolveExactRawFilename } = require('./asset-paths');
 const { getFileCategory, isAllowedAttachmentFile, isValidYearSeg, isValidMonthSeg, isPathWithin, sanitizeUploadFilename, buildAssetUrlsAndMeta } = require('../../core/file-security');
 const { updateShaIndex, getShaIndex, pathToShaMap, removeShaIndex } = require('./sha-index');
 const { getProtectedMap, isItemLocked } = require('./protection');
 const { removeAssetStats } = require('./stats');
 const { invalidateAssetCache } = require('./asset-cache');
-const { assertNameAvailable, inspectNameAvailability } = require('./asset-names');
+const { assertNameAvailable, inspectNameAvailability, syncAssetNameIdentity } = require('./asset-names');
 
 function buildConflictDetails(cfg, year, month, issue) {
   const filename = issue.existingFilename;
@@ -74,9 +74,17 @@ function newTrashRel(year, month, filename, deletedAt) {
   return `${new Date(deletedAt).toISOString().slice(0,10)}/${year}/${month}/${stem}_${deletedAt}_${crypto.randomBytes(4).toString('hex')}${path.extname(filename)}`;
 }
 
+function hasPendingTrash() {
+  return Boolean(readCriticalJsonData('asset_mutation', null, validPending));
+}
+
 /** Old trash entries remain visible; new sidecars preserve exact names and integrity baselines. */
-function listTrashEntries() {
-  recoverPendingTrash();
+function listTrashEntries(options = {}) {
+  if (options?.skipRecovery) {
+    readCriticalJsonData('asset_mutation', null, validPending);
+  } else {
+    recoverPendingTrash();
+  }
   const entries = [];
   if (!fs.existsSync(TRASH_DIR)) return entries;
   const walk = (dir, parts = []) => {
@@ -162,6 +170,7 @@ function recoverReplacement(record) {
     if (known) removeShaIndex(known.sha256, rel, false);
     updateShaIndex(record.sha256, { year: record.year, month: record.month, filename: record.filename,
       size: stat.size, mtimeMs: stat.mtimeMs, baselineSha256: record.baselineSha256 });
+    syncAssetNameIdentity(record.year, record.month, record.filename, record.sha256);
     removeAssetStats(record.year, record.month, record.filename);
     if (record.restoreTrashRel) {
       const restored = path.join(TRASH_DIR, record.restoreTrashRel);
@@ -288,24 +297,25 @@ function recoverPendingTrash() {
 }
 async function trashAsset(year,month,filename,expectedSha256 = null) {
   recoverPendingTrash();
-  if (isItemLocked(year,month,filename)) throw Object.assign(new Error('File is locked against deletion'),{status:403});
+  const actualFilename = resolveExactRawFilename(year, month, filename) || filename;
+  if (isItemLocked(year,month,actualFilename)) throw Object.assign(new Error('File is locked against deletion'),{status:403});
   getShaIndex();
-  const source = path.join(RAW_DIR,year,month,filename), rel = `${year}/${month}/${filename}`;
-  if (!fs.existsSync(source)) {
+  const source = path.join(RAW_DIR,year,month,actualFilename), rel = `${year}/${month}/${actualFilename}`;
+  if (!fs.existsSync(source) || !resolveExactRawFilename(year, month, actualFilename)) {
     if (expectedSha256) throw Object.assign(new Error('File no longer exists'),{status:412});
     const known = pathToShaMap.get(rel); if (known) removeShaIndex(known.sha256,rel);
-    removeAssetStats(year,month,filename); invalidateAssetCache(year,month,filename);
+    removeAssetStats(year,month,actualFilename); invalidateAssetCache(year,month,actualFilename);
     return {size:0,sha256:null};
   }
   const sha256 = checkedHash(source,RAW_DIR), stat = fs.statSync(source);
   if (expectedSha256 && sha256 !== expectedSha256) throw Object.assign(new Error('Attachment changed; refresh before deleting'),{status:412});
   const known = pathToShaMap.get(rel), deletedAt = Date.now();
-  const trashRel = newTrashRel(year, month, filename, deletedAt);
-  writeJsonData('asset_mutation',{version:1,kind:'delete',year,month,filename,trashRel,sha256,
+  const trashRel = newTrashRel(year, month, actualFilename, deletedAt);
+  writeJsonData('asset_mutation',{version:1,kind:'delete',year,month,filename:actualFilename,trashRel,sha256,
     baselineSha256:known?.baselineSha256 || known?.sha256 || sha256,deletedAt});
   recoverPendingTrash();
   const trashId = crypto.createHash('sha256').update(trashRel).digest('hex');
-  return {size:stat.size,sha256,trashRel,trashId};
+  return {size:stat.size,sha256,trashRel,trashId,filename:actualFilename};
 }
 async function restoreTrash(id, options = {}) {
   recoverPendingTrash();
@@ -399,12 +409,22 @@ async function restoreTrash(id, options = {}) {
   recoverPendingTrash();
   return { year: item.year, month: item.month, filename: targetFilename, restored: true, cleanupPending: false };
 }
-function deleteTrash(id) {
-  recoverPendingTrash();
-  const item = findTrash(id);
+function deleteTrashEntry(item) {
+  if (!item || !item.fullPath) throw Object.assign(new Error('Trash item not found'), { status: 404 });
+  if (!fs.existsSync(item.fullPath)) throw Object.assign(new Error('Trash item not found'), { status: 404 });
+  if (!isPathWithin(fs.realpathSync(item.fullPath), fs.realpathSync(TRASH_DIR))) {
+    throw Object.assign(new Error('Invalid trash path'), { status: 403 });
+  }
   fs.unlinkSync(item.fullPath);
-  fs.rmSync(item.fullPath+'.json',{force:true});
-  return {success:true};
+  fs.rmSync(item.fullPath + '.json', { force: true });
+  return { success: true };
+}
+function deleteTrash(id, preloadedById = null) {
+  recoverPendingTrash();
+  if (!/^[a-f0-9]{64}$/.test(String(id))) throw Object.assign(new Error('Invalid trash identifier'), { status: 400 });
+  const item = preloadedById ? preloadedById.get(id) : findTrash(id);
+  if (!item) throw Object.assign(new Error('Trash item not found'), { status: 404 });
+  return deleteTrashEntry(item);
 }
 function pruneExpiredTrash(now = Date.now()) {
   const days = Number(getConfig().image_host?.trash_retention_days || 0);
@@ -420,4 +440,4 @@ function pruneExpiredTrash(now = Date.now()) {
   }
   return removed;
 }
-Object.assign(module.exports,{trashAsset,replaceAsset,recoverPendingTrash,trashMetadata,listTrashEntries,publicTrashEntries,findTrash,restoreTrash,deleteTrash,pruneExpiredTrash,buildConflictDetails});
+Object.assign(module.exports,{trashAsset,replaceAsset,recoverPendingTrash,hasPendingTrash,trashMetadata,listTrashEntries,publicTrashEntries,findTrash,restoreTrash,deleteTrash,deleteTrashEntry,pruneExpiredTrash,buildConflictDetails});

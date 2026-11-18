@@ -28,6 +28,15 @@ export function createApi(request) {
     healthPreview: (options) => get("/api/platform/health-preview", options),
     metrics: (options) => get("/api/platform/metrics", options),
     files: () => get("/api/modules/image-host/list"),
+    filesPage: (params = {}, options = {}) => {
+      const sp = new URLSearchParams();
+      for (const [key, value] of Object.entries(params)) {
+        if (value !== undefined && value !== null && value !== "") {
+          sp.set(key, String(value));
+        }
+      }
+      return get("/api/modules/image-host/list" + (sp.size ? "?" + sp.toString() : ""), options);
+    },
     uploadCheck: (items, signal) => post("/api/image/upload-check", { items }, { signal }),
     trash: () => get("/api/modules/image-host/trash"),
     restoreTrash: (id, options) =>
@@ -71,6 +80,8 @@ export function createApi(request) {
     cancelIntegrity: () =>
       request("/api/modules/image-host/integrity", { method: "DELETE" }),
     shares: () => get("/api/modules/share/list"),
+    verifyShares: () => post("/api/modules/share/verify"),
+    cleanupInvalidShares: () => post("/api/modules/share/cleanup-invalid"),
     share: (item, options) =>
       post("/api/modules/share/create", {
         year: item.year,

@@ -4,7 +4,11 @@
 
 Names are checked across all year/month directories, including names reserved by old links. Automatic rename candidates use the same rule. Replacement preserves the target directory and URL; existing links will show the new content.
 
+> **Permanent target-name reservation**: When a file is renamed on the server (`A.png → B.png`), the old name `A.png` stays reserved for `rename_alias_days` and can be reused once expired, whereas the **renamed target name `B.png` remains permanently reserved even if `B.png` is later deleted**. This prevents an unrelated future upload from reusing `B.png` and hijacking historic external links. Overwriting an existing renamed file in place (`replace`) updates its recorded SHA-256 identity so trash recovery continues to work normally.
+
 同名检查覆盖全部年月目录及旧链接保留名称。自动改名遵守同一规则。覆盖保持目标文件原目录和 URL，已有笔记和页面将显示新内容。
+
+> **改名目标名称永久保留说明**：文件在服务端执行改名（`A.png → B.png`）后，旧文件名 `A.png` 在 `rename_alias_days` 保留期满后可重新使用；但**改名后的目标文件名 `B.png` 即使后续被删除也会永久保留**，防止未来上传不相关的同名文件意外劫持外部历史链接。若对仍存在的 `B.png` 执行同名覆盖（`replace`），服务端会同步更新其身份校验指纹，不影响回收站正常还原。
 
 `POST /api/image/upload-check` accepts `{ "items": [{ "filename": "cover.png" }] }`. A conflict result includes `conflict.year`, `month`, `filename`, and a SHA-256 computed from the current file bytes.
 

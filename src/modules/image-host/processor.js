@@ -9,46 +9,72 @@ const { NEEDS_TRANSCODE_EXTS, isPathWithin } = require('../../core/file-security
 const { createTaskQueue } = require('../../core/task-queue');
 
 const execFileAsync = promisify(execFile);
+const TRANSCODE_TIMEOUT_MS = 30000;
+const TRANSCODE_MAX_BUFFER = 4 * 1024 * 1024;
 const scheduleImage = createTaskQueue(2);
 const imageJobs = new Map();
+const pathGenerations = new Map();
 let cacheGeneration = 0;
 
 function invalidateProcessingCache() {
   cacheGeneration++;
 }
 
+function invalidateProcessingPaths(paths = []) {
+  for (const p of paths) {
+    if (!p) continue;
+    pathGenerations.set(p, (pathGenerations.get(p) || 0) + 1);
+  }
+}
+
 const sourceSignature = stat => `${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeMs}`;
 function runImageCacheJob(rawPath, cachePath, build, generation = cacheGeneration) {
-  const key = `${generation}:${cachePath}`;
+  const pathGen = pathGenerations.get(cachePath) || 0;
+  const key = `${generation}:${pathGen}:${cachePath}`;
   if (imageJobs.has(key)) return imageJobs.get(key);
-  const job = scheduleImage(async () => {
-    const assertCurrent = () => {
-      if (generation !== cacheGeneration) {
-        throw Object.assign(new Error('Image settings changed; retry this request'), { status: 503 });
-      }
-    };
-    assertCurrent();
-    const rawStat = await fs.promises.stat(rawPath);
-    const cached = await fs.promises.stat(cachePath).catch(() => null);
-    assertCurrent();
-    const signature = sourceSignature(rawStat);
-    const saved = await fs.promises.readFile(cachePath + '.source', 'utf8').catch(() => null);
-    if (cached && cached.size > 0 && saved === signature) return cachePath;
-    await fs.promises.mkdir(path.dirname(cachePath), { recursive: true });
-    const temp = `${cachePath}.${crypto.randomUUID()}.tmp`;
-    try {
-      await build(temp);
-      assertCurrent();
-      if (sourceSignature(fs.statSync(rawPath)) !== signature) throw Object.assign(new Error('Source image changed; retry this request'),{status:503});
-      fs.writeFileSync(temp + '.source', signature);
-      fs.renameSync(temp, cachePath);
-      fs.renameSync(temp + '.source', cachePath + '.source');
-      return cachePath;
-    } finally {
-      await fs.promises.unlink(temp).catch(() => {});
-      await fs.promises.unlink(temp + '.source').catch(() => {});
+  const isCurrent = () => generation === cacheGeneration && (pathGenerations.get(cachePath) || 0) === pathGen;
+  const assertCurrent = () => {
+    if (!isCurrent()) {
+      throw Object.assign(new Error('Image settings changed; retry this request'), { status: 503 });
     }
-  }).finally(() => imageJobs.delete(key));
+  };
+
+  const job = (async () => {
+    assertCurrent();
+    const [fastRawStat, fastCached, fastSaved] = await Promise.all([
+      fs.promises.stat(rawPath),
+      fs.promises.stat(cachePath).catch(() => null),
+      fs.promises.readFile(cachePath + '.source', 'utf8').catch(() => null)
+    ]);
+    assertCurrent();
+    if (fastCached && fastCached.size > 0 && fastSaved === sourceSignature(fastRawStat)) {
+      return cachePath;
+    }
+
+    return scheduleImage(async () => {
+      assertCurrent();
+      const rawStat = await fs.promises.stat(rawPath);
+      const cached = await fs.promises.stat(cachePath).catch(() => null);
+      assertCurrent();
+      const signature = sourceSignature(rawStat);
+      const saved = await fs.promises.readFile(cachePath + '.source', 'utf8').catch(() => null);
+      if (cached && cached.size > 0 && saved === signature) return cachePath;
+      await fs.promises.mkdir(path.dirname(cachePath), { recursive: true });
+      const temp = `${cachePath}.${crypto.randomUUID()}.tmp`;
+      try {
+        await build(temp);
+        assertCurrent();
+        if (sourceSignature(fs.statSync(rawPath)) !== signature) throw Object.assign(new Error('Source image changed; retry this request'),{status:503});
+        fs.writeFileSync(temp + '.source', signature);
+        fs.renameSync(temp, cachePath);
+        fs.renameSync(temp + '.source', cachePath + '.source');
+        return cachePath;
+      } finally {
+        await fs.promises.unlink(temp).catch(() => {});
+        await fs.promises.unlink(temp + '.source').catch(() => {});
+      }
+    });
+  })().finally(() => imageJobs.delete(key));
   imageJobs.set(key, job);
   return job;
 }
@@ -93,7 +119,10 @@ async function transcodePreviewJpeg(rawFilePath, previewCachePath) {
 
   // 2. Try Linux native heif-convert (apt package: libheif-examples)
   try {
-    await execFileAsync('heif-convert', ['-q', '92', rawFilePath, tmpPath]);
+    await execFileAsync('heif-convert', ['-q', '92', rawFilePath, tmpPath], {
+      timeout: TRANSCODE_TIMEOUT_MS,
+      maxBuffer: TRANSCODE_MAX_BUFFER
+    });
     if (fs.existsSync(tmpPath) && fs.statSync(tmpPath).size > 0) {
       fs.renameSync(tmpPath, previewCachePath);
       return previewCachePath;
@@ -104,7 +133,10 @@ async function transcodePreviewJpeg(rawFilePath, previewCachePath) {
 
   // 3. Try cross-platform ffmpeg on Linux/Windows/macOS
   try {
-    await execFileAsync('ffmpeg', ['-y', '-v', 'error', '-i', rawFilePath, '-frames:v', '1', '-q:v', '2', tmpPath]);
+    await execFileAsync('ffmpeg', ['-y', '-v', 'error', '-i', rawFilePath, '-frames:v', '1', '-q:v', '2', tmpPath], {
+      timeout: TRANSCODE_TIMEOUT_MS,
+      maxBuffer: TRANSCODE_MAX_BUFFER
+    });
     if (fs.existsSync(tmpPath) && fs.statSync(tmpPath).size > 0) {
       fs.renameSync(tmpPath, previewCachePath);
       return previewCachePath;
@@ -126,7 +158,10 @@ async function transcodePreviewJpeg(rawFilePath, previewCachePath) {
         rawFilePath,
         '--out',
         tmpPath
-      ]);
+      ], {
+        timeout: TRANSCODE_TIMEOUT_MS,
+        maxBuffer: TRANSCODE_MAX_BUFFER
+      });
       if (fs.existsSync(tmpPath) && fs.statSync(tmpPath).size > 0) {
         fs.renameSync(tmpPath, previewCachePath);
         return previewCachePath;
@@ -446,15 +481,17 @@ async function buildWatermarkOverlay(imgCfg, targetWidth, targetHeight, basePipe
 /**
  * Reads original image -> resizes -> applies watermark -> compresses to WebP -> atomically writes cache.
  */
+function sharedRawPreviewPath(rawFilePath, cacheFilePath) {
+  return path.join(path.dirname(cacheFilePath), `${path.basename(rawFilePath)}.raw_preview.jpg`);
+}
+
 async function processAndCacheImage(rawFilePath, cacheFilePath, imgCfg) {
   const generation = cacheGeneration;
   const ext = path.extname(rawFilePath).toLowerCase();
   let inputPathForSharp = rawFilePath;
 
   if (NEEDS_TRANSCODE_EXTS.has(ext)) {
-    const parsed = path.parse(cacheFilePath);
-    const previewJpegPath = path.join(parsed.dir, `${parsed.name}.raw_preview.jpg`);
-    inputPathForSharp = await ensureTranscodedPreviewJpeg(rawFilePath, previewJpegPath);
+    inputPathForSharp = await ensureTranscodedPreviewJpeg(rawFilePath, sharedRawPreviewPath(rawFilePath, cacheFilePath));
   }
 
   return runImageCacheJob(rawFilePath, cacheFilePath,
@@ -474,8 +511,12 @@ async function processImage(inputPathForSharp, cacheFilePath, imgCfg) {
     return cacheFilePath;
   }
 
-  let targetWidth = meta.width || 800;
-  let targetHeight = meta.height || 600;
+  const rawWidth = meta.width || 800;
+  const rawHeight = meta.height || 600;
+  // EXIF orientations 5..8 transpose width and height when auto-rotated by .rotate()
+  const swapsAxes = Number(meta.orientation) >= 5 && Number(meta.orientation) <= 8;
+  let targetWidth = swapsAxes ? rawHeight : rawWidth;
+  let targetHeight = swapsAxes ? rawWidth : rawHeight;
   const maxWidth = Number(imgCfg.max_width) || 0;
 
   let pipeline = sharp(inputPathForSharp).rotate(); // Auto-rotate based on EXIF
@@ -502,7 +543,7 @@ async function processImage(inputPathForSharp, cacheFilePath, imgCfg) {
 async function ensureThumbnail(rawPath, cachePath) {
   let input = rawPath;
   if (NEEDS_TRANSCODE_EXTS.has(path.extname(rawPath).toLowerCase())) {
-    input = await ensureTranscodedPreviewJpeg(rawPath, `${cachePath}.preview.jpg`);
+    input = await ensureTranscodedPreviewJpeg(rawPath, sharedRawPreviewPath(rawPath, cachePath));
   }
   return runImageCacheJob(rawPath, cachePath, (temp) => sharp(input, { animated: false })
     .rotate().resize({ width: 320, height: 240, fit: 'inside', withoutEnlargement: true })
@@ -527,5 +568,6 @@ module.exports = {
   processAndCacheImage,
   ensureThumbnail,
   renderDraftPreview,
-  invalidateProcessingCache
+  invalidateProcessingCache,
+  invalidateProcessingPaths
 };

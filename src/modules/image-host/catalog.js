@@ -34,10 +34,11 @@ function invalidateScanCache() {
  * Scans all raw assets and compiles summary metrics.
  */
 function scanAllImages(cfg, forceRefresh = false) {
-  try { require('./trash').recoverPendingTrash(); } catch (error) { return Promise.reject(error); }
+  let hasPending = false;
+  try { hasPending = require('./trash').hasPendingTrash(); } catch (error) { return Promise.reject(error); }
   const cfgKey = `${cfg.base_url}|${cfg.image_host?.raw_secret_path}|${cfg.image_host?.pub_secret_path}|${cfg.image_host?.enable_optimization}`;
   const now = Date.now();
-  if (!forceRefresh && cachedScanData && cfgKey === cachedScanCfgKey && now - cachedScanTime < SCAN_CACHE_TTL_MS) {
+  if (!hasPending && !forceRefresh && cachedScanData && cfgKey === cachedScanCfgKey && now - cachedScanTime < SCAN_CACHE_TTL_MS) {
     return Promise.resolve(cachedScanData);
   }
 
@@ -106,7 +107,7 @@ async function collectImages(cfg) {
 
     let assetCacheBytes = 0;
     if (assetMeta.isProcessableImage) {
-      const candidateCacheFiles = assetCachePaths(year,month,file);
+      const candidateCacheFiles = assetCachePaths(year, month, file, hasCollision);
       for (const cPath of candidateCacheFiles) {
         assetCacheBytes += cacheSizes.get(cPath) || 0;
       }

@@ -43,56 +43,31 @@ import { cardCopy } from "../state/preferences.mjs";
 import { confirmedMutation } from "../state/settings.mjs";
 
 /** One hierarchy for year/month navigation and counts, independent of viewport. */
-export function archiveGroups(items) {
+export function archiveGroups(itemsOrCounts) {
   const years = new Map();
-  for (const item of items) {
-    if (!years.has(item.year)) years.set(item.year, new Map());
-    const months = years.get(item.year);
-    months.set(item.month, (months.get(item.month) || 0) + 1);
+  if (Array.isArray(itemsOrCounts)) {
+    for (const item of itemsOrCounts) {
+      if (!years.has(item.year)) years.set(item.year, new Map());
+      const months = years.get(item.year);
+      months.set(item.month, (months.get(item.month) || 0) + 1);
+    }
+  } else if (itemsOrCounts && typeof itemsOrCounts === "object") {
+    for (const [bucket, rawCount] of Object.entries(itemsOrCounts)) {
+      const [year, month] = String(bucket).split("/");
+      const count = Number(rawCount) || 0;
+      if (!year || !month || count <= 0) continue;
+      if (!years.has(year)) years.set(year, new Map());
+      const months = years.get(year);
+      months.set(month, (months.get(month) || 0) + count);
+    }
   }
   return [...years].sort(([a], [b]) => b.localeCompare(a)).map(([key, months]) => ({
     key,
-    count: [...months.values()].reduce((sum, count) => sum + count, 0),
+    count: [...months].reduce((sum, [, count]) => sum + count, 0),
     months: [...months].sort(([a], [b]) => b.localeCompare(a)).map(([key, count]) => ({ key, count })),
   }));
 }
 export const PAGE_SIZE = 60;
-export function queryFiles(items, query) {
-  const q = String(query.q || "").toLocaleLowerCase();
-  const filtered = items.filter(
-    (item) =>
-      (!query.folder ||
-        `${item.year}/${item.month}`.startsWith(query.folder)) &&
-      (!q || item.filename.toLocaleLowerCase().includes(q)) &&
-      (!query.type ||
-        (query.type === "image" ? item.isImage : !item.isImage)) &&
-      (!query.protected || item.locked),
-  );
-  const [field, order] = (query.sort || "time-desc").split("-");
-  const dir = order === "asc" ? 1 : -1;
-  filtered.sort(
-    (a, b) =>
-      dir *
-      (field === "name"
-        ? a.filename.localeCompare(b.filename, undefined, { numeric: true })
-        : field === "size"
-          ? a.size - b.size
-          : field === "hits"
-            ? (a.hits || 0) - (b.hits || 0)
-            : a.createdAt - b.createdAt),
-  );
-  const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const page = Math.max(
-    1,
-    Math.min(pages, Math.floor(Number(query.page)) || 1),
-  );
-  return {
-    filtered,
-    page,
-    pages,
-    visible: filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
-  };
-}
 export function fileCard(item, index, from = "") {
   return `<article class="file-card"><a href="${e(detailHref(item, { from }))}" class="file-open"><div class="file-thumbnail">${fileThumbnail(item)}${item.locked ? `<span class="protection-badge" aria-label="${e(t("protected"))}">${icon("lock")}</span>` : ""}</div><div class="file-caption"><h3 title="${e(item.filename)}">${e(item.filename)}</h3><p>${metaItem("hardDrive", bytes(item.size))}<span class="meta-sep" aria-hidden="true"></span>${metaItem("eye", item.hits || 0, { title: `${t("sortHits")}: ${item.hits || 0}` })}</p></div></a><button type="button" class="card-copy icon-button" data-action="copy-raw" data-index="${index}" title="${e(t("copy"))}" aria-label="${e(t("copy"))}">${icon("copy")}</button></article>`;
 }
@@ -114,17 +89,65 @@ function fileRow(item, index, from = "") {
 const selected = (a, b) => (a === b ? "selected" : "");
 export async function mountFiles(ctx, root, route, signal) {
   root.addEventListener("error", thumbnailFallback, { capture: true, signal });
-  await Promise.all([ctx.loadFiles(), ctx.loadConfig()]);
-  if (signal.aborted) return;
   let query = { ...route.query };
+  const fetchPage = async (qState, { refresh = false, reqSignal = signal } = {}) => {
+    let page = Math.max(1, Math.floor(Number(qState.page)) || 1);
+    const types = qState.type === "image" ? "image" : qState.type === "other" ? "audio,other" : "";
+    const sort = String(qState.sort || "time-desc").replace("-", "_");
+    const params = {
+      q: qState.q || "",
+      folder: qState.folder || "",
+      types,
+      protected: qState.protected || "",
+      sort,
+      limit: PAGE_SIZE,
+      offset: (page - 1) * PAGE_SIZE,
+      ...(refresh ? { refresh: "1" } : {}),
+    };
+    let data = await ctx.api.filesPage(params, { signal: reqSignal });
+    const totalCount = Number(data.totalCount) || 0;
+    const pages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+    if (page > pages) {
+      page = pages;
+      data = await ctx.api.filesPage(
+        { ...params, offset: (page - 1) * PAGE_SIZE, refresh: "" },
+        { signal: reqSignal },
+      );
+    }
+    const resolvedTotal = Number(data.totalCount) || 0;
+    const allTotalCount = Number(data.allTotalCount ?? resolvedTotal) || 0;
+    return {
+      visible: data.images || [],
+      totalCount: resolvedTotal,
+      totalBytes: Number(data.totalBytes) || 0,
+      allTotalCount,
+      bucketCounts: data.bucketCounts || {},
+      optimizationEnabled: data.optimizationEnabled !== false,
+      page,
+      pages: Math.max(1, Math.ceil(resolvedTotal / PAGE_SIZE)),
+    };
+  };
+  const initialQuery = { ...query };
+  const [initialResult] = await Promise.all([fetchPage(initialQuery, { reqSignal: signal }), ctx.loadConfig()]);
+  if (signal.aborted) return;
+  let pageState = initialResult;
   const view =
     query.view || (matchMedia("(max-width: 600px)").matches ? "list" : "grid");
-  const archive = archiveGroups(ctx.files.items);
-  const [currentYear, currentMonth] = (query.folder || "").split("/");
-  const currentArchive = currentYear ? t("archiveYear", {year:currentYear}) + (currentMonth ? " / " + t("archiveMonth", {month:currentMonth}) : "") : t("allAssets");
-  const folderLink = (key, label, count) =>
-    `<a href="${e(filesHref({ ...query, folder: key, page: 1 }))}" class="folder-link" ${(!query.folder && !key) || query.folder === key ? 'aria-current="page"' : ""}>${icon("folder")}<span>${e(label)}</span><small>${count}</small></a>`;
-  const archiveHtml = `${folderLink("", t("allAssets"), ctx.files.items.length)}<div class="archive-years">${archive.map(year => `<details class="archive-year" open><summary><span class="archive-disclosure">${icon("chevron")}</span>${folderLink(year.key, t("archiveYear", {year: year.key}), year.count)}</summary><div class="archive-months">${year.months.map(month => folderLink(year.key + "/" + month.key, t("archiveMonth", {month: month.key}), month.count)).join("")}</div></details>`).join("")}</div>`;
+  const buildSortControlsHtml = () =>
+    [
+      ["time", "sortTime", "desc"],
+      ["size", "sortSize", "desc"],
+      ["name", "sortName", "asc"],
+      ["hits", "sortHits", "desc"],
+    ]
+      .map(([field, label, initial]) => {
+        const [active, order] = (query.sort || "time-desc").split("-");
+        const next = active === field ? (order === "desc" ? "asc" : "desc") : initial;
+        return `<a class="button sort-button ${active === field ? "is-active" : ""}" href="${e(filesHref({ ...query, sort: field + "-" + next, page: 1 }))}" aria-label="${e(t(label))} · ${e(t(active === field ? (order === "desc" ? "descending" : "ascending") : "sort"))}" ${active === field ? 'aria-current="true"' : ""}>${e(t(label))}<span aria-hidden="true">${active === field ? (order === "desc" ? "↓" : "↑") : "↕"}</span></a>`;
+      })
+      .join("");
+  const buildViewControlsHtml = () =>
+    `<a href="${e(filesHref({ ...query, view: "grid" }))}" aria-label="${e(t("grid"))}" ${view === "grid" ? 'aria-current="true"' : ""}>${icon("files")}</a><a href="${e(filesHref({ ...query, view: "list" }))}" aria-label="${e(t("list"))}" ${view === "list" ? 'aria-current="true"' : ""}>${icon("list")}</a>`;
   root.innerHTML =
     heading(
       "library",
@@ -134,22 +157,43 @@ export async function mountFiles(ctx, root, route, signal) {
     (ctx.status.storageHealth?.atomicUploads === true
       ? ""
       : notice(t("storageWarning"), "warning")) +
-    `<div class="explorer"><aside class="archive-panel"><details class="archive-root" ${matchMedia("(max-width:600px)").matches ? "" : "open"}><summary><span class="archive-label">${icon("clock")}${e(t("archive"))}</span><span class="archive-current">${e(currentArchive)}</span>${icon("chevron")}</summary><nav aria-label="${e(t("archive"))}">${archiveHtml}</nav></details></aside><section class="file-results"><div class="file-toolbar"><label class="search-field" for="file-search">${icon("search")}<input type="search" id="file-search" placeholder="${e(t("search"))}" value="${e(query.q || "")}"></label><div class="filter-controls"><select id="type-filter" aria-label="${e(t("type"))}"><option value="">${e(t("allTypes"))}</option><option value="image" ${selected(query.type, "image")}>${e(t("images"))}</option><option value="other" ${selected(query.type, "other")}>${e(t("otherFiles"))}</option></select><select id="protection-filter" aria-label="${e(t("protection"))}"><option value="">${e(t("allProtection"))}</option><option value="1" ${selected(query.protected, "1")}>${e(t("protected"))}</option></select><div class="library-display-controls"><div class="sort-controls" role="group" aria-label="${e(t("sort"))}">${[
-      ["time", "sortTime", "desc"], ["size", "sortSize", "desc"], ["name", "sortName", "asc"], ["hits", "sortHits", "desc"],
-    ].map(([field,label,initial]) => {
-      const [active,order] = (query.sort || "time-desc").split("-");
-      const next = active === field ? (order === "desc" ? "asc" : "desc") : initial;
-      return `<a class="button sort-button ${active === field ? 'is-active' : ''}" href="${e(filesHref({...query,sort:field+'-'+next,page:1}))}" aria-label="${e(t(label))} · ${e(t(active === field ? (order === 'desc' ? 'descending' : 'ascending') : 'sort'))}" ${active === field ? 'aria-current="true"' : ''}>${e(t(label))}<span aria-hidden="true">${active === field ? (order === 'desc' ? '↓' : '↑') : '↕'}</span></a>`;
-    }).join('')}</div><div class="segmented view-controls"><a href="${e(filesHref({ ...query, view: "grid" }))}" aria-label="${e(t("grid"))}" ${view === "grid" ? 'aria-current="true"' : ""}>${icon("files")}</a><a href="${e(filesHref({ ...query, view: "list" }))}" aria-label="${e(t("list"))}" ${view === "list" ? 'aria-current="true"' : ""}>${icon("list")}</a></div></div></div></div><div id="filter-summary" class="result-summary"></div><div id="file-items"></div><nav id="file-pages" class="pagination" aria-label="${e(t("pageNext"))}"></nav></section></div>`;
+    `<div class="explorer"><aside class="archive-panel"><details class="archive-root" ${matchMedia("(max-width:600px)").matches ? "" : "open"}><summary><span class="archive-label">${icon("clock")}${e(t("archive"))}</span><span class="archive-current"></span>${icon("chevron")}</summary><nav aria-label="${e(t("archive"))}"></nav></details></aside><section class="file-results"><div class="file-toolbar"><label class="search-field" for="file-search">${icon("search")}<input type="search" id="file-search" placeholder="${e(t("search"))}" value="${e(query.q || "")}"></label><div class="filter-controls"><select id="type-filter" aria-label="${e(t("type"))}"><option value="">${e(t("allTypes"))}</option><option value="image" ${selected(query.type, "image")}>${e(t("images"))}</option><option value="other" ${selected(query.type, "other")}>${e(t("otherFiles"))}</option></select><select id="protection-filter" aria-label="${e(t("protection"))}"><option value="">${e(t("allProtection"))}</option><option value="1" ${selected(query.protected, "1")}>${e(t("protected"))}</option></select><div class="library-display-controls"><div class="sort-controls" role="group" aria-label="${e(t("sort"))}">${buildSortControlsHtml()}</div><div class="segmented view-controls">${buildViewControlsHtml()}</div></div></div></div><div id="filter-summary" class="result-summary"></div><div id="file-items"></div><nav id="file-pages" class="pagination" aria-label="${e(t("pageNext"))}"></nav></section></div>`;
   let visible = [];
+  const renderArchive = () => {
+    const openByYear = new Map(
+      [...root.querySelectorAll(".archive-year[data-year]")].map((el) => [el.dataset.year, Boolean(el.open)]),
+    );
+    const archive = archiveGroups(pageState.bucketCounts);
+    const [currentYear, currentMonth] = (query.folder || "").split("/");
+    const currentArchive = currentYear
+      ? t("archiveYear", { year: currentYear }) + (currentMonth ? " / " + t("archiveMonth", { month: currentMonth }) : "")
+      : t("allAssets");
+    const currentEl = root.querySelector(".archive-current");
+    if (currentEl) currentEl.textContent = currentArchive;
+    const folderLink = (key, label, count) =>
+      `<a href="${e(filesHref({ ...query, folder: key, page: 1 }))}" class="folder-link" ${(!query.folder && !key) || query.folder === key ? 'aria-current="page"' : ""}>${icon("folder")}<span>${e(label)}</span><small>${count}</small></a>`;
+    const navEl = root.querySelector(".archive-panel nav");
+    if (navEl) {
+      navEl.innerHTML = `${folderLink("", t("allAssets"), pageState.allTotalCount)}<div class="archive-years">${archive
+        .map((year) => {
+          const isOpen = openByYear.has(year.key) ? openByYear.get(year.key) : true;
+          return `<details class="archive-year" data-year="${e(year.key)}"${isOpen ? " open" : ""}><summary><span class="archive-disclosure">${icon("chevron")}</span>${folderLink(year.key, t("archiveYear", { year: year.key }), year.count)}</summary><div class="archive-months">${year.months.map((month) => folderLink(year.key + "/" + month.key, t("archiveMonth", { month: month.key }), month.count)).join("")}</div></details>`;
+        })
+        .join("")}</div>`;
+    }
+  };
+  const syncToolbarLinks = () => {
+    const sortEl = root.querySelector(".sort-controls");
+    if (sortEl) sortEl.innerHTML = buildSortControlsHtml();
+    const viewEl = root.querySelector(".view-controls");
+    if (viewEl) viewEl.innerHTML = buildViewControlsHtml();
+  };
   const renderResults = () => {
-    const result = queryFiles(ctx.files.items, query);
-    visible = result.visible;
-    ctx.lastFilesHref = filesHref(query);
+    visible = pageState.visible;
     root.querySelector("#filter-summary").innerHTML =
-      `<span>${e(query.folder || t("allAssets"))} <span class="muted">/ ${e(t("filesSummary", { count: result.filtered.length, size: bytes(result.filtered.reduce((n, i) => n + i.size, 0)) }))}</span></span>${query.q || query.type || query.protected ? `<a href="${e(filesHref({ view, folder: query.folder }))}">${e(t("clearFilters"))}</a>` : ""}${query.folder ? `<a href="${e(filesHref({ ...query, folder: "", page: 1 }))}">${e(t("searchAll"))}</a>` : ""}`;
+      `<span>${e(query.folder || t("allAssets"))} <span class="muted">/ ${e(t("filesSummary", { count: pageState.totalCount, size: bytes(pageState.totalBytes) }))}</span></span>${query.q || query.type || query.protected ? `<a href="${e(filesHref({ view, folder: query.folder }))}">${e(t("clearFilters"))}</a>` : ""}${query.folder ? `<a href="${e(filesHref({ ...query, folder: "", page: 1 }))}">${e(t("searchAll"))}</a>` : ""}`;
     const box = root.querySelector("#file-items");
-    box.innerHTML = !ctx.files.items.length
+    box.innerHTML = !pageState.allTotalCount
       ? empty(
           "emptyLibrary",
           "emptyLibraryDesc",
@@ -173,14 +217,65 @@ export async function mountFiles(ctx, root, route, signal) {
               { className: "file-collection" },
             );
     root.querySelector("#file-pages").innerHTML =
-      `${button("pagePrevious", "previous", "secondary", "", result.page === 1 ? "disabled" : "")}<span>${e(t("pageCount", { current: result.page, total: result.pages }))}</span>${button("pageNext", "next", "secondary", "", result.page === result.pages ? "disabled" : "")}`;
+      `${button("pagePrevious", "previous", "secondary", "", pageState.page <= 1 ? "disabled" : "")}<span>${e(t("pageCount", { current: pageState.page, total: pageState.pages }))}</span>${button("pageNext", "next", "secondary", "", pageState.page >= pageState.pages ? "disabled" : "")}`;
   };
+  const commitState = (nextState, qSnapshot) => {
+    pageState = nextState;
+    query = { ...qSnapshot, page: nextState.page };
+    ctx.files.optimizationEnabled = nextState.optimizationEnabled;
+    ctx.files.bucketCounts = nextState.bucketCounts;
+    ctx.syncFileCount?.(nextState.allTotalCount);
+    ctx.lastFilesHref = filesHref(query);
+    renderArchive();
+    syncToolbarLinks();
+    renderResults();
+  };
+  let requestSeq = 0;
+  let searchTimer = null;
+  let activeController = null;
+  const loadAndCommit = async (qSnapshot, { refresh = false, seq = ++requestSeq } = {}) => {
+    clearTimeout(searchTimer);
+    activeController?.abort();
+    const reqController = new AbortController();
+    activeController = reqController;
+    try {
+      const nextState = await fetchPage(qSnapshot, { refresh, reqSignal: reqController.signal });
+      if (signal.aborted || reqController.signal.aborted || seq !== requestSeq) return false;
+      commitState(nextState, qSnapshot);
+      return true;
+    } catch (err) {
+      if (err?.name !== "AbortError" && !signal.aborted && !reqController.signal.aborted && seq === requestSeq) {
+        toast(err.message, "danger");
+      }
+      return false;
+    } finally {
+      if (activeController === reqController) activeController = null;
+    }
+  };
+  signal.addEventListener(
+    "abort",
+    () => {
+      ++requestSeq;
+      clearTimeout(searchTimer);
+      activeController?.abort();
+      activeController = null;
+    },
+    { once: true },
+  );
   root.querySelector("#file-search").addEventListener(
     "input",
     (event) => {
-      query = { ...query, q: event.target.value, page: 1 };
-      history.replaceState(null, "", filesHref(query));
-      renderResults();
+      const nextQ = event.target.value;
+      query = { ...query, q: nextQ, page: 1 };
+      const qSnapshot = { ...query };
+      const seq = ++requestSeq;
+      history.replaceState(null, "", filesHref(qSnapshot));
+      clearTimeout(searchTimer);
+      activeController?.abort();
+      activeController = null;
+      searchTimer = setTimeout(() => {
+        loadAndCommit(qSnapshot, { refresh: false, seq });
+      }, 200);
     },
     { signal },
   );
@@ -201,22 +296,22 @@ export async function mountFiles(ctx, root, route, signal) {
     {
       upload: () => ctx.chooseUpload(),
       refresh: async () => {
-        await ctx.loadFiles(true);
-        ctx.render();
+        ctx.invalidateFiles();
+        await loadAndCommit({ ...query }, { refresh: true });
       },
       reset: () => navigate(filesHref({ view })),
       previous: () =>
         navigate(
           filesHref({
             ...query,
-            page: queryFiles(ctx.files.items, query).page - 1,
+            page: Math.max(1, pageState.page - 1),
           }),
         ),
       next: () =>
         navigate(
           filesHref({
             ...query,
-            page: queryFiles(ctx.files.items, query).page + 1,
+            page: Math.min(pageState.pages, pageState.page + 1),
           }),
         ),
       "copy-raw": (target) =>
@@ -233,9 +328,10 @@ export async function mountFiles(ctx, root, route, signal) {
           await confirm(t("btnClearWatermarkCache"), t("clearCacheConfirm"))
         ) {
           await ctx.api.clearCache();
+          if (signal.aborted) return;
           toast(t("cacheCleared"));
-          await ctx.loadFiles(true);
-          ctx.render();
+          ctx.invalidateFiles();
+          await loadAndCommit({ ...query }, { refresh: true });
         }
       },
     },
@@ -252,18 +348,7 @@ export async function mountFiles(ctx, root, route, signal) {
     },
     { signal },
   );
-  root.addEventListener(
-    "error",
-    (event) => {
-      if (event.target.tagName === "IMG") {
-        event.target.hidden = true;
-        const fallback = event.target.nextElementSibling;
-        if (fallback) fallback.hidden = false;
-      }
-    },
-    { capture: true, signal },
-  );
-  renderResults();
+  commitState(initialResult, initialQuery);
   root.classList.add("files-drop-target");
   let dropOverlay = root.querySelector(".files-drop-overlay");
   if (!dropOverlay) {
@@ -364,9 +449,11 @@ export async function createShare(ctx, item, signal) {
 }
 
 export async function mountDetail(ctx, root, route, signal) {
-  await ctx.loadFiles();
+  const detailData = await ctx.api.filesPage({ key: route.key, limit: 1 }, { signal });
   if (signal.aborted) return;
-  const item = ctx.files.items.find((i) => assetKey(i) === route.key);
+  if (Number.isFinite(detailData.allTotalCount)) ctx.syncFileCount?.(detailData.allTotalCount);
+  ctx.files.optimizationEnabled = detailData.optimizationEnabled !== false;
+  const item = (detailData.images || []).find((i) => assetKey(i) === route.key);
   const back =
     libraryBacklink(route.query.from) || ctx.lastFilesHref || "#/files";
   if (!item) {
@@ -426,11 +513,11 @@ export async function mountDetail(ctx, root, route, signal) {
         img.naturalWidth + " × " + img.naturalHeight,
       );
       if (variant === "webp")
-        ctx
-          .loadFiles(true)
-          .then(() => {
+        ctx.api
+          .filesPage({ key: route.key, limit: 1, refresh: "1" }, { signal: previewSignal })
+          .then((refreshed) => {
             if (signal.aborted || previewSignal.aborted) return;
-            const current = ctx.files.items.find(
+            const current = (refreshed.images || []).find(
               (i) => assetKey(i) === route.key,
             );
             if (current?.webpSize != null)

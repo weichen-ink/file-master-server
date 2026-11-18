@@ -77,7 +77,7 @@ function registerUploadRoutes(app) {
         const now = new Date();
         const year = String(now.getFullYear());
         const month = String(now.getMonth() + 1).padStart(2, '0');
-        const desiredName = `${path.basename(safeOrigName, origExt)}${origExt}`;
+        const desiredName = `${path.basename(safeOrigName, path.extname(safeOrigName))}${origExt}`;
         // Verify bytes first, including a same-name file not yet discovered by index warmup.
         const preferred = { year, month, filename: resolveAlias(year, month, desiredName, false) || desiredName };
         const existing = isReplace ? null : await findExistingBySha256(fullSha256, preferred);
@@ -290,18 +290,22 @@ function registerUploadRoutes(app) {
       const year = String(now.getFullYear());
       const month = String(now.getMonth() + 1).padStart(2, '0');
       const targetDir = path.join(RAW_DIR, year, month);
+      const dirCache = { buckets: null, files: new Map() };
       const results = [];
       for (const item of items) {
         const rawName = String(item?.filename || '');
         const safeName = sanitizeUploadFilename(rawName) || 'file.png';
         const ext = path.extname(safeName).toLowerCase() || '.png';
-        const desiredName = `${path.basename(safeName, ext)}${ext}`;
+        const desiredName = `${path.basename(safeName, path.extname(safeName))}${ext}`;
         const sha = String(item?.sha256 || '').trim().toLowerCase();
         if (/^[0-9a-f]{64}$/.test(sha)) {
           const preferred = { year, month, filename: resolveAlias(year, month, desiredName, false) || desiredName };
           const existing = await findExistingBySha256(sha, preferred);
           if (existing) {
-            const hasCollision = hasSiblingWithSameBasename(existing.year, existing.month, existing.filename);
+            const existingDir = path.join(RAW_DIR, existing.year, existing.month);
+            const cachedFiles = dirCache.files.get(existingDir) || (fs.existsSync(existingDir) ? fs.readdirSync(existingDir) : []);
+            dirCache.files.set(existingDir, cachedFiles);
+            const hasCollision = hasSiblingWithSameBasename(existing.year, existing.month, existing.filename, cachedFiles);
             const assetMeta = buildAssetUrlsAndMeta(cfg, {
               year: existing.year,
               month: existing.month,
@@ -323,10 +327,10 @@ function registerUploadRoutes(app) {
         const itemDir = path.join(RAW_DIR, itemYear, itemMonth);
         const match = hasExplicitBucket
           ? (() => {
-              const issue = inspectNameAvailability(itemDir, itemYear, itemMonth, desiredName);
+              const issue = inspectNameAvailability(itemDir, itemYear, itemMonth, desiredName, { dirCache });
               return issue ? { year: itemYear, month: itemMonth, issue } : null;
             })()
-          : inspectGlobalNameAvailability(RAW_DIR, year, month, desiredName);
+          : inspectGlobalNameAvailability(RAW_DIR, year, month, desiredName, { dirCache });
         if (match) {
           results.push({
             filename: rawName,

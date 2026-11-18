@@ -83,11 +83,14 @@ test("Failed mutations cannot commit a successful UI state", async () => {
 
 test("File routing safely roundtrips filenames and legacy bookmarks, filters and clamps pages", async () => {
   const { parseRoute, detailHref, filesHref } = await modules("router");
-  const { queryFiles } = await modules("features/files");
+  const filesMod = await modules("features/files");
+  const { queryCatalog } = require("../src/modules/image-host/catalog-query");
+  assert.equal("queryFiles" in filesMod, false, "Legacy client-side queryFiles() must be removed");
   const item = {
     year: "2026",
     month: "11",
     filename: "中文 #?%'\".png",
+    category: "image",
     isImage: true,
     size: 3,
     createdAt: 2,
@@ -100,14 +103,18 @@ test("File routing safely roundtrips filenames and legacy bookmarks, filters and
     filesHref({ q: "#中文", folder: "2026/11", sort: "size-desc", page: 999 }),
   ).query;
   assert.equal(query.q, "#中文");
-  const result = queryFiles([item], {
-    type: "image",
+  const matched = queryCatalog({ images: [item], optimizationEnabled: true }, {
+    types: "image",
     protected: "1",
-    page: 999,
+    limit: filesMod.PAGE_SIZE,
+    offset: 0,
   });
-  assert.equal(result.page, 1);
-  assert.equal(result.visible[0], item);
-  assert.equal(queryFiles([item], { type: "other" }).filtered.length, 0);
+  assert.equal(matched.totalCount, 1);
+  assert.equal(matched.images[0], item);
+  assert.equal(
+    queryCatalog({ images: [item], optimizationEnabled: true }, { types: "audio,other" }).totalCount,
+    0,
+  );
 });
 
 test("API errors propagate without retrying writes; only 401 invalidates sessions", async () => {

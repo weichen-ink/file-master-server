@@ -125,6 +125,13 @@ export async function start() {
     if (savedSection !== "advanced")
       ctx.drafts.merge("advanced", { raw: data.rawYaml, revision: data.revision });
   };
+  ctx.syncFileCount = (count) => {
+    if (!Number.isFinite(count)) return;
+    ctx.files.totalCount = count;
+    document
+      .querySelectorAll("[data-file-count]")
+      .forEach((el) => (el.textContent = count));
+  };
   ctx.invalidateFiles = () => {
     fileRevision++;
     filesPromise = null;
@@ -147,9 +154,7 @@ export async function start() {
             stats: data.stats || {},
             optimizationEnabled: data.optimizationEnabled !== false,
           });
-          document
-            .querySelectorAll("[data-file-count]")
-            .forEach((el) => (el.textContent = ctx.files.items.length));
+          ctx.syncFileCount(ctx.files.items.length);
         })
         .finally(() => {
           if (filesPromise === pending) filesPromise = null;
@@ -185,7 +190,7 @@ export async function start() {
   };
   ctx.tasks = createTasks(ctx.api, async () => {
     if (!ctx.authenticated) return;
-    await ctx.loadFiles(true);
+    ctx.invalidateFiles();
     if (["files", "detail"].includes(ctx.route?.page)) ctx.render();
   });
   ctx.tasks.subscribe(renderTaskSummary);
@@ -343,6 +348,17 @@ export async function start() {
         setLocale(getLocale() === "zh" ? "en" : "zh");
         if (ctx.authenticated) {
           renderShell();
+          const drawer = document.querySelector("dialog.dialog-drawer[open]");
+          if (drawer) {
+            const titleEl = drawer.querySelector(".dialog-title > span:last-child");
+            if (titleEl) titleEl.textContent = t("workspace");
+            const closeEl = drawer.querySelector("[data-dialog-cancel]");
+            if (closeEl) closeEl.setAttribute("aria-label", t("close"));
+            const contentEl = drawer.querySelector(".dialog-content");
+            if (contentEl) {
+              contentEl.innerHTML = `<nav class="mobile-nav">${navigationHtml(ctx.route)}</nav><div class="sidebar-bottom">${utilityHtml()}</div>`;
+            }
+          }
           ctx.render();
         } else showLogin();
       },
@@ -357,9 +373,13 @@ export async function start() {
           `<nav class="mobile-nav">${navigationHtml(ctx.route)}</nav><div class="sidebar-bottom">${utilityHtml()}</div>`,
           {
             symbol: "menu",
+            hideFooter: true,
+            className: "dialog-drawer",
             onMount: (el) =>
               el.addEventListener("click", (event) => {
-                if (event.target.closest("a,[data-action]")) el.close();
+                if (event.target.closest('a[href^="#"],[data-action="logout"]')) {
+                  el.close();
+                }
               }),
           },
         ),

@@ -30,6 +30,8 @@ const {
   clearLoginFailures,
   createSessionToken,
   createSessionCookie,
+  verifySessionToken,
+  parseCookies,
   revokeSessionToken,
   isAdminAuthenticated,
   requireAdmin,
@@ -288,13 +290,13 @@ app.post('/api/platform/login', loginRateLimiter, async (req, res) => {
 });
 
 app.post('/api/platform/logout', (req, res) => {
-  const cookieHeader = req.headers.cookie || '';
-  const match = cookieHeader.match(/filemaster_session=([^;]+)/);
-  if (match) {
-    try {
-      revokeSessionToken(decodeURIComponent(match[1].trim()));
-    } catch {}
-  }
+  try {
+    const cookies = parseCookies(req);
+    const sessionToken = cookies.filemaster_session;
+    if (sessionToken && verifySessionToken(sessionToken, getConfig())) {
+      revokeSessionToken(sessionToken);
+    }
+  } catch {}
   res.setHeader('Set-Cookie', 'filemaster_session=; Path=/; HttpOnly; Max-Age=0');
   res.json({ success: true });
 });

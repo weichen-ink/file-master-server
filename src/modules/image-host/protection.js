@@ -8,11 +8,26 @@ function getProtectedMap() {
 function isItemLocked(year, month, filename, protectedMap = null) {
   const map = protectedMap || getProtectedMap();
   const key = `${year}/${month}/${filename}`;
-  return Boolean(map[key]);
+  if (map[key]) return true;
+  const prefix = `${year}/${month}/`;
+  const targetLower = String(filename || '').normalize('NFC').toLowerCase();
+  for (const existingKey of Object.keys(map)) {
+    if (existingKey.startsWith(prefix) && existingKey.slice(prefix.length).normalize('NFC').toLowerCase() === targetLower) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function setItemLockState(year, month, filename, locked) {
   const map = getProtectedMap();
+  const prefix = `${year}/${month}/`;
+  const targetLower = String(filename || '').normalize('NFC').toLowerCase();
+  for (const existingKey of Object.keys(map)) {
+    if (existingKey.startsWith(prefix) && existingKey.slice(prefix.length).normalize('NFC').toLowerCase() === targetLower && existingKey !== `${prefix}${filename}`) {
+      delete map[existingKey];
+    }
+  }
   const key = `${year}/${month}/${filename}`;
   if (locked) {
     map[key] = { lockedAt: Date.now() };

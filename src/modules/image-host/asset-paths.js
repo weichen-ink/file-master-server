@@ -99,6 +99,24 @@ function findRawFile(year, month, requestedFilename, requireSameExt = false) {
   return null;
 }
 
+function resolveExactRawFilename(year, month, requestedFilename) {
+  const monthDir = path.join(RAW_DIR, year, month);
+  if (!fs.existsSync(monthDir)) return null;
+  const entries = fs.readdirSync(monthDir);
+  if (entries.includes(requestedFilename)) return requestedFilename;
+  const lower = String(requestedFilename || '').normalize('NFC').toLowerCase();
+  const ciMatch = entries.find((f) => f.normalize('NFC').toLowerCase() === lower);
+  if (ciMatch && fs.existsSync(path.join(monthDir, requestedFilename))) {
+    // Case-insensitive filesystem (e.g. macOS APFS / Windows): return canonical on-disk filename
+    try {
+      const a = fs.statSync(path.join(monthDir, requestedFilename));
+      const b = fs.statSync(path.join(monthDir, ciMatch));
+      if (a.ino === b.ino && a.dev === b.dev) return ciMatch;
+    } catch {}
+  }
+  return null;
+}
+
 function ensureDirs() {
   fs.mkdirSync(RAW_DIR, { recursive: true });
   fs.mkdirSync(CACHE_DIR, { recursive: true });
@@ -114,5 +132,6 @@ module.exports = {
   getLegacyWebpCacheFilePath,
   getRawPreviewCacheFilePath,
   hasSiblingWithSameBasename,
-  findRawFile
+  findRawFile,
+  resolveExactRawFilename
 };

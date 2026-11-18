@@ -1,5 +1,13 @@
 # Changelog (file-master-server)
 
+## [1.2.7] - 2026-11-18
+
+### Paginated File Library, Share Integrity Self-Check, Async Catalog & Admin UX Refinements
+- Add paginated `/api/modules/image-host/files/query` support with `totalBytes`, `allTotalCount`, `bucketCounts`, and protection filtering, and unify Web `#/files` search/refresh/cache-clear state commits under a single request coordinator with live archive year/month updates.
+- Harden public shares with SHA-256 target identity binding: automatically invalidate shares when the underlying asset is deleted or replaced (`404`/`410`), add `/api/modules/share/verify` and `/api/modules/share/cleanup-invalid` with bounded-concurrency async stream hashing deduplicated per file version, and surface live validity badges, permanent-share security guidance, and one-click invalid cleanup in `#/shares`.
+- Convert catalog rebuilds and recycle-bin metadata hydration to non-blocking async file operations, enforce serialized conflict checks on upload auto-rename, and preserve WebP optimization cache across metadata-only renames.
+- Polish admin console, setup wizard, public landing page, and `404` page typography, spacing, dark/light contrast, keyboard accessibility, and responsive mobile layouts.
+
 ## [1.2.6] - 2026-11-17
 
 ### Security Hardening, Private-File Protection & Draft/Backup Resilience

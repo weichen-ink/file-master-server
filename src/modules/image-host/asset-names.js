@@ -64,24 +64,45 @@ function resolveAlias(year, month, filename, optimized) {
 const routeNames = filename => [...new Set([filename, `${filename}.webp`, `${path.parse(filename).name}.webp`]
   .flatMap(name => [name, name.replace(/[\s_]+/g, '_')]))];
 
+function syncAssetNameIdentity(year, month, filename, sha256) {
+  if (!/^[a-f0-9]{64}$/.test(String(sha256 || ''))) return;
+  const file = path.join(DATA_DIR, 'asset_names.json');
+  if (!fs.existsSync(file) && !cached) return;
+  const state = readNameState();
+  const key = keyOf(year, month, filename);
+  if (Object.prototype.hasOwnProperty.call(state.identities, key) && state.identities[key] !== sha256) {
+    state.identities[key] = sha256;
+    saveNameState(state);
+  }
+}
+
+function readDirCached(directory, dirCache = null) {
+  if (dirCache && dirCache.files.has(directory)) return dirCache.files.get(directory);
+  const list = fs.existsSync(directory) ? fs.readdirSync(directory) : [];
+  if (dirCache) dirCache.files.set(directory, list);
+  return list;
+}
+
 /** One namespace check for uploads, renames and restores. Content deduplication runs before this. */
-function inspectNameAvailability(directory, year, month, filename, { owner = null, restoreSha256 = null } = {}) {
+function inspectNameAvailability(directory, year, month, filename, { owner = null, restoreSha256 = null, dirCache = null } = {}) {
   const state = readNameState(), bucket = `${year}/${month}/`;
   const proposed = new Set([filename, `${filename}.webp`].map(foldName));
   const allowed = target => target === owner || (target === filename && restoreSha256 && state.identities[bucket + target] === restoreSha256);
+  const dirEntries = readDirCached(directory, dirCache);
+  const dirSet = new Set(dirEntries);
   for (const [key, target] of [...Object.entries(state.raw), ...Object.entries(state.pub)]) {
     if (key.startsWith(bucket) && proposed.has(foldName(key.slice(bucket.length))) && !allowed(target)) {
-      const sameFileOnDisk = foldName(target) === foldName(filename) && fs.existsSync(path.join(directory, target));
+      const sameFileOnDisk = foldName(target) === foldName(filename) && dirSet.has(target);
       return {
         code: sameFileOnDisk ? 'NAME_CONFLICT' : 'NAME_RESERVED',
         message: sameFileOnDisk
           ? 'A different file already uses this name. Choose another name.'
-          : 'This name belongs to an existing or renamed file. Choose another name.',
+          : 'This name belongs to an existing or renamed file (renamed names remain permanently reserved even after deletion). Choose another name.',
         existingFilename: target
       };
     }
   }
-  for (const name of fs.existsSync(directory) ? fs.readdirSync(directory) : []) {
+  for (const name of dirEntries) {
     if (name !== owner && foldName(name) === foldName(filename)) {
       return {
         code: 'NAME_CONFLICT',
@@ -93,26 +114,29 @@ function inspectNameAvailability(directory, year, month, filename, { owner = nul
   return null;
 }
 function inspectGlobalNameAvailability(rawDir, targetYear, targetMonth, filename, options = {}) {
+  const dirCache = options.dirCache || null;
   const currentIssue = inspectNameAvailability(path.join(rawDir, targetYear, targetMonth), targetYear, targetMonth, filename, options);
   if (currentIssue) return { year: targetYear, month: targetMonth, issue: currentIssue };
-  let years = [];
-  try {
-    years = fs.readdirSync(rawDir, { withFileTypes: true }).filter((d) => d.isDirectory() && /^\d{4}$/.test(d.name)).map((d) => d.name).sort().reverse();
-  } catch {
-    return null;
-  }
-  for (const y of years) {
-    let months = [];
+  let buckets = dirCache?.buckets;
+  if (!buckets) {
+    buckets = [];
     try {
-      months = fs.readdirSync(path.join(rawDir, y), { withFileTypes: true }).filter((d) => d.isDirectory() && /^\d{2}$/.test(d.name)).map((d) => d.name).sort().reverse();
+      const years = fs.readdirSync(rawDir, { withFileTypes: true }).filter((d) => d.isDirectory() && /^\d{4}$/.test(d.name)).map((d) => d.name).sort().reverse();
+      for (const y of years) {
+        try {
+          const months = fs.readdirSync(path.join(rawDir, y), { withFileTypes: true }).filter((d) => d.isDirectory() && /^\d{2}$/.test(d.name)).map((d) => d.name).sort().reverse();
+          for (const m of months) buckets.push([y, m]);
+        } catch {}
+      }
+      if (dirCache) dirCache.buckets = buckets;
     } catch {
-      continue;
+      return null;
     }
-    for (const m of months) {
-      if (y === targetYear && m === targetMonth) continue;
-      const issue = inspectNameAvailability(path.join(rawDir, y, m), y, m, filename, options);
-      if (issue) return { year: y, month: m, issue };
-    }
+  }
+  for (const [y, m] of buckets) {
+    if (y === targetYear && m === targetMonth) continue;
+    const issue = inspectNameAvailability(path.join(rawDir, y, m), y, m, filename, options);
+    if (issue) return { year: y, month: m, issue };
   }
   return null;
 }
@@ -142,4 +166,4 @@ function assetReferenceUrls(cfg, year, month, filename, item) {
   const urls = new Set([item.rawUrl, item.pubUrl, ...assetLinkMappings(cfg, year, month, filename, item).map(mapping => mapping.from)]);
   return [...urls];
 }
-module.exports = { aliasRetentionDays, assetLinkMappings, assetReferenceUrls, hasOptimizedNameConflict, inspectNameAvailability, inspectGlobalNameAvailability, keyOf, foldName, conflict, routeNames, readNameState, saveNameState, resolveAlias, assertNameAvailable };
+module.exports = { aliasRetentionDays, assetLinkMappings, assetReferenceUrls, hasOptimizedNameConflict, inspectNameAvailability, inspectGlobalNameAvailability, keyOf, foldName, conflict, routeNames, readNameState, saveNameState, resolveAlias, assertNameAvailable, syncAssetNameIdentity };

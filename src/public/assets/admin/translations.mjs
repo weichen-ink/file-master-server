@@ -2,7 +2,7 @@
 const I18N = {
   zh: {
     renameAliasDays: "旧文件名保留天数",
-    renameAliasDaysHelp: "改名后，旧链接在保留期内仍可访问；到期后旧名称可重新使用。修改此项只影响之后的改名。",
+    renameAliasDaysHelp: "改名后，旧链接在保留期内仍可访问，到期后旧名称可重新使用；改名产生的新文件名即使删除也会永久保留，防止历史外链被其他文件占用。修改此项只影响之后的改名。",
     trashRetentionDays: "回收站自动清理（天）",
     trashRetentionDaysHelp: "文件移入回收站超过指定天数后自动彻底删除；填 0 表示长期保留、不自动删除。",
     uploadConflictTitle: "发现同名文件",
@@ -13,11 +13,12 @@ const I18N = {
     uploadConflictNewName: "新文件名",
     uploadConflictReplaceHint: "覆盖后，服务器上的旧文件会移入回收站。",
     uploadConflictLockedHint: "服务器上的文件已开启保护，无法覆盖。",
-    uploadConflictReservedHint: "该名称在旧链接保留期内，无法覆盖。",
+    uploadConflictReservedHint: "该名称已被历史改名保留（旧链接保留期内，或改名后的目标文件名在删除后仍永久保留以保护历史外链），无法覆盖。",
     uploadConflictApplyAll: "应用到本批次后续同名文件（改名将自动编号）",
     uploadConflictRenameBtn: "改名上传",
     uploadConflictRenameDesc: "以新名称上传，保留服务器已有文件。",
     uploadConflictRenameExists: "「{name}」已存在，请换个名字",
+    uploadConflictRenameReserved: "「{name}」已被历史改名永久保留（即使原文件已删除也不可复用），请换个名字",
     uploadConflictRenameAvailable: "名称可用",
     uploadConflictChecking: "检查中…",
     uploadConflictUseRemoteBtn: "使用已有文件",
@@ -199,7 +200,7 @@ const I18N = {
 
     // 安全文件分享
     lblSharesTitle: "分享链接",
-    lblSharesDesc: "为文件创建分享链接，可设置有效期和下载次数。",
+    lblSharesDesc: "创建可控有效期与下载次数的分享链接；原文件若被删除或覆盖替换，分享链接将自动失效。",
     btnRefreshShares: "刷新列表",
 
     // 主机监控中心
@@ -483,7 +484,7 @@ const I18N = {
   },
   en: {
     renameAliasDays: "Keep old filenames (days)",
-    renameAliasDaysHelp: "After a rename, old links keep working for this many days. The old name can be reused afterward. Changes apply to future renames.",
+    renameAliasDaysHelp: "After a rename, old links keep working for this many days, after which the old name can be reused; renamed target filenames stay permanently reserved even after deletion to protect historic links. Changes apply to future renames.",
     trashRetentionDays: "Empty recycle bin automatically (days)",
     trashRetentionDaysHelp: "Permanently delete items after this many days in the recycle bin. Set to 0 to keep items until deleted manually.",
     uploadConflictTitle: "File already exists",
@@ -494,11 +495,12 @@ const I18N = {
     uploadConflictNewName: "New filename",
     uploadConflictReplaceHint: "Overwriting moves the existing server file to the recycle bin.",
     uploadConflictLockedHint: "The server file is protected and cannot be overwritten.",
-    uploadConflictReservedHint: "This name is reserved for a recent rename and cannot be overwritten.",
+    uploadConflictReservedHint: "This name is reserved by a rename (within the alias window, or permanently reserved after a renamed file is deleted to protect historic links) and cannot be overwritten.",
     uploadConflictApplyAll: "Apply to remaining conflicts (auto-number if renaming)",
     uploadConflictRenameBtn: "Rename & upload",
     uploadConflictRenameDesc: "Enter a new filename and upload as a separate file.",
     uploadConflictRenameExists: "\"{name}\" already exists — try another name",
+    uploadConflictRenameReserved: "\"{name}\" is permanently reserved by a previous rename (even after deletion) — try another name",
     uploadConflictRenameAvailable: "Name available",
     uploadConflictChecking: "Checking…",
     uploadConflictUseRemoteBtn: "Use existing file",
@@ -689,7 +691,7 @@ const I18N = {
     // Shared Links
     lblSharesTitle: "Share links",
     lblSharesDesc:
-      "Create a link for a file and set an expiry or download limit.",
+      "Create links with optional expiry or download limits; links automatically invalidate if the original file is deleted or replaced.",
     btnRefreshShares: "Refresh list",
 
     // Host & Monitoring

@@ -123,7 +123,7 @@ label {
   border-color: var(--brand);
 }
 .btn-primary {
-  background: var(--brand);
+  background: var(--brand-solid, #7132f5);
   color: #fff;
   width: 100%;
   padding: 12px;

@@ -2,7 +2,12 @@ import { abortableDelay } from "../api/client.mjs";
 import { t } from "../locale.mjs";
 
 /** A successful POST is not proof of restart: wait for a different service start time. */
-export async function restartAndReconnect(ctx, signal, { install = false, onProgress = () => {}, wait = abortableDelay } = {}) {
+export async function restartAndReconnect(ctx, signal, {
+  install = false,
+  onProgress = () => {},
+  wait = abortableDelay,
+  reload = () => typeof location !== "undefined" && typeof location.reload === "function" && setTimeout(() => location.reload(), 300),
+} = {}) {
   signal.throwIfAborted();
   const previous = await ctx.api.metrics({ signal });
   signal.throwIfAborted();
@@ -16,6 +21,7 @@ export async function restartAndReconnect(ctx, signal, { install = false, onProg
       if (current.site.startedAt !== previous.site.startedAt) {
         await ctx.refreshStatus();
         onProgress(t(install ? "updateRestartSuccess" : "serviceRestarted"));
+        if (install) reload();
         return;
       }
     } catch (error) {

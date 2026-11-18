@@ -27,10 +27,19 @@ export const messages = {
   rawSaved: ["配置已保存", "Configuration saved"],
   shareColDownloads: ["下载次数", "Downloads"],
   shareNeverExpire: ["永久有效", "Never expires"],
-  downloadCount: ["{count} 次", "{count} downloads"],
+  downloadCount: ["{count} 次", "{count} {count|download|downloads}"],
   downloadLimit: ["上限 {count} 次", "Limit: {count}"],
   unlimitedDownloads: ["不限次数", "No download limit"],
-  fileMissing: ["文件不存在", "File missing"],
+  fileMissing: ["已失效 · 原文件不存在", "Invalid · File missing"],
+  fileChanged: ["已失效 · 原文件已变更", "Invalid · File replaced"],
+  shareFilterInvalid: ["全部已失效", "All invalid"],
+  shareBtnVerify: ["检测状态", "Check status"],
+  shareBtnCleanupInvalid: ["清理失效项", "Clean invalid"],
+  shareBrokenNotice: ["检测到 {count} 条分享因原文件被删除或覆盖已自动失效（当前有效 {active} 条，已失效 {invalid} 条）。", "{count} {count|share has|shares have} been invalidated because the original file was deleted or replaced ({active} active, {invalid} invalid)."],
+  shareStatusSummary: ["共 {total} 条分享：有效 {active} 条，已失效 {invalid} 条。", "{total} {total|share|shares}: {active} active, {invalid} invalid."],
+  shareVerifyDone: ["状态检测完成：共 {total} 条，有效 {active} 条，已失效 {invalid} 条", "Status check complete: {total} total, {active} active, {invalid} invalid"],
+  shareCleanupConfirm: ["清理全部 {count} 条已失效或已过期的分享记录？原文件不会受影响。", "Remove all {count} invalid or expired share links? Original files will not be affected."],
+  shareCleanupDone: ["已清理 {count} 条失效分享链接", "Removed {count} invalid share {count|link|links}"],
   updatedAt: ["更新于 {time}", "Updated at {time}"],
   metricsUpdateFailed: ["数据更新失败", "Could not update data"],
   updateAddress: ["更新地址", "Repository"],
@@ -63,11 +72,11 @@ export const messages = {
   metricUnavailable: ["暂时无法读取", "Currently unavailable"],
   serviceInformation: ["服务信息", "Service information"],
   serviceUptime: ["已运行", "Uptime"],
-  storageFileCount: ["{count} 个文件 · {size}", "{count} files · {size}"],
+  storageFileCount: ["{count} 个文件 · {size}", "{count} {count|file|files} · {size}"],
   uptimeValue: ["{days} 天 {hours} 小时 {minutes} 分钟", "{days}d {hours}h {minutes}m"],
   serviceRestarted: ["服务已重启，连接已恢复。", "Service restarted and reconnected."],
   saveBeforeRestart: ["请先保存或放弃未保存的设置，再重启服务。", "Save or discard your settings changes before restarting."],
-  updatesAvailableCount: ["有 {count} 项更新可用", "{count} updates available"],
+  updatesAvailableCount: ["有 {count} 项更新可用", "{count} {count|update|updates} available"],
   useUpdateProxy: ["启用代理", "Use a proxy"],
   proxyWebsite: ["代理网站", "Proxy provider"],
   customProxy: ["自定义代理", "Custom proxy"],
@@ -101,10 +110,6 @@ export const messages = {
   restartHelp: ["需要重新加载服务配置时使用，连接会短暂中断。", "Reload the service when needed. Connections will briefly be interrupted."],
   checkUpdateHelp: ["检查是否有可安装的新版本。", "Check whether a new version is available."],
   nodeVersion: ["Node.js 版本", "Node.js version"],
-  mirrorUrl: [
-    "镜像前缀地址（留空直连）",
-    "Mirror prefix URL (blank for direct)",
-  ],
   allStates: ["所有状态", "All statuses"],
   shareBtnRevoke: ["撤销分享", "Revoke"],
   skipContent: ["跳转到内容", "Skip to content"],
@@ -144,6 +149,10 @@ export const messages = {
   retry: ["重试", "Retry"],
   loading: ["正在加载…", "Loading…"],
   failed: ["加载失败", "Unable to load"],
+  failedDesc: ["无法加载当前页面内容，请检查连接后重试。", "Could not load this page. Check your connection and try again."],
+  advancedHelp: ["直接编辑服务器配置文件，保存前会展示变更对比。", "Edit config.yaml directly; changes are validated and previewed before saving."],
+  rawSecretPathHelp: ["原始文件直链的 URL 路径前缀（修改后已有原文件链接会随之变化）。", "URL route prefix for original file links (changing it alters existing raw links)."],
+  pubSecretPathHelp: ["公开 WebP 优化图的 URL 路径前缀（用于路径隔离与兼容，非访问鉴权；修改后已有公开链接会变化）。", "Public URL route prefix for optimized WebP images (for path isolation, not access control; changing it alters existing public links)."],
   online: ["服务可用", "Service available"],
   unknown: ["未知", "Unknown"],
   search: ["搜索当前归档的文件", "Search this archive"],
@@ -162,7 +171,7 @@ export const messages = {
   size: ["原文件大小", "Original size"],
   date: ["上传时间", "Uploaded"],
   type: ["类型", "Type"],
-  filesSummary: ["{count} 个文件 · {size}", "{count} files · {size}"],
+  filesSummary: ["{count} 个文件 · {size}", "{count} {count|file|files} · {size}"],
   clearFilters: ["清除筛选", "Clear filters"],
   emptyLibrary: ["从第一个文件开始", "A home for your first file"],
   emptyLibraryDesc: [
@@ -318,16 +327,16 @@ export const messages = {
   currentVersion: ["当前版本", "Current version"],
   source: ["更新来源", "Update source"],
   sharesHelp: [
-    "分享限制只适用于分享链接，不会撤销原文件直链。",
-    "Limits apply to share links only; original URLs remain accessible.",
+    "分享限制只适用于分享链接，不会撤销原文件直链；若原文件被删除或覆盖替换，此分享链接将自动失效。",
+    "Limits apply to share links only; if the original file is deleted or overwritten, this share link is automatically invalidated.",
   ],
   revokedHelp: [
     "撤销后此分享链接立即失效，原文件不会删除。",
     "Revoking invalidates this share link without deleting the original.",
   ],
   active: ["有效", "Active"],
-  expired: ["已过期", "Expired"],
-  quotaUsed: ["次数已用尽", "Limit reached"],
+  expired: ["已失效 · 已过期", "Invalid · Expired"],
+  quotaUsed: ["已失效 · 次数已用尽", "Invalid · Limit reached"],
   shareCreated: ["分享链接已创建", "Share link created"],
   shareLink: ["分享链接", "Share link"],
   done: ["完成", "Done"],
@@ -372,7 +381,7 @@ export const messages = {
   uploadResultsComplete: ["文件处理完成", "Files processed"],
   uploadProcessed: ["已处理 {done} / {total} 个文件", "Processed {done} of {total} files"],
   uploadResultFiles: ["文件列表", "Files"],
-  uploadFileCount: ["{count} 个文件", "{count} files"],
+  uploadFileCount: ["{count} 个文件", "{count} {count|file|files}"],
   uploadOpenFile: ["查看文件", "View file"],
   uploadOpenFileNamed: ["查看文件：{name}", "View file: {name}"],
   uploadOriginalName: ["原文件名：{name}", "Original name: {name}"],
@@ -444,7 +453,7 @@ Object.assign(messages, {
   watermark: ["图片水印", "Image watermark"],
   watermarkFontTipTitle: ["中文字体依赖提示 (Linux / Docker)", "Chinese Font Requirement (Linux / Docker)"],
   watermarkFontTipDesc: ["若服务端运行于 Linux 或 Docker 环境，文字水印需宿主机已安装中文字体（如 Noto Sans CJK 或文泉驿微米黑），否则汉字可能会被渲染为方块（□）。", "If the server runs on Linux or Docker, rendering Chinese text watermarks requires CJK fonts (e.g. Noto Sans CJK or WenQuanYi Micro Hei) installed on the system; otherwise, Chinese characters will render as tofu boxes (□)."],
-  unsavedCount: ["{count} 项设置未保存", "{count} unsaved sections"],
+  unsavedCount: ["{count} 项设置未保存", "{count} unsaved {count|section|sections}"],
   uploadDrop: [
     "在此拖入或粘贴文件，也可以选择文件。",
     "Drop or paste files here, or choose files.",
@@ -502,7 +511,7 @@ Object.assign(messages, {
   deletedForever: ["文件已永久删除", "File permanently deleted"],
   selectAll: ["全选", "Select all"],
   clearSelection: ["取消选择", "Clear selection"],
-  trashSummary: ["共 {count} 项 · {size}", "{count} items · {size}"],
+  trashSummary: ["共 {count} 项 · {size}", "{count} {count|item|items} · {size}"],
   selectedSummary: ["已选 {count} 项 · {size}", "{count} selected · {size}"],
   batchRestore: ["批量恢复", "Restore selected"],
   batchDeleteForever: ["批量永久删除", "Delete selected"],
@@ -603,9 +612,14 @@ export function t(key, params = {}) {
     messages[key]?.[locale === "zh" ? 0 : 1] ??
     translations[locale]?.[key] ??
     key;
-  return String(value).replace(
-    /\{(\w+)\}/g,
-    (match, name) => params[name] ?? match,
-  );
+  return String(value)
+    .replace(
+      /\{(\w+)\|([^|}]+)\|([^}]+)\}/g,
+      (_, name, one, many) => (Number(params[name]) === 1 ? one : many),
+    )
+    .replace(
+      /\{(\w+)\}/g,
+      (match, name) => params[name] ?? match,
+    );
 }
 export { translations };

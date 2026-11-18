@@ -64,6 +64,9 @@ summary:focus-visible {
   outline: 3px solid var(--brand);
   outline-offset: 3px;
 }
+[tabindex="-1"]:focus:not(:focus-visible) {
+  outline: none;
+}
 input,
 select,
 textarea {
@@ -661,6 +664,10 @@ pre {
   background: var(--warning-bg);
   color: var(--warning);
 }
+.badge.danger {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
 .empty-state {
   text-align: center;
   padding: 64px 24px;
@@ -1052,8 +1059,9 @@ dd {
   font-size: 12px;
 }
 .code-panel {
-  background: var(--text);
-  color: var(--surface);
+  background: var(--code-bg, #161821);
+  color: var(--code-text, #eef0f7);
+  border: 1px solid var(--border);
   padding: 16px;
   border-radius: 12px;
   font-size: 12px;

@@ -18,6 +18,8 @@
   --danger-solid: #b42338;
   --danger-bg: #fff0f1;
   --info-bg: #f0ecff;
+  --code-bg: #161821;
+  --code-text: #eef0f7;
   --radius-control: 12px;
   --radius-panel: 12px;
   --radius-dialog: 16px;
@@ -41,6 +43,8 @@
 :root[data-theme="dark"] {
     color-scheme: dark;
     --brand: #b59aff;
+    --brand-solid: #7132f5;
+    --brand-hover: #8347ff;
     --brand-subtle: rgba(133,91,251,.18);
     --canvas: #15161c;
     --surface: #1d1f27;
@@ -53,8 +57,11 @@
     --warning: #f1c17b;
     --warning-bg: #3b3021;
     --danger: #f397a5;
+    --danger-solid: #c82840;
     --danger-bg: #3d232b;
     --info-bg: #2b2544;
+    --code-bg: #11131a;
+    --code-text: #eef0f7;
     --shadow-card: 0 4px 24px rgba(0,0,0,.08);
     --shadow-dialog: 0 16px 64px rgba(0,0,0,.4);
 }

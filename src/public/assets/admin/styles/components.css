@@ -375,13 +375,19 @@
 }
 
 .trash-select-all-label {
-  display: inline-flex;
+  display: none;
   align-items: center;
   gap: 8px;
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   user-select: none;
+}
+
+@media (max-width: 780px) {
+  .trash-select-all-label {
+    display: inline-flex;
+  }
 }
 
 .trash-selection-summary {
@@ -412,7 +418,7 @@
 }
 
 .collection-row.is-selected {
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  background: color-mix(in srgb, var(--brand) 10%, var(--surface));
 }
 
 .backup-collection {
@@ -1468,8 +1474,9 @@
 }
 
 .secret-control input {
-  padding-right: 44px;
+  padding-right: 48px;
   width: 100%;
+  text-overflow: ellipsis;
 }
 
 .secret-toggle {
@@ -2019,14 +2026,16 @@
   }
 
   .trash-collection .collection-row {
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    gap: 8px 12px;
   }
 
   .trash-collection .collection-cell.column-select {
     display: flex;
     align-items: center;
     grid-column: 1;
-    padding: 0;
+    padding: 4px 0 0;
   }
 
   .trash-collection .collection-cell.column-file {
@@ -2036,7 +2045,24 @@
 
   .trash-collection .collection-cell.column-actions {
     display: block;
-    grid-column: 3;
+    grid-column: 2;
+  }
+
+  .trash-collection .collection-cell .actions,
+  .share-collection .collection-cell .actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-left: 0;
+  }
+
+  .share-collection .collection-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .share-collection .collection-cell:last-child {
+    grid-column: 1;
   }
 
   .collection-summary {
@@ -2303,11 +2329,14 @@
 }
 
 .settings-anchor:hover {
-  color: var(--ink);
-  border-color: var(--accent);
+  color: var(--text);
+  border-color: var(--brand);
 }
 
-.settings-form-stack .save-bar:not([hidden]) {
+.settings-form-stack .save-bar:not([hidden]),
+.settings-content .panel > .save-bar:not([hidden]),
+.configuration-editor > .save-bar:not([hidden]),
+#update-save-bar:not([hidden]) {
   position: sticky;
   bottom: 16px;
   z-index: 10;
@@ -2449,6 +2478,16 @@
   padding: 20px;
   border-radius: 12px;
   background: var(--canvas);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.watermark-preview select {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .watermark-preview h3 {
@@ -3614,6 +3653,15 @@ a.brand .brand-mark {
 .conflict-feedback-success { color: var(--success); }
 .conflict-feedback:empty {
   display: none;
+}
+
+.dialog.dialog-drawer {
+  width: min(320px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+}
+.dialog.dialog-drawer .dialog-content {
+  max-height: calc(100dvh - 96px);
+  padding-bottom: 16px;
 }
 
 @media (max-width: 520px) {

@@ -67,7 +67,7 @@
           </div>
         </label>
 
-        <div class="grid-3">
+        <div class="grid-2">
           <div class="form-group">
             <label for="s_raw_path" data-i18n="rawPath">原文件链接前缀</label>
             <input type="text" id="s_raw_path" class="form-input" value="raw" required />
@@ -76,7 +76,7 @@
           <div class="form-group">
             <label for="s_pub_path" data-i18n="pubPath">WebP 链接前缀</label>
             <input type="text" id="s_pub_path" class="form-input" value="pub" required />
-            <div class="hint" data-i18n="pubPathHint">例如 /pub/2026/10/a.webp</div>
+            <div class="hint" data-i18n="pubPathHint">例如 /pub/2026/10/a.webp（公开链接路径前缀）</div>
           </div>
           <div class="form-group" id="grp_webp_quality">
             <label for="s_webp_quality" data-i18n="webpQuality">WebP 质量（10–100）</label>
@@ -130,7 +130,7 @@
         apiToken: '上传 API 令牌', regenerate: '重新生成', apiTokenHint: 'Obsidian 插件和其他上传工具需要使用此令牌。',
         imageTitle: '2. 图片与链接', optimize: '生成 WebP 图片', optimizeHint: '保留原图，并提供体积更小的 WebP 链接。',
         rawPath: '原文件链接前缀', rawPathHint: '例如 /raw/2026/10/a.png',
-        pubPath: 'WebP 链接前缀', pubPathHint: '例如 /pub/2026/10/a.webp',
+        pubPath: 'WebP 链接前缀', pubPathHint: '例如 /pub/2026/10/a.webp（公开链接路径前缀）',
         webpQuality: 'WebP 质量（10–100）', maxWidth: '图片最大宽度（像素）', watermark: 'WebP 图片水印',
         watermarkOn: '开启（默认右下角）', watermarkOff: '关闭', serverTitle: '3. 服务器地址',
         siteName: '站点名称', baseUrl: '公开访问地址', port: '监听端口', submit: '完成设置',
@@ -144,7 +144,7 @@
         apiToken: 'Upload API token', regenerate: 'Regenerate', apiTokenHint: 'The Obsidian plugin and other upload apps use this token.',
         imageTitle: '2. Images and links', optimize: 'Generate WebP images', optimizeHint: 'Keep originals and provide smaller WebP image URLs.',
         rawPath: 'Original file URL prefix', rawPathHint: 'For example: /raw/2026/10/a.png',
-        pubPath: 'WebP URL prefix', pubPathHint: 'For example: /pub/2026/10/a.webp',
+        pubPath: 'WebP URL prefix', pubPathHint: 'For example: /pub/2026/10/a.webp (public URL prefix)',
         webpQuality: 'WebP quality (10–100)', maxWidth: 'Maximum image width (px)', watermark: 'WebP image watermark',
         watermarkOn: 'On (bottom right by default)', watermarkOff: 'Off', serverTitle: '3. Server address',
         siteName: 'Site name', baseUrl: 'Public URL', port: 'Listening port', submit: 'Finish setup',

@@ -25,16 +25,50 @@ import { sectionValues, sectionPatch } from "./settings-schema.mjs";
 import { detailHref } from "../router.mjs";
 
 export async function mountShares(ctx, root, route, signal) {
-  const [{ shares }] = await Promise.all([ctx.api.shares(), ctx.loadFiles()]);
+  let sharePayload = await ctx.api.shares();
   if (signal.aborted) return;
+  let shares = sharePayload.shares || [];
+  let summary = sharePayload.summary || {};
+  const state = (item) => item.state || shareState(item);
+  const badgeTone = (st) =>
+    st === "active" ? "success" : st === "fileMissing" || st === "fileChanged" ? "danger" : "warning";
+  const countInvalid = () => shares.filter((i) => state(i) !== "active").length;
+
   root.innerHTML =
-    heading("shares", "", button("refresh", "refresh")) +
-    `<div class="share-filters"><label for="share-state">${e(t("shareColStatus"))}</label><select id="share-state"><option value="all">${e(t("allStates"))}</option>${["active", "expired", "quotaUsed", "fileMissing"].map((key) => `<option value="${key}">${e(t(key))}</option>`).join("")}</select></div><div id="shares-results"></div>`;
-  const fileFor = item => ctx.files.items.find(file => file.year === item.year && file.month === item.month && file.filename === item.filename);
-  const state = item => item.state || shareState(item);
+    heading(
+      "shares",
+      "lblSharesDesc",
+      `${button("shareBtnVerify", "verify-shares", "secondary", "pulse")}<span id="share-cleanup-slot"></span>${button("refresh", "refresh")}`,
+    ) +
+    `<div id="share-check-banner"></div><div class="share-filters"><label for="share-state">${e(t("shareColStatus"))}</label><select id="share-state"><option value="all">${e(t("allStates"))}</option><option value="active">${e(t("active"))}</option><option value="invalid">${e(t("shareFilterInvalid"))}</option>${["fileMissing", "fileChanged", "expired", "quotaUsed"].map((key) => `<option value="${key}">${e(t(key))}</option>`).join("")}</select></div><div id="shares-results"></div>`;
+
   const render = () => {
-    const filter = root.querySelector("#share-state").value,
-      items = shares.filter((i) => filter === "all" || state(i) === filter);
+    const invalidTotal = countInvalid();
+    const activeTotal = shares.length - invalidTotal;
+    const brokenFiles = shares.filter((i) => ["fileMissing", "fileChanged"].includes(state(i))).length;
+    const cleanupSlot = root.querySelector("#share-cleanup-slot");
+    if (cleanupSlot) {
+      cleanupSlot.innerHTML = invalidTotal > 0
+        ? button("shareBtnCleanupInvalid", "cleanup-invalid", "secondary destructive", "trash")
+        : "";
+    }
+    const bannerEl = root.querySelector("#share-check-banner");
+    if (bannerEl) {
+      bannerEl.innerHTML = !shares.length
+        ? ""
+        : brokenFiles > 0
+          ? notice(t("shareBrokenNotice", { count: brokenFiles, active: activeTotal, invalid: invalidTotal }), "warning")
+          : invalidTotal > 0
+            ? notice(t("shareStatusSummary", { total: shares.length, active: activeTotal, invalid: invalidTotal }), "info")
+            : "";
+    }
+    const filter = root.querySelector("#share-state").value;
+    const items = shares.filter((i) => {
+      const st = state(i);
+      if (filter === "all") return true;
+      if (filter === "invalid") return st !== "active";
+      return st === filter;
+    });
     root.querySelector("#shares-results").innerHTML = collection(
       [
         { key: "file", label: "file" },
@@ -43,18 +77,23 @@ export async function mountShares(ctx, root, route, signal) {
         { key: "state", label: "shareColStatus" },
         { key: "actions", label: "shareColActions", className: "share-actions" },
       ],
-      items.map((i) => ({
-        file: fileIdentity(fileFor(i) || i, {
-          href: i.fileExists === false ? '' : detailHref(i),
-          summary: `${metaItem("clock", i.expiresAt ? compactDate(i.expiresAt) : t("shareNeverExpire"))}${metaItem("download", `${t("downloadCount", { count: i.downloads })}${i.maxDownloads ? " / " + i.maxDownloads : ""}`)}<span class="collection-status ${state(i) === "active" ? "success" : ""}">${e(t(state(i)))}</span>`,
-          thumbnail: fileFor(i)?.isImage ? `<img src="${e(fileFor(i).thumbnailUrl || fileFor(i).rawPreviewPath)}" alt="" loading="lazy">` : '',
-        }),
-        expires: i.expiresAt ? `<time class="share-expiry" datetime="${e(new Date(i.expiresAt).toISOString())}">${e(compactDate(i.expiresAt))}</time>` : e(t('shareNeverExpire')),
-        downloads: `<span class="share-downloads">${e(t('downloadCount',{count:i.downloads}))}<small>${e(i.maxDownloads ? t('downloadLimit',{count:i.maxDownloads}) : t('unlimitedDownloads'))}</small></span>`,
-        state: `<span class="collection-status ${state(i) === 'active' ? 'success' : ''}">${e(t(state(i)))}</span>`,
-        actions: `<div class="actions">${state(i) === 'active' ? button('copy', 'copy', 'quiet', '', `data-id="${e(i.id)}"`) : ''}${button('shareBtnRevoke', 'revoke', 'quiet share-revoke', '', `data-id="${e(i.id)}"`)}</div>`,
-      })),
-      { className: "share-collection", empty: empty("shares", "noShareLinks") },
+      items.map((i) => {
+        const st = state(i);
+        const tone = badgeTone(st);
+        const canOpenDetail = i.fileExists !== false && !i.fileChanged;
+        return {
+          file: fileIdentity(i, {
+            href: canOpenDetail ? detailHref(i) : "",
+            summary: `${metaItem("clock", i.expiresAt ? compactDate(i.expiresAt) : t("shareNeverExpire"))}${metaItem("download", `${t("downloadCount", { count: i.downloads })}${i.maxDownloads ? " / " + i.maxDownloads : ""}`)}<span class="badge ${tone}">${e(t(st))}</span>`,
+            thumbnail: i.isImage && i.thumbnailUrl ? `<img src="${e(i.thumbnailUrl)}" alt="" loading="lazy">` : "",
+          }),
+          expires: i.expiresAt ? `<time class="share-expiry" datetime="${e(new Date(i.expiresAt).toISOString())}">${e(compactDate(i.expiresAt))}</time>` : e(t("shareNeverExpire")),
+          downloads: `<span class="share-downloads">${e(t("downloadCount", { count: i.downloads }))}<small>${e(i.maxDownloads ? t("downloadLimit", { count: i.maxDownloads }) : t("unlimitedDownloads"))}</small></span>`,
+          state: `<span class="badge ${tone}">${e(t(st))}</span>`,
+          actions: `<div class="actions">${st === "active" ? button("copy", "copy", "quiet", "", `data-id="${e(i.id)}"`) : ""}${button("shareBtnRevoke", "revoke", "quiet share-revoke", "", `data-id="${e(i.id)}"`)}</div>`,
+        };
+      }),
+      { className: "share-collection", empty: empty("shares", shares.length ? "noResultsDesc" : "noShareLinks") },
     );
   };
   root
@@ -64,6 +103,32 @@ export async function mountShares(ctx, root, route, signal) {
     root,
     {
       refresh: () => ctx.render(),
+      "verify-shares": async () => {
+        const res = await ctx.api.verifyShares();
+        if (signal.aborted) return;
+        shares = res.shares || [];
+        summary = res.summary || {};
+        render();
+        toast(
+          t("shareVerifyDone", {
+            total: summary.total ?? shares.length,
+            active: summary.active ?? shares.filter((i) => state(i) === "active").length,
+            invalid: summary.invalid ?? countInvalid(),
+          }),
+        );
+      },
+      "cleanup-invalid": async () => {
+        const invalidCount = countInvalid();
+        if (!invalidCount) return;
+        if (!(await confirm(t("shareBtnCleanupInvalid"), t("shareCleanupConfirm", { count: invalidCount }), true)))
+          return;
+        const res = await ctx.api.cleanupInvalidShares();
+        if (signal.aborted) return;
+        shares = res.shares || [];
+        summary = res.summary || {};
+        render();
+        toast(t("shareCleanupDone", { count: res.removed ?? invalidCount }));
+      },
       copy: (target) =>
         copy(shares.find((i) => i.id === target.dataset.id).shareUrl),
       revoke: async (target) => {
@@ -410,6 +475,7 @@ export function mountClientIntegration(ctx, root, signal) {
 
 export function shareState(item, now = Date.now()) {
   if (item.fileExists === false) return 'fileMissing';
+  if (item.fileChanged === true) return 'fileChanged';
   if (item.expiresAt > 0 && now >= item.expiresAt) return 'expired';
   if (item.maxDownloads > 0 && item.downloads >= item.maxDownloads) return 'quotaUsed';
   return 'active';
@@ -539,11 +605,12 @@ export function mountBackup(ctx, root, signal) {
 export async function mountUpdates(ctx, root, signal) {
   const state=ctx.drafts.section('updates',sectionValues('updates',ctx.config));
   const mirrors=['https://ghproxy.net/','https://gh-proxy.com/','https://mirror.ghproxy.com/'];
-  root.innerHTML=heading('updates')+`<div class="settings-content update-content"><section class="panel update-control-card"><div class="update-control-layout"><a class="update-repository" href="https://github.com/weichen-ink/file-master-server" target="_blank" rel="noopener noreferrer"><span class="update-repository-icon">${icon('github')}</span><span class="update-repository-name"><strong>file-master-server ${icon('external')}</strong><span><span class="source-branch">${icon('branch')}${e(ctx.config.upstream_branch || 'main')}</span><span aria-hidden="true">·</span><span>${e(t('versionStatus'))} <strong id="version-value">v${e(ctx.status.version)}</strong></span></span></span></a><div class="update-connection-card"><div class="update-connection-toolbar"><label class="proxy-check" for="enable-proxy"><input id="enable-proxy" type="checkbox">${e(t('useUpdateProxy'))}</label><div id="proxy-options" class="update-proxy-fields"><div class="field"><label class="sr-only" for="update-mirror">${e(t('proxyWebsite'))}</label><select id="update-mirror">${mirrors.map(value=>`<option value="${value}">${e(new URL(value).hostname)}</option>`).join('')}<option value="custom">${e(t('customProxy'))}</option></select></div><div class="field" id="custom-proxy-field"><label class="sr-only" for="custom-mirror">${e(t('proxyAddress'))}</label><input id="custom-mirror" type="url" placeholder="https://" value="${e(state.draft.upstream_mirror || '')}"></div></div><div class="update-check-actions">${button('checkUpdate','check-update','primary')}</div></div><p id="update-source-error" class="field-error" role="status"></p></div></div></section><section id="update-details" aria-live="polite"></section><details id="update-log" open hidden><summary>${e(t('executionLog'))}</summary><pre class="code-panel"></pre></details></div>`;
+  root.innerHTML=heading('updates')+`<div class="settings-content update-content"><section class="panel update-control-card"><div class="update-control-layout"><a class="update-repository" href="https://github.com/weichen-ink/file-master-server" target="_blank" rel="noopener noreferrer"><span class="update-repository-icon">${icon('github')}</span><span class="update-repository-name"><strong>file-master-server ${icon('external')}</strong><span><span class="source-branch">${icon('branch')}${e(ctx.config.upstream_branch || 'main')}</span><span aria-hidden="true">·</span><span>${e(t('versionStatus'))} <strong id="version-value">v${e(ctx.status.version)}</strong></span></span></span></a><div class="update-connection-card"><div class="update-connection-toolbar"><label class="proxy-check" for="enable-proxy"><input id="enable-proxy" type="checkbox">${e(t('useUpdateProxy'))}</label><div id="proxy-options" class="update-proxy-fields"><div class="field"><label class="sr-only" for="update-mirror">${e(t('proxyWebsite'))}</label><select id="update-mirror">${mirrors.map(value=>`<option value="${value}">${e(new URL(value).hostname)}</option>`).join('')}<option value="custom">${e(t('customProxy'))}</option></select></div><div class="field" id="custom-proxy-field"><label class="sr-only" for="custom-mirror">${e(t('proxyAddress'))}</label><input id="custom-mirror" type="url" placeholder="https://" value="${e(state.draft.upstream_mirror || '')}"></div></div><div class="update-check-actions">${button('checkUpdate','check-update','primary')}</div></div><p id="update-source-error" class="field-error" role="status"></p></div></div></section><footer class="save-bar" id="update-save-bar" hidden><strong id="update-save-state"></strong><div class="actions">${button('discard','discard-source')}${button('save','save-source','primary')}</div></footer><section id="update-details" aria-live="polite"></section><details id="update-log" open hidden><summary>${e(t('executionLog'))}</summary><pre class="code-panel"></pre></details></div>`;
   let available=false, checked=false, busy=false;
   const sync=()=>{
     if(signal.aborted)return;
     const enabled=state.draft.mirror_enabled;
+    const dirty=ctx.drafts.dirty('updates');
     root.querySelector('#enable-proxy').checked=enabled;
     root.querySelector('#update-mirror').value=state.draft.mirror_preset;
     root.querySelector('#proxy-options').hidden=!enabled;
@@ -553,8 +620,15 @@ export async function mountUpdates(ctx, root, signal) {
     root.querySelectorAll('button,input,select').forEach(el=>el.disabled=busy || state.saving);
     root.querySelector('#update-mirror').disabled=!enabled || busy || state.saving;
     custom.disabled=!enabled || state.draft.mirror_preset!=='custom' || busy || state.saving;
+    const saveBar=root.querySelector('#update-save-bar');
+    if(saveBar){
+      saveBar.hidden=!state.saving && !dirty;
+      root.querySelector('#update-save-state').textContent=t(state.saving?'saving':dirty?'unsaved':'');
+      root.querySelector('[data-action="save-source"]').disabled=busy || state.saving || !dirty;
+      root.querySelector('[data-action="discard-source"]').disabled=busy || state.saving || !dirty;
+    }
     const install=root.querySelector('[data-action="install"]');
-    if(install){install.hidden=!available;install.disabled=busy || state.saving || !checked || ctx.drafts.dirty('updates') || ctx.config.hot_update===false;}
+    if(install){install.hidden=!available;install.disabled=busy || state.saving || !checked || dirty || ctx.config.hot_update===false;}
   };
   const invalidate=()=>{available=false;checked=false;root.querySelector('#update-details').replaceChildren();sync();};
   const sourceError=error=>{if(!signal.aborted)root.querySelector('#update-source-error').textContent=error?.message || '';};
@@ -595,6 +669,14 @@ export async function mountUpdates(ctx, root, signal) {
   customMirror.addEventListener('change',async()=>{try{await saveSource();}catch(error){sourceError(error);}},{signal});
   const log=value=>{if(signal.aborted)return;const box=root.querySelector('#update-log');box.hidden=false;box.open=true;box.querySelector('pre').textContent=value;};
   actions(root,{
+    'save-source':async()=>{
+      try{await saveSource();if(!signal.aborted)toast(t('configSaved'));}catch(error){sourceError(error);}
+    },
+    'discard-source':()=>{
+      ctx.drafts.discard('updates');
+      sourceError();
+      invalidate();
+    },
     'check-update':async()=>{
       busy=true;sync();
       try{

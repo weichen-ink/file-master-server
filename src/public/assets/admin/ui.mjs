@@ -49,6 +49,10 @@ const paths = {
     '<rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8" cy="8" r="1"/><path d="m3 17 5-5 4 4 4-6 5 7"/>',
   plug: '<path d="M8 2v5m8-5v5M6 7h12v4a6 6 0 0 1-12 0Zm6 10v5"/>',
   status: '<path d="M3 12h4l3-8 4 16 3-8h4"/>',
+  pulse: '<path d="M3 12h4l3-8 4 16 3-8h4"/>',
+  archive: '<rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8M10 12h4"/>',
+  refresh: '<path d="M21 12a9 9 0 1 1-2.64-6.36L21 8M21 3v5h-5"/>',
+  shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/>',
   settings:
     '<path d="m9 3-1 3-3 1v4l3 1 1 3h4l1-3 3-1V7l-3-1-1-3Z" transform="translate(1 2)"/><circle cx="12" cy="11" r="3"/>',
   upload:
@@ -80,22 +84,23 @@ export const button = (label, action, variant = "secondary", symbol = "", attrs 
   const iconOnly = variant.split(" ").includes("icon-button");
   return `<button type="button" class="${iconOnly ? variant : "button " + variant}" data-action="${e(action)}" ${iconOnly ? `title="${e(t(label))}" aria-label="${e(t(label))}"` : ""} ${attrs}>${symbol ? icon(symbol) : ""}${iconOnly ? "" : e(t(label))}</button>`;
 };
-export const heading = (title, description, actions = "") =>
-  `<header class="page-heading"><h1 tabindex="-1">${e(t(title))}</h1><div class="actions">${actions}</div></header>`;
+export const heading = (title, description = "", actions = "") =>
+  `<header class="page-heading"><div><h1 tabindex="-1">${e(t(title))}</h1>${description ? `<p class="page-description">${e(t(description))}</p>` : ""}</div>${actions ? `<div class="actions">${actions}</div>` : ""}</header>`;
 export const empty = (title, description, action = "", symbol = "files") =>
   `<div class="empty-state"><div class="empty-icon">${icon(symbol)}</div><h2>${e(t(title))}</h2><p>${e(t(description))}</p>${action}</div>`;
 export const notice = (text, kind = "info") =>
   `<div class="notice ${kind}" role="${kind === "danger" ? "alert" : "status"}">${e(text)}</div>`;
 export const errorView = (error) =>
-  empty("failed", "retry", button("retry", "reload")) +
+  empty("failed", "failedDesc", button("retry", "reload"), "alert") +
   notice(error.message, "danger");
 export const storageWarning = (health) =>
   health?.atomicUploads === true ? "" : notice(t("storageWarning"), "warning");
 export const kv = (label, value) =>
   `<div class="property"><dt>${e(t(label))}</dt><dd>${e(value ?? "—")}</dd></div>`;
-export function toast(message) {
+export function toast(message, kind = "") {
   const region = document.getElementById("toast");
   region.textContent = message;
+  region.dataset.kind = kind || "";
   region.hidden = false;
   clearTimeout(toast.timer);
   toast.timer = setTimeout(() => {
@@ -128,14 +133,14 @@ export function downloadJson(value, filename) {
 export function dialog(
   title,
   content,
-  { submit, cancel, danger = false, className = "", symbol = "file", focusSelector, onMount } = {},
+  { submit, cancel, danger = false, className = "", symbol = "file", focusSelector, hideFooter = false, onMount } = {},
 ) {
   return new Promise((resolve) => {
     const previous = document.activeElement;
     const el = document.createElement("dialog");
     el.className = className ? `dialog ${className}` : "dialog";
     const titleId = `dialog-title-${++dialog.sequence}`;
-    el.innerHTML = `<form method="dialog"><header><h2 id="${titleId}" class="dialog-title"><span class="dialog-title-icon">${icon(symbol)}</span><span>${e(title)}</span></h2><button type="button" data-dialog-cancel class="icon-button" aria-label="${e(t("close"))}">${icon("close")}</button></header><div class="dialog-content">${content}</div><footer><button type="button" data-dialog-cancel class="button secondary">${e(cancel || t(submit ? "cancel" : "close"))}</button>${submit ? `<button value="confirm" class="button ${danger ? "danger" : "primary"}">${e(submit)}</button>` : ""}</footer></form>`;
+    el.innerHTML = `<form method="dialog"><header><h2 id="${titleId}" class="dialog-title"><span class="dialog-title-icon">${icon(symbol)}</span><span>${e(title)}</span></h2><button type="button" data-dialog-cancel class="icon-button" aria-label="${e(t("close"))}">${icon("close")}</button></header><div class="dialog-content">${content}</div>${hideFooter ? "" : `<footer><button type="button" data-dialog-cancel class="button secondary">${e(cancel || t(submit ? "cancel" : "close"))}</button>${submit ? `<button value="confirm" class="button ${danger ? "danger" : "primary"}">${e(submit)}</button>` : ""}</footer>`}</form>`;
     el.setAttribute("aria-labelledby", titleId);
     document.body.append(el);
     el.addEventListener("click", (event) => {

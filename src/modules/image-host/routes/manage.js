@@ -12,13 +12,13 @@ const {
   isValidMonthSeg
 } = require('../../../core/file-security');
 const { verifyOriginalFiles } = require('../asset-files');
-const { RAW_DIR } = require('../asset-paths');
+const { RAW_DIR, resolveExactRawFilename } = require('../asset-paths');
 const { pathToShaMap, getShaIndex } = require('../sha-index');
 const { isItemLocked, setItemLockState } = require('../protection');
 const { scanAllImages, invalidateScanCache, clearCacheDir } = require('../catalog');
 const { queryCatalog } = require('../catalog-query');
-const { serializeMutation } = require('../mutation-queue');
-const { trashAsset, publicTrashEntries, findTrash, restoreTrash, deleteTrash } = require('../trash');
+const { serializeMutation, mutateAssets } = require('../mutation-queue');
+const { trashAsset, listTrashEntries, publicTrashEntries, findTrash, restoreTrash, deleteTrash } = require('../trash');
 const { renderDraftPreview, ensureThumbnail } = require('../processor');
 
 const { renameAsset } = require('../rename');
@@ -44,7 +44,7 @@ function registerManageRoutes(app) {
   app.get('/api/modules/image-host/trash/:id/preview', requireApiOrAdmin, async (req,res) => {
     let dir;
     try {
-      const item = findTrash(req.params.id);
+      const item = await mutateAssets(() => findTrash(req.params.id));
       if (getFileCategory(path.extname(item.filename)) !== 'image') return res.status(415).json({error:'This file has no image preview'});
       fs.mkdirSync(UPLOAD_TMP_DIR,{recursive:true});
       dir = fs.mkdtempSync(path.join(UPLOAD_TMP_DIR,'trash-preview-'));
@@ -52,7 +52,7 @@ function registerManageRoutes(app) {
       if (req.query.thumbnail === '1') await ensureThumbnail(item.fullPath,output);
       else await renderDraftPreview(item.fullPath,output,{enable_optimization:false});
       // Recheck after conversion: a concurrent restore/delete must invalidate the request.
-      findTrash(req.params.id);
+      await mutateAssets(() => findTrash(req.params.id));
       res.set('Cache-Control','private, no-store').set('X-Content-Type-Options','nosniff').type('image/webp').send(fs.readFileSync(output));
     } catch(error) { res.status(error.status || (error.code === 'ENOENT' ? 404 : 422)).json({error: error.status ? error.message : 'Unable to preview this file'}); }
     finally { if (dir) fs.rmSync(dir,{recursive:true,force:true}); }
@@ -87,11 +87,12 @@ function registerManageRoutes(app) {
   app.post('/api/modules/image-host/trash/batch/delete', requireApiOrAdmin, serializeMutation(async (req, res) => {
     try {
       const ids = normalizeBatchIds(req.body);
+      const byId = new Map(listTrashEntries().map((entry) => [entry.id, entry]));
       const deleted = [];
       const failed = [];
       for (const id of ids) {
         try {
-          deleteTrash(id);
+          deleteTrash(id, byId);
           deleted.push({ id });
         } catch (error) {
           failed.push({ id, error: error.message, status: error.status || 500 });
@@ -107,12 +108,13 @@ function registerManageRoutes(app) {
   }));
   app.post('/api/modules/image-host/trash/empty', requireApiOrAdmin, serializeMutation(async (req, res) => {
     try {
-      const items = publicTrashEntries();
+      const entries = listTrashEntries();
+      const byId = new Map(entries.map((entry) => [entry.id, entry]));
       const deleted = [];
       const failed = [];
-      for (const item of items) {
+      for (const item of entries) {
         try {
-          deleteTrash(item.id);
+          deleteTrash(item.id, byId);
           deleted.push({ id: item.id });
         } catch (error) {
           failed.push({ id: item.id, error: error.message, status: error.status || 500 });
@@ -171,8 +173,9 @@ function registerManageRoutes(app) {
   // 4. Console & File Master Plugin Management API
   app.get('/api/modules/image-host/list', requireApiOrAdmin, async (req, res) => {
     try {
-      const data = await scanAllImages(getConfig());
-      const hasQuery = ['q', 'limit', 'offset', 'types', 'buckets', 'sort'].some(key => req.query[key] !== undefined);
+      const forceRefresh = req.query.refresh === '1' || req.query.refresh === 'true';
+      const data = await scanAllImages(getConfig(), forceRefresh);
+      const hasQuery = ['q', 'limit', 'offset', 'types', 'buckets', 'sort', 'folder', 'protected', 'key'].some(key => req.query[key] !== undefined);
       if (!hasQuery) {
         return res.json(data);
       }
@@ -219,20 +222,21 @@ function registerManageRoutes(app) {
     if (!isPathWithin(rawFilePath, RAW_DIR)) {
       return res.status(403).json({ error: 'Access denied: path traversal attempt detected' });
     }
-    const finalLocked = setItemLockState(year, month, filename, locked);
+    const canonicalFilename = resolveExactRawFilename(year, month, filename) || filename;
+    const finalLocked = setItemLockState(year, month, canonicalFilename, locked);
     invalidateScanCache();
     appendAuditLog({
       action: locked ? 'lock' : 'unlock',
       ip: getClientIp(req),
       year,
       month,
-      filename
+      filename: canonicalFilename
     });
     return res.json({
       success: true,
       year,
       month,
-      filename,
+      filename: canonicalFilename,
       locked: finalLocked
     });
   }));
@@ -240,17 +244,18 @@ function registerManageRoutes(app) {
   app.delete('/api/modules/image-host/item/:year/:month/:filename', requireApiOrAdmin, serializeMutation(async (req, res) => {
     const year = sanitizeSegment(req.params.year);
     const month = sanitizeSegment(req.params.month);
-    const filename = sanitizeSegment(req.params.filename);
+    const reqFilename = sanitizeSegment(req.params.filename);
 
-    if (!isValidYearSeg(year) || !isValidMonthSeg(month) || !filename || !isAllowedAttachmentFile(filename)) {
+    if (!isValidYearSeg(year) || !isValidMonthSeg(month) || !reqFilename || !isAllowedAttachmentFile(reqFilename)) {
       return res.status(400).json({ error: 'Invalid file path parameters' });
     }
 
-    const rawFilePath = path.join(RAW_DIR, year, month, filename);
+    const rawFilePath = path.join(RAW_DIR, year, month, reqFilename);
     if (!isPathWithin(rawFilePath, RAW_DIR)) {
       return res.status(403).json({ error: 'Access denied: path traversal attempt detected' });
     }
 
+    const filename = resolveExactRawFilename(year, month, reqFilename) || reqFilename;
     if (isItemLocked(year, month, filename)) {
       return res.status(403).json({
         error: `File "${filename}" is locked against deletion. Unlock before deleting.`

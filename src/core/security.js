@@ -330,10 +330,8 @@ function requireApiOrAdmin(req, res, next) {
   // Only accept token via Authorization header or X-API-Token header (reject query params to prevent token leakage in access logs)
   const token = bearerToken || req.headers['x-api-token'];
 
-  if (cfg.api_token && typeof token === 'string' && token.length === cfg.api_token.length) {
-    if (crypto.timingSafeEqual(Buffer.from(token), Buffer.from(cfg.api_token))) {
-      return next();
-    }
+  if (cfg.api_token && typeof token === 'string' && token.length > 0 && safeEqual(token, cfg.api_token)) {
+    return next();
   }
 
   if (typeof token === 'string' && token.length > 0) recordLoginFailure(ip);

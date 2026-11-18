@@ -54,7 +54,7 @@ const collectors = {
     const [raw,cacheBytes,trashBytes]=await Promise.all([originalSummary(),getDirSize(CACHE_DIR),getDirSize(TRASH_DIR)]);
     return {filesystem:{totalBytes:disk.total,availableBytes:disk.free,usedBytes:disk.used,usagePercent:disk.usagePercent},originalBytes:raw.bytes,cacheBytes,trashBytes};
   },
-  files:async()=>({originalCount:(await originalSummary()).count,trashCount:listTrashEntries().length}),
+  files:async()=>({originalCount:(await originalSummary()).count,trashCount:listTrashEntries({skipRecovery:true}).length}),
   backup:async()=>getBackupMonitorState()
 };
 

@@ -11,13 +11,25 @@ const kind = item => {
 /** Filter and sort the catalog before slicing, so every page uses the same global order. */
 function queryCatalog(data, query) {
   const q = String(query.q || '').trim().toLowerCase();
+  const folder = String(query.folder || '').trim();
+  const exactKey = String(query.key || '').trim();
+  const onlyProtected = query.protected === '1' || query.protected === 'true';
   const buckets = values(query.buckets), types = values(query.types);
   const offset = Math.max(0, parseInt(query.offset, 10) || 0);
   const limit = Math.min(500, Math.max(1, parseInt(query.limit, 10) || 20));
-  const sort = /^(time|name|size|hits)_(asc|desc)$/.test(String(query.sort)) ? String(query.sort) : 'time_desc';
-  const images = data.images.filter(item => (!q || key(item).toLowerCase().includes(q))
+  const rawSort = String(query.sort || '').replace('-', '_');
+  const sort = /^(time|name|size|hits)_(asc|desc)$/.test(rawSort) ? rawSort : 'time_desc';
+  const bucketCounts = {};
+  for (const item of data.images) {
+    const b = `${item.year}/${item.month}`;
+    bucketCounts[b] = (bucketCounts[b] || 0) + 1;
+  }
+  const images = data.images.filter(item => (!exactKey || key(item) === exactKey)
+    && (!q || key(item).toLowerCase().includes(q))
+    && (!folder || item.year === folder || `${item.year}/${item.month}` === folder)
     && (!buckets.length || buckets.includes(`${item.year}/${item.month}`))
-    && (!types.length || types.includes(kind(item))));
+    && (!types.length || types.includes(kind(item)))
+    && (!onlyProtected || Boolean(item.locked)));
   images.sort((a, b) => {
     let difference;
     if (sort.startsWith('name_')) difference = a.filename.localeCompare(b.filename, undefined, { numeric: true, sensitivity: 'base' });
@@ -27,9 +39,16 @@ function queryCatalog(data, query) {
     }
     return (sort.endsWith('_asc') ? difference : -difference) || key(a).localeCompare(key(b));
   });
-  return { images: images.slice(offset, offset + limit), totalCount: images.length,
-    buckets: [...new Set(data.images.map(item => `${item.year}/${item.month}`))].sort().reverse(),
-    optimizationEnabled: data.optimizationEnabled };
+  const totalBytes = images.reduce((sum, item) => sum + (Number(item.size) || 0), 0);
+  return {
+    images: images.slice(offset, offset + limit),
+    totalCount: images.length,
+    totalBytes,
+    allTotalCount: data.images.length,
+    buckets: Object.keys(bucketCounts).sort().reverse(),
+    bucketCounts,
+    optimizationEnabled: data.optimizationEnabled
+  };
 }
 
 module.exports = { queryCatalog };

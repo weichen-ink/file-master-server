@@ -20,8 +20,8 @@ Instead of relying on third-party image hosts or heavy cloud suites, File Master
 
 - **File Library & Browser**: filter by directory, type, search query, and sort by date, name, size, or views; switch between grid and list views with zoomable previews.
 - **Media Processing (Compression + Adaptive Watermarks)**: automatic WebP conversion, max-width resizing, and image/text/tiled watermarks with auto-contrast and live console preview.
-- **Safety & Deduplication**: SHA-256 deduplication on upload, file lock protection, safe renames with URL alias grace periods, and a recycle bin for accidental deletions.
-- **Expiring Shares**: generate share links with custom expiration dates and download limits, revocable anytime. Limited shares deliver whole files without byte-range resume; unlimited shares support resume.
+- **Safety & Deduplication**: SHA-256 deduplication on upload, file lock protection, safe renames with URL alias grace periods (renamed target filenames stay permanently reserved even after deletion to prevent historic link hijacking), and a recycle bin for accidental deletions.
+- **Expiring & Self-Checked Shares**: generate share links bound to the original file's SHA-256 with custom expiration dates and download limits, revocable anytime. If the underlying file is deleted or overwritten, the share link automatically invalidates, and the **Shares** console page provides one-click status verification and invalid-link cleanup. Limited shares deliver whole files without byte-range resume; unlimited shares support resume.
 - **Operations & Monitoring**: runtime status overview, CPU-throttled `.tar.gz` backups (with `rclone` sync and Bark alerts), one-click updates, and a read-only `/api/health` endpoint.
 - **Themes & Languages**: English and Simplified Chinese UI with light, dark, and system theme support.
 
@@ -86,7 +86,7 @@ The PM2 process name is `fms` on port `3210`. Run `pm2 startup` and follow its i
 
 1. Open the admin console (default `/admin`) to upload, browse, and share files.
 2. To connect **Obsidian File Master** or **PicList**, copy your site URL and API token from **Settings → Site settings** (HTTPS is recommended for public deployments).
-3. This is version **1.2.0**; when connecting Obsidian, use plugin version **1.1 or later** (**1.2.0+** recommended).
+3. This is version **1.2.7**; when connecting Obsidian, use plugin version **1.1 or later** (**1.2.8+** recommended).
 
 ---
 

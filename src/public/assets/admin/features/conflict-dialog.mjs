@@ -194,9 +194,12 @@ export function promptFileConflict({
             renderChoices();
             choicesEl.querySelector('[aria-checked="true"]')?.focus();
           };
-          const showRenameConflict = (targetName) => {
+          const showRenameConflict = (targetName, conflictInfo = null) => {
             // A rename check never changes the file being compared or the overwrite target.
-            setFeedback(`<p class="conflict-feedback-error">${e(t("uploadConflictRenameExists", { name: targetName }))}</p>`, true);
+            const key = conflictInfo?.code === "NAME_RESERVED" || conflictInfo?.reserved
+              ? "uploadConflictRenameReserved"
+              : "uploadConflictRenameExists";
+            setFeedback(`<p class="conflict-feedback-error">${e(t(key, { name: targetName }))}</p>`, true);
             syncConfirmState();
           };
           const runAvailabilityCheck = async (targetName) => {
@@ -233,7 +236,7 @@ export function promptFileConflict({
             }
             const targetName = buildTargetName();
             if (lastCheckedName === targetName && lastCheckedResult?.status === "conflict") {
-              showRenameConflict(targetName);
+              showRenameConflict(targetName, lastCheckedResult.conflict);
               return;
             }
             syncConfirmState();
@@ -245,7 +248,7 @@ export function promptFileConflict({
                   const item = await runAvailabilityCheck(targetName);
                   if (buildTargetName() !== targetName || settled) return;
                   if (item.status === "conflict" && item.conflict) {
-                    showRenameConflict(targetName);
+                    showRenameConflict(targetName, item.conflict);
                   } else if (item.status === "ok" || item.status === "instant") {
                     setFeedback(`<p class="conflict-feedback-success">${e(t("uploadConflictRenameAvailable"))}</p>`, false);
                     syncConfirmState();
@@ -286,6 +289,28 @@ export function promptFileConflict({
             { signal: controller.signal },
           );
           input?.addEventListener("input", syncRenameInput, { signal: controller.signal });
+          input?.addEventListener(
+            "keydown",
+            (event) => {
+              if (event.key === "Enter" && !event.isComposing) {
+                event.preventDefault();
+                if (!confirmBtn.disabled && confirmBtn.getAttribute("aria-disabled") !== "true") {
+                  confirmBtn.click();
+                }
+              }
+            },
+            { signal: controller.signal },
+          );
+          modal.querySelector("form")?.addEventListener(
+            "submit",
+            (event) => {
+              event.preventDefault();
+              if (!confirmBtn.disabled && confirmBtn.getAttribute("aria-disabled") !== "true") {
+                confirmBtn.click();
+              }
+            },
+            { signal: controller.signal },
+          );
           renderChoices();
           if (initialRenameBase && initialRenameBase !== defaultBase) {
             syncRenameInput();
@@ -310,7 +335,7 @@ export function promptFileConflict({
                         return;
                       }
                       if (item.status === "conflict" && item.conflict) {
-                        showRenameConflict(nextName);
+                        showRenameConflict(nextName, item.conflict);
                         input?.focus();
                         input?.select();
                         return;

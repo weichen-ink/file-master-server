@@ -253,9 +253,10 @@ export async function mountSettings(ctx, root, route, signal) {
   if (name === "backup")
     ctx.mountBackup(root.querySelector("#backup-runtime"), signal);
   if (isMedia) {
-    await ctx.loadFiles();
+    const sampleData = await ctx.api.filesPage({ types: "image", limit: 30 }, { signal });
     if (signal.aborted) return;
-    const eligible = ctx.files.items
+    if (Number.isFinite(sampleData.allTotalCount)) ctx.syncFileCount?.(sampleData.allTotalCount);
+    const eligible = (sampleData.images || [])
       .filter((i) => i.isProcessableImage)
       .slice(0, 20);
     const select = root.querySelector("#sample-select");
