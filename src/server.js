@@ -146,7 +146,7 @@ app.get('/api/platform/version', (req, res) => {
     name: 'file-master-server',
     version: readPackageVersion(),
     apiVersion: 1,
-    minPluginVersion: '1.1.0',
+    minPluginVersion: '1.2.9',
     supportedExtensions: [...ALL_ALLOWED_EXTS],
     features: {
       webp: true,

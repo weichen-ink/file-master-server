@@ -1,5 +1,10 @@
 # Changelog (file-master-server)
 
+## [1.2.8] - 2026-11-18
+
+### Strict Peer Version Handshake
+- Tighten `/api/platform/version` `minPluginVersion` to `1.2.9` (paired with Obsidian plugin `1.2.9` requiring server `1.2.8+`) so connected clients always honor atomic conflict-target verification, server-side catalog pagination, and share integrity contracts.
+
 ## [1.2.7] - 2026-11-18
 
 ### Paginated File Library, Share Integrity Self-Check, Async Catalog & Admin UX Refinements

@@ -86,7 +86,7 @@ The PM2 process name is `fms` on port `3210`. Run `pm2 startup` and follow its i
 
 1. Open the admin console (default `/admin`) to upload, browse, and share files.
 2. To connect **Obsidian File Master** or **PicList**, copy your site URL and API token from **Settings → Site settings** (HTTPS is recommended for public deployments).
-3. This is version **1.2.7**; when connecting Obsidian, use plugin version **1.1 or later** (**1.2.8+** recommended).
+3. This is version **1.2.8**; when connecting Obsidian, use plugin version **1.2.9 or later**.
 
 ---
 
